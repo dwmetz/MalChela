@@ -27,7 +27,7 @@ fn main() {
         ("NSRL MD5 Lookup", "cargo run --bin nsrlmd5"),
         ("NSRL SHA1 Lookup", "cargo run --bin nsrlsha1"),
         ("Strings to YARA", "cargo run --bin strings_to_yara"),
-        ("VirusTotal Hash Submission", "cargo run --bin vthash"),
+        ("Malware Hash Lookup", "cargo run --bin vthash"),
     ];
 
     loop {

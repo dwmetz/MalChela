@@ -1,0 +1,14 @@
+HASH: 
+DATE/TIME UTC: 2025-03-02 20:22:06.255525 UTC
+
+Submitting the hash  to VirusTotal...
+
+** VIRUS TOTAL RESULTS: **
+No detections found.
+
+
+Submitting the hash  to Malware Bazaar...
+
+
+** MALWARE BAZAAR RESULTS: **
+** END REPORT **

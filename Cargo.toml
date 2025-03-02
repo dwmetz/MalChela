@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = [ "combine_yara", "extract_samples", "malhash", "measure_yara", "mzcount","mzmd5", "nsrl_md5", "nsrl_sha1", "rename_malware", "strings_to_yara", "vthash", "xmzmd5"]
+members = [ "combine_yara", "extract_samples", "launcher", "malhash", "measure_yara", "mzcount","mzmd5", "nsrlmd5", "nsrlsha1", "rename_malware", "strings_to_yara", "vthash", "xmzmd5"]

@@ -1,5 +1,5 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="512" width="512" src="/images/malchela.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="/images/malchela.png"/>
  <p>
   <h2>
    Malchela
@@ -11,50 +11,49 @@
 <p>
  </div>
 <div align="center">
-  <img style="padding:0;vertical-align:bottom;" height="340" width="526" src="/images/malchela_screenshot.png"/>
+  <img style="padding:0;vertical-align:bottom;" height="545" width="792" src="/images/malchela_screenshot.png"/>
   <div align="left">
   <h5>
    Features:
   </h5>
 
-- :ram: Capture a memory image with MAGNET DumpIt for Windows, (x32, x64, ARM64), or MAGNET RAM Capture on legacy systems;
-- :computer: Create a Triage collection* with MAGNET Response;
-- :closed_lock_with_key: Check for encrypted disks with Encrypted Disk Detector;
-- :key: Recover the active BitLocker Recovery key;
-- :floppy_disk: Save all artifacts, output, and audit logs to USB or source network drive.
+>- Combine YARA	:: Point it at a directory of YARA files and it will output one combined rule
+>- Extract Samples :: Point it at a directory of password protected malware files to extract all
+>- Hash It :: Point it to a file and get the MD5, SHA1 and SHA256 hash
+>- Measure YARA :: Calculate the speed of YARA searches using a single rule or a directory of rules
+>- MZMD5 :: Recurse a directory, for files with MZ header, create hash list
+>- MZcount :: Recurse a directory, uses YARA to count MZ, Zip, PDF, other 
+>- NSRL MD5 Lookup :: Query a MD5 hash against NSRL
+>- NSRL SHA1 Lookup :: Query a SHA1hash against NSRL 
+>- Strings to YARA :: Prompts for metadata and strings (text file) to create a YARA rule
+>- Malware Hash Lookup :: Query a hash value against VirusTotal & Malware Bazaar*
+>- XMZMD5 :: Recurse a directory, for files without MZ, Zip or PDF header, create hash list
 
-*There are collection profiles available for: 
->- Volatile Artifacts
->- Triage Collection (Volatile, RAM, Pagefile, Triage artifacts)
->- Just RAM
->- RAM & Pagefile
->- or build your own using the RESPONSE CLI options
 
-
-<h5>
-   Prerequisites:
-</h5>
-
->- [MAGNET Response](https://www.magnetforensics.com/resources/magnet-response/)
->- [MAGNET Encrypted Disk Detector](https://www.magnetforensics.com/resources/encrypted-disk-detector/) 
+*The Malware Hash Lookup requires an api key for Virus Total and Malware Bazaar.  If unidentified , MalChela will prompt you to create them the first time you run the malware lookup function.
 
 
 <h5>
-Network Collections:
-</h5>
+   About:
+   </h5>
 
-CyberPipe 5 also has the capability to write captures to a network repository. Just un-comment # the Network section and update the `\\server\share` line to reflect your environment.
+> mal — malware</p>
+> chela — “crab hand”
 
-In this configuration it can be included as part of automation functions like a collection being triggered from an event logged on the EDR.
+>- A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things;  just like these programs.
 
 <h5>
-   Prior version (KAPE support):
+Installation:
 </h5>
 
-If you're a prior user of CyberPipe and want to use the previous method where KAPE facilitates the collection with the MAGNET tools, or have made other KAPE modifications, use v4.01 `CyberPipe.v4.01.ps1`
+- Install Rust - https://rustup.rs/
+- Git clone https://github.com/dwmetz/MalChela.git
+- cd MalChela
+- cargo build
 
+<h5>
+   Run:
+</h5>
 
+- cargo run -p malchela
 
-> Note: this script was previously titled CSIRT-Collect. Project name and repo updated with version 4.0.
-
-For more information visit [BakerStreetForensics.com](https://bakerstreetforensics.com/2024/02/14/cyberpipe-version-5-0/)

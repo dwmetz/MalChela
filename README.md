@@ -50,9 +50,9 @@ Installation:
 Install Rust - https://rustup.rs/</p>
 
 ```
-- Git clone https://github.com/dwmetz/MalChela.git
-- cd MalChela
-- cargo build
+Git clone https://github.com/dwmetz/MalChela.git
+cd MalChela
+cargo build
 ```
 
 <h3>

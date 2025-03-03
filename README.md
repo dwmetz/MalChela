@@ -38,9 +38,8 @@
    About:
    </h3>
 
-**mal** — malware</p>
-**chela** — “crab hand”
-
+> **mal** — malware</p>
+> **chela** — “crab hand”</p>
 > A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things;  just like these programs.
 
 <h3>
@@ -48,8 +47,8 @@ Installation:
 </h3>
 
 
-(first) Install Rust - https://rustup.rs/</p>
-(then)
+Install Rust - https://rustup.rs/</p>
+
 ```
 - Git clone https://github.com/dwmetz/MalChela.git
 - cd MalChela

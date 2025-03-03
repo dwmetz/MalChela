@@ -77,8 +77,8 @@ fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path) -> i
                     // Only process files that do not match any YARA rule
                     if matches.is_empty() {
                         if let Some(md5_hash) = calculate_md5(path) {
-                            println!("Writing hash for {}: {}", path.display(), md5_hash);
-                            writeln!(output, "{} {}", path.display(), md5_hash)?;
+                            println!("Writing hash for {}", path.display());
+                            writeln!(output, "{}", md5_hash)?; // Write only the hash value
                             hash_count += 1;
                         }
                     }

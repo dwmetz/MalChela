@@ -5,3 +5,4 @@ XMZMD5.txt
 combined_rule.yar
 malhash-*
 /target/*
+images/.DS_Store

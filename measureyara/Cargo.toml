@@ -1,0 +1,8 @@
+[package]
+name = "measureyara"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+yara = "0.30.0"
+yara-sys = "0.29.0"

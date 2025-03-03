@@ -1,0 +1,7 @@
+[package]
+name = "about"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prettytable = "0.10"

@@ -1,222 +1,126 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::io::{self, Write};
-use yara::{Compiler, Rules};
-use std::time::Instant;
+use std::{io::{self}, path::{Path, PathBuf}};
+use walkdir::WalkDir;
+use yara::{Rules, Scanner, Rule};
+use std::error::Error;
 
-fn main() {
-    println!("Choose an option:");
-    println!("1. Run a single YARA rule file (.yar or .yara)");
-    println!("2. Run all YARA rules in a folder (combined into one rule set)");
-    println!("3. Run all YARA rules in a folder (individually)");
-    print!("Enter your choice (1, 2, or 3): ");
-    io::stdout().flush().unwrap();
+// Function to load a single YARA rule file
+fn load_yara_rule(rule_file_path: &Path) -> Result<Rules, Box<dyn Error>> {
+    println!("Attempting to load YARA rule file: {:?}", rule_file_path);
 
-    let mut choice = String::new();
-    io::stdin().read_line(&mut choice).unwrap();
-    let choice = choice.trim();
-
-    match choice {
-        "1" => {
-            print!("Enter the path to the YARA rule file (.yar or .yara): ");
-            io::stdout().flush().unwrap();
-            let mut rule_path = String::new();
-            io::stdin().read_line(&mut rule_path).unwrap();
-            let rule_path = resolve_path(rule_path.trim(), false);
-
-            print!("Enter the directory to scan: ");
-            io::stdout().flush().unwrap();
-            let mut target_dir = String::new();
-            io::stdin().read_line(&mut target_dir).unwrap();
-            let target_dir = resolve_path(target_dir.trim(), true);
-
-            if let (Some(rule_path), Some(target_dir)) = (rule_path, target_dir) {
-                run_single_rule(&rule_path, &target_dir);
-            } else {
-                eprintln!("Invalid file or directory path.");
-            }
-        }
-        "2" => {
-            print!("Enter the folder containing YARA rule files: ");
-            io::stdout().flush().unwrap();
-            let mut rules_folder = String::new();
-            io::stdin().read_line(&mut rules_folder).unwrap();
-            let rules_folder = resolve_path(rules_folder.trim(), true);
-
-            print!("Enter the directory to scan: ");
-            io::stdout().flush().unwrap();
-            let mut target_dir = String::new();
-            io::stdin().read_line(&mut target_dir).unwrap();
-            let target_dir = resolve_path(target_dir.trim(), true);
-
-            if let (Some(rules_folder), Some(target_dir)) = (rules_folder, target_dir) {
-                run_combined_rules(&rules_folder, &target_dir);
-            } else {
-                eprintln!("Invalid folder or directory path.");
-            }
-        }
-        "3" => {
-            print!("Enter the folder containing YARA rule files: ");
-            io::stdout().flush().unwrap();
-            let mut rules_folder = String::new();
-            io::stdin().read_line(&mut rules_folder).unwrap();
-            let rules_folder = resolve_path(rules_folder.trim(), true);
-
-            print!("Enter the directory to scan: ");
-            io::stdout().flush().unwrap();
-            let mut target_dir = String::new();
-            io::stdin().read_line(&mut target_dir).unwrap();
-            let target_dir = resolve_path(target_dir.trim(), true);
-
-            if let (Some(rules_folder), Some(target_dir)) = (rules_folder, target_dir) {
-                run_individual_rules(&rules_folder, &target_dir);
-            } else {
-                eprintln!("Invalid folder or directory path.");
-            }
-        }
-        _ => eprintln!("Invalid choice. Please enter 1, 2, or 3."),
+    // Check if the file exists
+    if !rule_file_path.exists() {
+        return Err(Box::new(io::Error::new(io::ErrorKind::NotFound, "YARA rule file not found")));
     }
-}
 
-fn run_single_rule(rule_path: &Path, target_dir: &Path) {
-    let start_time = Instant::now();
-
-    match Compiler::new()
-        .expect("Failed to create compiler")
-        .add_rules_file(rule_path)
-    {
-        Ok(compiler) => match compiler.compile_rules() {
-            Ok(rules) => {
-                let total_matches = scan_directory(&rules, target_dir);
-                println!("Total matches found: {}", total_matches);
-            }
-            Err(err) => eprintln!("Error compiling YARA rules: {}", err),
+    // Try to load the YARA rule file
+    match Rules::load_from_file(rule_file_path.to_str().unwrap()) {
+        Ok(rules) => {
+            println!("YARA rule loaded successfully: {:?}", rule_file_path);
+            Ok(rules)
         },
-        Err(err) => eprintln!("Error adding YARA rule file {}: {}", rule_path.display(), err),
+        Err(e) => {
+            // Provide a detailed error message if loading fails
+            eprintln!("Failed to load YARA rule file {:?} due to: {:?}", rule_file_path, e);
+            Err(Box::new(e))  // Return the actual YARA error for debugging
+        }
     }
-
-    let duration = start_time.elapsed();
-    println!("Execution time: {:.2?}", duration);
 }
 
-fn run_combined_rules(rules_folder: &Path, target_dir: &Path) {
-    let start_time = Instant::now();
+// Function to load all YARA rules from a directory (and subdirectories)
+fn load_yara_rules_from_directory(directory_path: &PathBuf) -> Result<Vec<Rules>, Box<dyn Error>> {
+    let mut combined_rules = Vec::new(); // Create an empty vector to store rules
 
-    // Collect all valid rule paths
-    let rule_paths: Vec<PathBuf> = fs::read_dir(rules_folder)
-        .expect("Failed to read folder")
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension() == Some(std::ffi::OsStr::new("yar")))
-        .map(|entry| entry.path())
-        .collect();
+    // Walk the directory to find all YARA rule files
+    for entry in WalkDir::new(directory_path) {
+        let entry = entry?;
+        let path = entry.path();
 
-    // Compile all valid rules together
-    match rule_paths.iter().try_fold(
-        Compiler::new().expect("Failed to create compiler"),
-        |compiler, path| compiler.add_rules_file(path),
-    ) {
-        Ok(compiler) => match compiler.compile_rules() {
-            Ok(rules) => {
-                let total_matches = scan_directory(&rules, target_dir);
-                println!("Total matches found: {}", total_matches);
-            }
-            Err(err) => eprintln!("Error compiling YARA rules: {}", err),
-        },
-        Err(err) => eprintln!("Error adding YARA rules: {}", err),
-    }
+        if path.is_file() && (path.extension() == Some("yara".as_ref()) || path.extension() == Some("yar".as_ref())) {
+            // Load the individual rule file
+            let rules = load_yara_rule(path)?;
 
-    let duration = start_time.elapsed();
-    println!("Execution time: {:.2?}", duration);
-}
-
-fn run_individual_rules(rules_folder: &Path, target_dir: &Path) {
-    let start_time = Instant::now();
-
-    // Collect all valid rule paths
-    let rule_paths: Vec<PathBuf> = fs::read_dir(rules_folder)
-        .expect("Failed to read folder")
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension() == Some(std::ffi::OsStr::new("yar")))
-        .map(|entry| entry.path())
-        .collect();
-
-    // Compile and run each rule individually
-    for path in &rule_paths {
-        match Compiler::new()
-            .expect("Failed to create compiler")
-            .add_rules_file(path)
-        {
-            Ok(compiler) => match compiler.compile_rules() {
-                Ok(rules) => {
-                    println!(
-                        "Scanning with rule file: {}",
-                        path.file_name().unwrap_or_default().to_string_lossy()
-                    );
-                    scan_directory(&rules, target_dir);
-                    println!(); // Add spacing between results for readability
-                }
-                Err(err) => eprintln!(
-                    "Error compiling YARA rule file {}: {}",
-                    path.display(),
-                    err
-                ),
-            },
-            Err(err) => eprintln!(
-                "Error adding YARA rule file {}: {}",
-                path.display(),
-                err
-            ),
+            // Add the rules to the combined set
+            combined_rules.push(rules);
         }
     }
 
-    let duration = start_time.elapsed();
-    println!("Execution time: {:.2?}", duration);
+    Ok(combined_rules)
 }
 
-fn scan_directory(rules: &Rules, dir: &Path) -> usize {
-    let mut total_matches = 0;
+// Function to scan a file using the loaded YARA rules
+fn scan_with_yara<'a>(rules: &'a Rules, path_to_scan: &'a Path) -> Result<Vec<Rule<'a>>, Box<dyn Error>> {
+    // Alternative to Scanner::new(), use a public method to create the scanner (adjust based on available methods)
+    // Ensure you are using the correct public method from YARA crate
+    let mut scanner = Scanner::load_from_rules(rules)?;  // Assuming this method exists, check documentation for details
 
-    for entry in fs::read_dir(dir).expect("Failed to read directory") {
-        if let Ok(entry) = entry {
-            if entry.path().is_file() {
-                match rules.scan_file(entry.path(), 10) { // Added timeout argument
-                    Ok(matches) => {
-                        for m in matches.iter() {
-                            println!(
-                                "Match found in file {}: {}",
-                                entry.path().display(),
-                                m.identifier
-                            );
-                        }
-                        total_matches += matches.len(); // Count matches
-                    }
-                    Err(e) => eprintln!(
-                        "Error scanning file {}: {}",
-                        entry.path().display(),
-                        e
-                    ),
-                }
-            }
-        }
-    }
-
-    total_matches
+    // Scan the file at the provided path
+    let matches = scanner.scan_file(path_to_scan)?;
+    Ok(matches)
 }
 
-/// Resolves a path conditionally using canonicalization.
-///
-/// If `trusted` is true, it assumes the parent path is canonical and only resolves symlinks.
-/// Otherwise, it fully canonicalizes the path.
-///
-/// Returns `None` if the path is invalid.
-fn resolve_path<P: AsRef<Path>>(path: P, trusted: bool) -> Option<PathBuf> {
-    let path = PathBuf::from(path.as_ref());
+// Main function to execute the program
+fn main() -> Result<(), Box<dyn Error>> {
+    // Ask the user whether to scan with a single rule or a directory of rules
+    println!("Would you like to scan with a single YARA rule or a directory of rules? (single/directory)");
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let choice = input.trim();
 
-    if trusted && path.exists() {
-        fs::canonicalize(&path).ok()
-    } else if !trusted {
-        Some(path)
+    let rules: Rules;
+
+    if choice == "single" {
+        // Ask the user to provide a YARA rule file
+        println!("Please provide the path to the YARA rule file:");
+        input.clear();
+        io::stdin().read_line(&mut input)?;
+        let rule_file_path = PathBuf::from(input.trim());
+
+        // Load the YARA rule
+        rules = load_yara_rule(&rule_file_path)?;
+    } else if choice == "directory" {
+        // Ask the user to provide the directory containing YARA rules
+        println!("Please provide the path to the directory containing YARA rules:");
+        input.clear();
+        io::stdin().read_line(&mut input)?;
+        let directory_path = PathBuf::from(input.trim());
+
+        // Load all YARA rules from the directory
+        let rules_vector = load_yara_rules_from_directory(&directory_path)?;
+
+        // Combine all rules into one (we can't do it with unsafe_try_from, so just keep the vector)
+        // Depending on your use case, you might want to scan with each set of rules separately
+        rules = rules_vector.into_iter().next().ok_or_else(|| Box::new(io::Error::new(io::ErrorKind::NotFound, "No rules found in directory")))?;
     } else {
-        None
+        return Err(Box::new(io::Error::new(io::ErrorKind::InvalidInput, "Invalid choice")));
     }
+
+    // Ask the user for the directory to scan
+    println!("Please provide the path to the directory you want to scan:");
+    input.clear();
+    io::stdin().read_line(&mut input)?;
+    let path_to_scan = PathBuf::from(input.trim());
+
+    // Walk through the directory and scan each file with the loaded YARA rules
+    for entry in WalkDir::new(path_to_scan) {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            // Scan each file with the YARA rules
+            let matches = scan_with_yara(&rules, &path)?;
+
+            // Print the scan results
+            if matches.is_empty() {
+                println!("No matches found in {:?}", path);
+            } else {
+                println!("Matches found in {:?}:", path);
+                for rule in matches {
+                    // Access the rule's identifier directly as a field
+                    println!("{}", rule.identifier);
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

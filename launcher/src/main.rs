@@ -24,10 +24,12 @@ fn main() {
         ("Combine YARA", "cargo run --bin combine_yara"),
         ("Extract Samples", "cargo run --bin extract_samples"),
         ("MZMD5", "cargo run --bin mzmd5"),
+        ("MZcount", "cargo run --bin mzcount"),
         ("NSRL MD5 Lookup", "cargo run --bin nsrlmd5"),
         ("NSRL SHA1 Lookup", "cargo run --bin nsrlsha1"),
         ("Strings to YARA", "cargo run --bin strings_to_yara"),
         ("Malware Hash Lookup", "cargo run --bin vthash"),
+        ("XMZMD5", "cargo run --bin xmzmd5"),
     ];
 
     loop {

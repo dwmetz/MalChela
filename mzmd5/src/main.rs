@@ -1,10 +1,10 @@
+use md5::{Digest, Md5};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
-use md5::{Md5, Digest};
-use yara::{Compiler, Rules};
 use walkdir::WalkDir;
+use yara::{Compiler, Rules};
 
 /// Compile YARA rules for detecting MZ headers.
 fn compile_yara_rules() -> Result<Rules, yara::Error> {
@@ -19,12 +19,9 @@ rule mz_header {
 }
 "#;
 
-    Compiler::new()
-        .map_err(yara::Error::from)?
-        .add_rules_str(rule)
-        .map_err(yara::Error::from)?
+    Compiler::new()?
+        .add_rules_str(rule)?
         .compile_rules()
-        .map_err(yara::Error::from)
 }
 
 /// Calculate the MD5 hash of a file.
@@ -44,12 +41,16 @@ fn calculate_md5(file_path: &Path) -> Option<String> {
     Some(format!("{:x}", hasher.finalize()))
 }
 
-/// Scan files in a directory using YARA rules and write results to an output file.
+/// Scan files in a directory or volume using YARA rules and write results to an output file.
 fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path) -> usize {
     let mut hash_count = 0;
     let mut output = File::create(output_file).expect("Failed to create output file");
 
-    for entry in WalkDir::new(directory).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(directory)
+        .follow_links(true) // Follow symbolic links
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         let path = entry.path();
 
         if path.is_file() {
@@ -57,35 +58,39 @@ fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path) -> u
                 Ok(matches) => {
                     if matches.iter().any(|m| m.identifier == "mz_header") {
                         if let Some(md5_hash) = calculate_md5(path) {
-                            // Debug output for verification
-                            println!("Writing hash to file: {}", md5_hash);
-
-                            // Write hash to output file
-                            writeln!(output, "{}", md5_hash).expect("Failed to write to output file");
+                            println!("Writing hash for {}: {}", path.display(), md5_hash);
+                            writeln!(output, "{} {}", path.display(), md5_hash)
+                                .expect("Failed to write to output file");
                             hash_count += 1;
                         }
                     }
                 }
-                Err(_) => continue,
+                Err(err) => {
+                    eprintln!("[WARNING] Failed to scan file {}: {}", path.display(), err);
+                }
             }
         }
     }
 
-    // Flush the buffer to ensure all data is written
     output.flush().expect("Failed to flush output file");
-
     hash_count
 }
 
 fn main() {
     println!("Enter the directory or volume you want to scan:");
     let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("Failed to read input");
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read input");
 
     let directory_to_scan = match fs::canonicalize(input.trim()) {
         Ok(path) => path,
         Err(err) => {
-            eprintln!("Error: Failed to resolve path. Details: {}", err);
+            eprintln!(
+                "Error: Failed to resolve path '{}'. Details: {}",
+                input.trim(),
+                err
+            );
             process::exit(1);
         }
     };
@@ -95,7 +100,10 @@ fn main() {
     let metadata = match fs::metadata(&directory_to_scan) {
         Ok(meta) => meta,
         Err(err) => {
-            eprintln!("Error: The specified path does not exist or cannot be accessed. Details: {}", err);
+            eprintln!(
+                "Error: The specified path does not exist or cannot be accessed. Details: {}",
+                err
+            );
             process::exit(1);
         }
     };
@@ -105,7 +113,7 @@ fn main() {
         process::exit(1);
     }
 
-    let output_file_path = Path::new("MZMD5.txt");
+    let output_file_path = PathBuf::from("MZMD5.txt");
 
     if output_file_path.exists() {
         println!(
@@ -113,7 +121,9 @@ fn main() {
             output_file_path.display()
         );
         let mut overwrite_input = String::new();
-        io::stdin().read_line(&mut overwrite_input).expect("Failed to read input");
+        io::stdin()
+            .read_line(&mut overwrite_input)
+            .expect("Failed to read input");
         if overwrite_input.trim().to_lowercase() != "y" {
             println!("Operation canceled.");
             process::exit(0);
@@ -128,7 +138,7 @@ fn main() {
         }
     };
 
-    let total_hashes = scan_and_hash_files(&directory_to_scan, &yara_rules, output_file_path);
+    let total_hashes = scan_and_hash_files(&directory_to_scan, &yara_rules, &output_file_path);
 
     println!("\nScan completed.");
     println!("Total number of hashes written: {}", total_hashes);

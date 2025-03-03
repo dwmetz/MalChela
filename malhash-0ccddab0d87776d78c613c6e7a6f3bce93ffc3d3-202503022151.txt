@@ -1,0 +1,85 @@
+HASH: 0ccddab0d87776d78c613c6e7a6f3bce93ffc3d3
+DATE/TIME UTC: 2025-03-02 21:51:53.642144 UTC
+
+Submitting the hash 0ccddab0d87776d78c613c6e7a6f3bce93ffc3d3 to VirusTotal...
+
+** VIRUS TOTAL RESULTS: **
+VirusTotal Permalink: https://www.virustotal.com/gui/file/833610e95cc965e70096620e0adaa8917963df9f9ec56e00af1ff331161a7971/detection/f-833610e95cc965e70096620e0adaa8917963df9f9ec56e00af1ff331161a7971-1740942607
+
+45 out of 71 detected this sample.
+
+Detection Names:
+- APEX: Malicious
+- AVG: Win32:SpywareX-gen [Trj]
+- AhnLab-V3: Trojan/Win.Generic.R693419
+- Alibaba: TrojanPSW:Win32/Stealer.35ef2edb
+- Arcabit: Trojan.Zusy.D8DBF8
+- Avast: Win32:SpywareX-gen [Trj]
+- BitDefender: Gen:Variant.Zusy.580600
+- Bkav: W32.AIDetectMalware
+- CAT-QuickHeal: cld.trojanpws.stealer
+- CTX: exe.trojan.themida
+- CrowdStrike: win/malicious_confidence_100% (W)
+- Cylance: Unsafe
+- Cynet: Malicious (score: 100)
+- DeepInstinct: MALICIOUS
+- ESET-NOD32: a variant of Win32/Packed.Themida.HZB
+- Elastic: malicious (high confidence)
+- Emsisoft: Gen:Variant.Zusy.580600 (B)
+- FireEye: Generic.mg.9218e5cad03c752f
+- Fortinet: W32/Themida.HZB!tr
+- GData: Gen:Variant.Zusy.580600
+- Google: Detected
+- Gridinsoft: Malware.Win32.Gen.tr
+- K7AntiVirus: Trojan ( 00587f0f1 )
+- K7GW: Trojan ( 00587f0f1 )
+- Kaspersky: VHO:Trojan-PSW.Win32.Azorult.gen
+- Kingsoft: Win32.Trojan-PSW.Stealer.gen
+- Lionic: Trojan.Win32.Themida.i!c
+- Malwarebytes: Trojan.MalPack.Themida.Generic
+- MaxSecure: Trojan.Malware.300983.susgen
+- McAfee: Artemis!9218E5CAD03C
+- McAfeeD: Real Protect-LS!9218E5CAD03C
+- MicroWorld-eScan: Gen:Variant.Zusy.580600
+- Microsoft: Trojan:Win32/Coroxy!rfn
+- Paloalto: generic.ml
+- Panda: Trj/Chgt.AD
+- Rising: Trojan.Agent!1.1280F (CLASSIC)
+- SentinelOne: Static AI - Malicious PE
+- Skyhigh: Artemis!Trojan
+- Sophos: Mal/Generic-S
+- Symantec: ML.Attribute.HighConfidence
+- Tencent: Win32.Trojan.FalseSign.Hajl
+- Trapmine: suspicious.low.ml.score
+- TrendMicro: Trojan.Win32.AMADEY.YXFCBZ
+- TrendMicro-HouseCall: Trojan.Win32.AMADEY.YXFCBZ
+- VIPRE: Gen:Variant.Zusy.580600
+
+
+Submitting the hash 0ccddab0d87776d78c613c6e7a6f3bce93ffc3d3 to Malware Bazaar...
+
+
+** MALWARE BAZAAR RESULTS: **
+First Seen: 2025-03-02 13:18:36
+Last Seen: 2025-03-02 14:32:37
+File Type: exe
+Delivery Method: web_download
+
+Hashes:
+- SHA256 Hash: 833610e95cc965e70096620e0adaa8917963df9f9ec56e00af1ff331161a7971
+- MD5 Hash: 9218e5cad03c752f237ed87a9e52def4
+- SHA1 Hash: 0ccddab0d87776d78c613c6e7a6f3bce93ffc3d3
+
+YARA Rule Matches:
+- Rule Name: meth_peb_parsing
+  Author: Willi Ballenthin
+- Rule Name: PE_Digital_Certificate
+  Author: albertzsigovits
+- Rule Name: Sus_Obf_Enc_Spoof_Hide_PE
+  Author: XiAnzheng
+  Description: Check for Overlay, Obfuscating, Encrypting, Spoofing, Hiding, or Entropy Technique(can create FP)
+- Rule Name: vmdetect
+  Author: nex
+  Description: Possibly employs anti-virtualization techniques
+
+** END REPORT **

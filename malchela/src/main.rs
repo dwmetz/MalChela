@@ -24,7 +24,6 @@ fn main() {
         ("Combine YARA", "cargo run --bin combine_yara"),
         ("Extract Samples", "cargo run --bin extract_samples"),
         ("Hash It", "cargo run --bin hashit"),
-        ("Measure YARA", "cargo run --bin measureyara"),
         ("MZcount", "cargo run --bin mzcount"),
         ("NSRL MD5 Lookup", "cargo run --bin nsrlmd5"),
         ("NSRL SHA1 Lookup", "cargo run --bin nsrlsha1"),

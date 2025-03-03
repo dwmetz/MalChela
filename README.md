@@ -4,18 +4,18 @@
   <h2>
    Malchela
   </h2>
-  <h5>
+  <h4>
       A YARA & Malware Analysis Toolkit written in Rust.
-   </h5>
+   </h4>
 <p>
 <p>
  </div>
 <div align="center">
   <img style="padding:0;vertical-align:bottom;" height="545" width="792" src="/images/malchela_screenshot.png"/>
   <div align="left">
-  <h5>
+  <h3>
    Features:
-  </h5>
+  </h3>
 
 >- Combine YARA	:: Point it at a directory of YARA files and it will output one combined rule
 >- Extract Samples :: Point it at a directory of password protected malware files to extract all

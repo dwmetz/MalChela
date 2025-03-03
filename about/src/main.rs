@@ -47,10 +47,6 @@ println!("
         Cell::new("Point it to a file and get the MD5, SHA1 and SHA256 hash"),
     ]));
     table.add_row(Row::new(vec![
-        Cell::new("Measure YARA"),
-        Cell::new("Calculate the speed of YARA searches using a single rule or a directory of rules"),
-    ]));
-    table.add_row(Row::new(vec![
         Cell::new("MZMD5"),
         Cell::new("Recurse a directory, for files with MZ header, create hash list"),
     ]));

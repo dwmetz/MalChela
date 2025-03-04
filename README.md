@@ -63,4 +63,4 @@ cargo run -p malchela
 ```
 
 Caveat Emptor:
-Successfully tested on MacOS on Silicon. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. More to come... Testers (and contributors) appreciated. If you are having issues, many of the functions here are also available via Python and PowerShell scripts [here](https://github.com/dwmetz/Toolbox).
+Successfully tested on MacOS on Silicon and Ubuntu. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. More to come... Testers (and contributors) appreciated. Yara, OpenSSL (and their development options) and Clang are the key packages. If you are having issues, many of the functions here are also available via Python and PowerShell scripts [here](https://github.com/dwmetz/Toolbox).

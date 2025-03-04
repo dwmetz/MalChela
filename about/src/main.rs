@@ -24,7 +24,9 @@ println!("
     println!("ABOUT:");
     println!("  mal — malware");
     println!("  chela — \"crab hand\"\n");
-    println!("A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things; just like these programs.\n");
+    println!("A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage,"); 
+    println!("typically found on the first pair of legs, used for grasping, defense, and manipulating things; ");
+    println!("just like these programs.\n");
 
     println!("FEATURES:");
 
@@ -81,9 +83,9 @@ println!("
 
     table.printstd();
 
-    println!(
-        "\n*The Malware Hash Lookup requires an API key for VirusTotal and Malware Bazaar. If unidentified, MalChela will prompt you to create them the first time you run the malware lookup function."
-    );
+    println!();
+    println!("* The Malware Hash Lookup requires an API key for VirusTotal and Malware Bazaar. If unidentified,"); 
+    println!("  MalChela will prompt you to create them the first time you run the malware lookup function.");
     println!(); 
 
 }

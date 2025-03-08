@@ -1,7 +1,9 @@
-use prettytable::{Table, Row, Cell};
+use colored::*;
 
 fn main() {
-println!("    
+    let crab_art = format!(
+        "{}",
+        r#"
                                                                                     
                                                                                         
                 ▒▒▒▒▒▒▒▒        ▒▒▒▒▒▒▒▒                                
@@ -18,74 +20,46 @@ println!("
                   ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒                                  
                 ▒▒▒▒    ▒▒▒▒▒▒▒▒    ▒▒▒▒                                
 
-            https://bakerstreetforensics.com  
-\n");    
-    println!("MalChela - A YARA & Malware Analysis Toolkit written in Rust\n");
-    println!("ABOUT:");
+            https://bakerstreetforensics.com                                                                                                                                  
+"#
+    ).red();
+
+    println!("{}", crab_art);
+
+    println!("{}", "MalChela - A YARA & Malware Analysis Toolkit written in Rust\n".blue());
+    println!("{}", "ABOUT:".bright_blue());
     println!("  mal — malware");
     println!("  chela — \"crab hand\"\n");
-    println!("A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage,"); 
+    println!("A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage,");
     println!("typically found on the first pair of legs, used for grasping, defense, and manipulating things; ");
     println!("just like these programs.\n");
 
-    println!("FEATURES:");
+    println!("{}", "FEATURES:".bright_blue());
 
-    let mut table = Table::new();
-    table.add_row(Row::new(vec![
-        Cell::new("Feature"),
-        Cell::new("Description"),
-    ]));
+    let feature_width = 20; // Adjust as needed
+    let description_width = 70; // Adjust as needed
 
-    table.add_row(Row::new(vec![
-        Cell::new("Combine YARA"),
-        Cell::new("Point it at a directory of YARA files and it will output one combined rule"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("Extract Samples"),
-        Cell::new("Point it at a directory of password protected malware files to extract all"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("Hash It"),
-        Cell::new("Point it to a file and get the MD5, SHA1 and SHA256 hash"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("MZMD5"),
-        Cell::new("Recurse a directory, for files with MZ header, create hash list"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("MZcount"),
-        Cell::new("Recurse a directory, uses YARA to count MZ, Zip, PDF, other"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("NSRL MD5 Lookup"),
-        Cell::new("Query an MD5 hash against NSRL"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("NSRL SHA1 Lookup"),
-        Cell::new("Query a SHA1 hash against NSRL"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("Strings to YARA"),
-        Cell::new("Prompts for metadata and strings (text file) to create a YARA rule"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("Malware Hash Lookup"),
-        Cell::new("Query a hash value against VirusTotal & Malware Bazaar*"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("XMZMD5"),
-        Cell::new("Recurse a directory, for files without MZ, Zip or PDF header, create hash list"),
-    ]));
-    table.add_row(Row::new(vec![
-        Cell::new("About"),
-        Cell::new("You are here"),
-    ]));
+    let table_string = format!(
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Feature".green(), "Description".green()),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Combine YARA", "Point it at a directory of YARA files and it will output one combined rule"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Extract Samples", "Point it at a directory of password protected malware files to extract all"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Hash It", "Point it to a file and get the MD5, SHA1 and SHA256 hash"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "MSTRINGS", "Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex."),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "MZMD5", "Recurse a directory, for files with MZ header, create hash list"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "MZcount", "Recurse a directory, uses YARA to count MZ, Zip, PDF, other"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "NSRL MD5 Lookup", "Query an MD5 hash against NSRL"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "NSRL SHA1 Lookup", "Query a SHA1 hash against NSRL"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Strings to YARA", "Prompts for metadata and strings (text file) to create a YARA rule"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Malware Hash Lookup", "Query a hash value against VirusTotal & Malware Bazaar*"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "XMZMD5", "Recurse a directory, for files without MZ, Zip or PDF header, create hash list"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "About", "You are here"),
+    );
 
-    table.printstd();
+    println!("{}", table_string);
 
-    println!();
-    println!("* The Malware Hash Lookup requires an API key for VirusTotal and Malware Bazaar. If unidentified,"); 
-    println!("  MalChela will prompt you to create them the first time you run the malware lookup function.");
-    println!(); 
-
+    println!("{}", "\n".yellow());
+    println!("{}", "* The Malware Hash Lookup requires an API key for VirusTotal and Malware Bazaar. If unidentified,".yellow());
+    println!("{}", "  MalChela will prompt you to create them the first time you run the malware lookup function.".yellow());
+    println!("{}", "\n".white());
 }

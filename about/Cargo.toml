@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-prettytable = "0.10"
+prettytable-rs = "0.10.0"
+colored = "2" #Or newer

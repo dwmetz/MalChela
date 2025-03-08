@@ -1,6 +1,6 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, BufRead, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Prompts the user for input and returns the collected metadata.
 fn get_user_input() -> (String, String, String, String, String) {
@@ -89,12 +89,19 @@ fn main() -> io::Result<()> {
             // Print the generated YARA rule.
             println!("Generated YARA rule:\n{}", yara_rule);
 
-            // Save the YARA rule to a file.
+            // Create the "Saved_Output" directory if it doesn't exist.
+            let output_dir = Path::new("Saved_Output");
+            fs::create_dir_all(output_dir)?;
+
+            // Save the YARA rule to a file in the "Saved_Output" directory.
             let yar_filename = format!("{}.yar", rule_name);
-            let mut yar_file = File::create(&yar_filename)?;
+            let mut yar_file_path = PathBuf::from(output_dir);
+            yar_file_path.push(yar_filename);
+
+            let mut yar_file = File::create(&yar_file_path)?;
             yar_file.write_all(yara_rule.as_bytes())?;
 
-            println!("YARA rule saved to {}", yar_filename);
+            println!("YARA rule saved to {}", yar_file_path.display());
         }
         Err(e) => {
             eprintln!("Error generating YARA rule: {}", e);

@@ -1,19 +1,77 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::io::{self, Write};
+use colored::*;
+use std::env;
+use std::path::PathBuf;
 
-// ANSI color codes
-const RED: &str = "\x1B[31m";
-const GREEN: &str = "\x1B[32m";
-const YELLOW: &str = "\x1B[33m";
-const BLUE: &str = "\x1B[34m";
-const CYAN: &str = "\x1B[36m";
-const RESET: &str = "\x1B[0m";
-const GRAY: &str = "\x1B[37m"; 
+fn find_workspace_root() -> io::Result<PathBuf> {
+    let mut current_dir = env::current_exe()?;
+    current_dir.pop();
+    current_dir.pop();
+    current_dir.pop();
+
+    let workspace_root = current_dir.join("MalChela");
+    if workspace_root.exists() && workspace_root.is_dir() {
+        Ok(workspace_root)
+    } else {
+        eprintln!("{}", "Error: Workspace root not found.".red());
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Workspace root not found",
+        ))
+    }
+}
+
+fn check_for_updates(crab_art: &str) -> io::Result<()> {
+    let workspace_root = match find_workspace_root() {
+        Ok(path) => path,
+        Err(err) => {
+            eprintln!("{}", format!("Error finding workspace root: {}", err).red());
+            return Err(err);
+        }
+    };
+
+    if let Err(err) = env::set_current_dir(&workspace_root) {
+        eprintln!("{}", format!("Error changing directory: {}", err).red());
+        return Err(err);
+    }
+
+    let update_output = Command::new("git")
+        .arg("remote")
+        .arg("update")
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .output()?;
+
+    if !update_output.status.success() {
+        io::stderr().write_all(&update_output.stderr)?;
+        eprintln!("{}", "Error: Git remote update failed.".red());
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Git remote update failed",
+        ));
+    }
+
+    let status_output = Command::new("git")
+        .arg("status")
+        .arg("-uno")
+        .output()?;
+
+    let status_str = String::from_utf8_lossy(&status_output.stdout);
+
+    if status_str.contains("branch is behind") {
+        println!("{}", crab_art);
+        println!("{}", "Update available. Please run `git pull` from the workspace root.".yellow());
+    } else {
+        println!("{}", "Your branch is up to date.".green());
+    }
+
+    Ok(())
+}
 
 fn main() {
     let crab_art = format!(
-        "{}{}{}",
-        RED,
+        "{}",
         r#"
                                                                                     
                                                                                         
@@ -32,35 +90,42 @@ fn main() {
                 ▒▒▒▒    ▒▒▒▒▒▒▒▒    ▒▒▒▒                                
 
             https://bakerstreetforensics.com                                                                                                                                  
-"#,
-        RESET
+"#
+        .red()
     );
 
+    if let Err(err) = check_for_updates(&crab_art) {
+        eprintln!("{}", format!("Error checking for updates: {}", err).red());
+    }
+
+    pause();
+
+    clear_screen();
+
     let programs = vec![
-        (format!("{} Combine YARA{}", GREEN, RESET), "cargo run --bin combine_yara"),
-        (format!("{} Extract Samples{}", GREEN, RESET), "cargo run --bin extract_samples"),
-        (format!("{} Hash It{}", GREEN, RESET), "cargo run --bin hashit"),
-        (format!("{} MStrings{}", GREEN, RESET), "cargo run --bin mstrings"),
-        (format!("{} MZCount{}", GREEN, RESET), "cargo run --bin mzcount"),
-        (format!("{} MZMD5{}", GREEN, RESET), "cargo run --bin mzmd5"),
-        (format!("{} NSRL MD5 Lookup{}", GREEN, RESET), "cargo run --bin nsrlmd5"),
-        (format!("{} NSRL SHA1 Lookup{}", GREEN, RESET), "cargo run --bin nsrlsha1"),
-        (format!("{} Strings to YARA{}", GREEN, RESET), "cargo run --bin strings_to_yara"),
-        (format!("{}Malware Hash Lookup{}", GREEN, RESET), "cargo run --bin vthash"),
-        (format!("{}XMZMD5{}", GREEN, RESET), "cargo run --bin xmzmd5"),
-        (format!("{}About{}", GREEN, RESET), "cargo run --bin about"),
+        (format!("{} Combine YARA", "Combine YARA").green(), "cargo run --bin combine_yara"),
+        (format!("{} Extract Samples", "Extract Samples").green(), "cargo run --bin extract_samples"),
+        (format!("{} Hash It", "Hash It").green(), "cargo run --bin hashit"),
+        (format!("{} MStrings", "MStrings").green(), "cargo run --bin mstrings"),
+        (format!("{} MZCount", "MZCount").green(), "cargo run --bin mzcount"),
+        (format!("{} MZMD5", "MZMD5").green(), "cargo run --bin mzmd5"),
+        (format!("{} NSRL MD5 Lookup", "NSRL MD5 Lookup").green(), "cargo run --bin nsrlmd5"),
+        (format!("{} NSRL SHA1 Lookup", "NSRL SHA1 Lookup").green(), "cargo run --bin nsrlsha1"),
+        (format!("{} Strings to YARA", "Strings to YARA").green(), "cargo run --bin strings_to_yara"),
+        (format!("{}Malware Hash Lookup", "Malware Hash Lookup").green(), "cargo run --bin vthash"),
+        (format!("{}XMZMD5", "XMZMD5").green(), "cargo run --bin xmzmd5"),
+        (format!("{}About", "About").green(), "cargo run --bin about"),
     ];
 
     loop {
-        clear_screen();
         println!("{}", crab_art);
-        println!("{}MalChela - YARA & Malware Analysis Toolkit{}", BLUE, RESET);
+        println!("{}", "MalChela - YARA & Malware Analysis Toolkit".blue());
 
         println!("\nSelect a program to launch:");
         for (i, (name, _)) in programs.iter().enumerate() {
             println!("{}. {}", i + 1, name);
         }
-        println!("{}. {}Exit{}", programs.len() + 1, GRAY, RESET);
+        println!("{}. {}", programs.len() + 1, "Exit".bright_black());
 
         print!("\nEnter your choice: ");
         io::stdout().flush().unwrap();
@@ -70,18 +135,18 @@ fn main() {
         let choice: usize = match input.trim().parse() {
             Ok(num) => num,
             Err(_) => {
-                println!("{}Invalid input. Please enter a number.{}", RED, RESET);
+                println!("{}", "Invalid input. Please enter a number.".red());
                 continue;
             }
         };
 
         if choice == programs.len() + 1 {
-            println!("{}Exiting...{}", YELLOW, RESET);
+            println!("{}", "Exiting...".yellow());
             break;
         }
 
         if let Some((_, command)) = programs.get(choice - 1) {
-            println!("{}Launching {}...{}", CYAN, command, RESET);
+            println!("{}", format!("Launching {}...", command).cyan());
             match Command::new("sh")
                 .arg("-c")
                 .arg(command)
@@ -91,13 +156,14 @@ fn main() {
                     child.wait().unwrap();
                 }
                 Err(e) => {
-                    println!("{}Failed to launch program: {}{}", RED, e, RESET);
+                    println!("{}", format!("Failed to launch program: {}", e).red());
                 }
             }
             pause();
         } else {
-            println!("{}Invalid choice. Please try again.{}", RED, RESET);
+            println!("{}", "Invalid choice. Please try again.".red());
         }
+        clear_screen();
     }
 }
 

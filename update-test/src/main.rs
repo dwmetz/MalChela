@@ -1,5 +1,7 @@
 fn main() {
     println!("Testing update feature.
     
-    This is a test.");
+    This is a test.
+    
+    And another test.");
 }

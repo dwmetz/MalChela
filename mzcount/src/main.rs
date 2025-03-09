@@ -5,6 +5,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use yara::{Compiler, Rules};
 use clearscreen;
+use colored::*;
 
 #[derive(Debug)]
 struct Counts {
@@ -55,13 +56,28 @@ rule zip_header {
 
 fn display_table(counts: &Counts) {
     println!("\n+----------------------+---------+");
-    println!("| File Type           | Count   |");
-    println!("+----------------------+---------+");
-    println!("| Total Files         | {:<7} |", counts.total_files);
-    println!("| MZ Header Files     | {:<7} |", counts.mz_header);
-    println!("| PDF Header Files    | {:<7} |", counts.pdf_header);
-    println!("| ZIP Header Files    | {:<7} |", counts.zip_header);
-    println!("| Neither Header Files| {:<7} |", counts.neither_header);
+
+    println!(
+        "{}",
+        format!("| Total Files         | {:>7} |", counts.total_files)
+            .cyan()
+    );
+    println!(
+        "{}",
+        format!("| MZ Header Files     | {:>7} |", counts.mz_header).red()
+    );
+    println!(
+        "{}",
+        format!("| PDF Header Files    | {:>7} |", counts.pdf_header).green()
+    );
+    println!(
+        "{}",
+        format!("| ZIP Header Files    | {:>7} |", counts.zip_header).yellow()
+    );
+    println!(
+        "{}",
+        format!("| Neither Header Files| {:>7} |", counts.neither_header).purple()
+    );
     println!("+----------------------+---------+");
 }
 
@@ -75,7 +91,6 @@ fn scan_and_count_files(
         for entry in entries.flatten() {
             let file_path = entry.path();
 
-            // Skip unreadable or inaccessible paths
             if let Ok(file_type) = entry.file_type() {
                 if file_type.is_file() {
                     counts.total_files += 1;
@@ -97,19 +112,16 @@ fn scan_and_count_files(
                         Err(e) => eprintln!("Error scanning {:?}: {}", file_path, e),
                     }
 
-                    // Live table refresh for table display mode
                     if use_table_display {
                         clearscreen::clear().expect("Failed to clear screen");
                         display_table(counts);
                     } else {
-                        // Detailed output for each file
-                        println!("Scanned: {:?}", file_path);
+                        println!("Scanned: {:?}", file_path.to_string_lossy().blue());
                         println!("Current Counts: {:?}", counts);
                     }
 
-                    sleep(Duration::from_millis(100)); // Optional delay for smoother updates
+                    sleep(Duration::from_millis(100));
                 } else if file_type.is_dir() {
-                    // Recursively scan subdirectories
                     scan_and_count_files(&file_path, rules, use_table_display, counts);
                 } else {
                     eprintln!("Skipping special file: {:?}", file_path);
@@ -134,13 +146,12 @@ fn scan_file(file_path: &Path, rules: &Rules) -> Result<Vec<String>, io::Error> 
 
 fn main() {
     println!("Enter directory to scan:");
-    
+
     let mut directory_to_scan = String::new();
     std::io::stdin().read_line(&mut directory_to_scan).unwrap();
-    
+
     let directory_to_scan = directory_to_scan.trim();
 
-    // Resolve absolute path for compatibility with volumes
     let directory_path = match fs::canonicalize(directory_to_scan) {
         Ok(path) => path,
         Err(_) => {
@@ -153,15 +164,14 @@ fn main() {
     };
 
     println!("Choose output format - (1) Detailed, (2) Table Display:");
-    
+
     let mut display_choice = String::new();
     std::io::stdin().read_line(&mut display_choice).unwrap();
-    
+
     let use_table_display = display_choice.trim() == "2";
 
     match compile_yara_rules() {
         Ok(rules) => {
-            // Only clear screen before starting and after scanning in table view mode
             if use_table_display {
                 clearscreen::clear().expect("Failed to clear screen");
             }
@@ -176,7 +186,6 @@ fn main() {
 
             scan_and_count_files(&directory_path, &rules, use_table_display, &mut counts);
 
-            // Clear screen before displaying final results in table view mode
             if use_table_display {
                 clearscreen::clear().expect("Failed to clear screen");
             }

@@ -1243,6 +1243,7 @@ name = "mzcount"
 version = "0.1.0"
 dependencies = [
  "clearscreen",
+ "colored 2.2.0",
  "walkdir",
  "yara",
  "yara-sys",

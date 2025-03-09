@@ -22,6 +22,7 @@
 | Combine YARA	| Point it at a directory of YARA files and it will output one combined rule|
 | Extract Samples | Point it at a directory of password protected malware files to extract all|
 | Hash It | Point it to a file and get the MD5, SHA1 and SHA256 hash|
+| mStrings | Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex |
 | MZMD5 | Recurse a directory, for files with MZ header, create hash list|
 | MZcount | Recurse a directory, uses YARA to count MZ, Zip, PDF, other| 
 | NSRL MD5 Lookup | Query a MD5 hash against NSRL|

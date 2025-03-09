@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 use md5::{Md5, Digest};
 use yara::{Compiler, Rules};
@@ -104,8 +104,10 @@ fn main() {
         eprintln!("Error: The specified path is not a directory or volume.");
         process::exit(1);
     }
-
-    let output_file_path = Path::new("MZMD5.txt");
+    
+    let mut output_file_path = PathBuf::from("Saved_Output");
+    fs::create_dir_all(&output_file_path).expect("Failed to create Saved_Output directory");
+    output_file_path.push("MZMD5.txt");
 
     if output_file_path.exists() {
         println!(
@@ -128,7 +130,7 @@ fn main() {
         }
     };
 
-    let total_hashes = scan_and_hash_files(&directory_to_scan, &yara_rules, output_file_path);
+    let total_hashes = scan_and_hash_files(&directory_to_scan, &yara_rules, &output_file_path);
 
     println!("\nScan completed.");
     println!("Total number of hashes written: {}", total_hashes);

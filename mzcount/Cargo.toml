@@ -8,3 +8,4 @@ clearscreen = "4.0.1"
 walkdir = "2.5.0"
 yara = "0.30.0"
 yara-sys = "0.29.0"
+colored = "2" #Or newer

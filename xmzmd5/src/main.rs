@@ -1,5 +1,5 @@
 use md5::{Digest, Md5};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -36,9 +36,9 @@ rule zip_header {
 
 /// Compiles YARA rules from a string.
 fn compile_yara_rules() -> Result<Rules, Box<dyn std::error::Error>> {
-    let compiler = Compiler::new()?; 
-    let compiler = compiler.add_rules_str(YARA_RULES)?; 
-    let rules = compiler.compile_rules()?; 
+    let compiler = Compiler::new()?;
+    let compiler = compiler.add_rules_str(YARA_RULES)?;
+    let rules = compiler.compile_rules()?;
     Ok(rules)
 }
 
@@ -77,7 +77,7 @@ fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path) -> i
                     // Only process files that do not match any YARA rule
                     if matches.is_empty() {
                         if let Some(md5_hash) = calculate_md5(path) {
-                            println!("Writing hash for {}", path.display());
+                            println!("Writing hash to file: {}", md5_hash);
                             writeln!(output, "{}", md5_hash)?; // Write only the hash value
                             hash_count += 1;
                         }
@@ -117,7 +117,9 @@ fn main() {
     };
 
     // Output filename for unmatched files' MD5 hashes
-    let output_filename = PathBuf::from("XMZMD5.txt");
+    let mut output_filename = PathBuf::from("Saved_Output");
+    fs::create_dir_all(&output_filename).unwrap();
+    output_filename.push("XMZMD5.txt");
 
     // Check if the output file already exists and prompt user for action
     if output_filename.exists() {

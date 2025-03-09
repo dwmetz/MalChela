@@ -63,6 +63,3 @@ fn main() {
     println!("{}", "  MalChela will prompt you to create them the first time you run the malware lookup function.".yellow());
     println!("{}", "\n".white());
 }
-
-
-

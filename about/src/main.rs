@@ -26,22 +26,21 @@ fn main() {
 
     println!("{}", crab_art);
 
-    println!("{}", "MalChela - A YARA & Malware Analysis Toolkit written in Rust\n".blue());
-    println!("{}", "ABOUT:".bright_blue());
-    println!("  mal — malware");
-    println!("  chela — \"crab hand\"\n");
+    println!("{}", "MalChela - A YARA & Malware Analysis Toolkit written in Rust\n".yellow());
+    println!("{}", "ABOUT:".green());
+    println!("{}", "   mal — malware".white());
+    println!("{}", "   chela — \"crab hand\"\n".white());
     println!("A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage,");
     println!("typically found on the first pair of legs, used for grasping, defense, and manipulating things; ");
     println!("just like these programs.\n");
 
-    println!("{}", "FEATURES:".bright_blue());
+    println!("{}", "FEATURES:".green());
 
-    let feature_width = 20; // Adjust as needed
-    let description_width = 70; // Adjust as needed
+    let feature_width = 20; 
+    let description_width = 70;
 
     let table_string = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}{}",
-        format!("  {:<feature_width$}|  {:<description_width$}\n", "Feature".green(), "Description".green()),
+        "{}{}{}{}{}{}{}{}{}{}{}{}",
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Combine YARA", "Point it at a directory of YARA files and it will output one combined rule"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Extract Samples", "Point it at a directory of password protected malware files to extract all"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Hash It", "Point it to a file and get the MD5, SHA1 and SHA256 hash"),

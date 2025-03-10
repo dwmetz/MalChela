@@ -3,24 +3,34 @@ use std::io::{self, Write};
 use colored::*;
 use std::env;
 use std::path::PathBuf;
+use std::fs;
 
 fn find_workspace_root() -> io::Result<PathBuf> {
-    let mut current_dir = env::current_exe()?;
-    current_dir.pop();
-    current_dir.pop();
-    current_dir.pop();
+    let exe_path = env::current_exe()?;
+    let resolved_exe_path = fs::canonicalize(exe_path)?;
+    println!("Resolved exe path: {:?}", resolved_exe_path);
 
-    let workspace_root = current_dir.join("MalChela");
-    if workspace_root.exists() && workspace_root.is_dir() {
-        Ok(workspace_root)
-    } else {
-        eprintln!("{}", "Error: Workspace root not found.".red());
-        Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Workspace root not found",
-        ))
+    if let Some(parent1) = resolved_exe_path.parent() {
+        println!("Parent 1: {:?}", parent1);
+        if let Some(parent2) = parent1.parent() {
+            println!("Parent 2: {:?}", parent2);
+            //Remove the join command.
+            let workspace_root = parent2.to_path_buf();
+            println!("Workspace root candidate: {:?}", workspace_root);
+
+            if workspace_root.exists() && workspace_root.is_dir() {
+                return Ok(workspace_root);
+            }
+        }
     }
+
+    eprintln!("{}", "Error: Workspace root not found.");
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        "Workspace root not found",
+    ))
 }
+
 
 fn check_for_updates(crab_art: &str) -> io::Result<()> {
     let workspace_root = match find_workspace_root() {

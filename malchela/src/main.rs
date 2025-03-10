@@ -8,22 +8,15 @@ use std::fs;
 fn find_workspace_root() -> io::Result<PathBuf> {
     let exe_path = env::current_exe()?;
     let resolved_exe_path = fs::canonicalize(exe_path)?;
-    println!("Resolved exe path: {:?}", resolved_exe_path);
 
     if let Some(parent1) = resolved_exe_path.parent() {
-        println!("Parent 1: {:?}", parent1);
         if let Some(parent2) = parent1.parent() {
-            println!("Parent 2: {:?}", parent2);
-            //Remove the join command.
             let workspace_root = parent2.to_path_buf();
-            println!("Workspace root candidate: {:?}", workspace_root);
-
             if workspace_root.exists() && workspace_root.is_dir() {
                 return Ok(workspace_root);
             }
         }
     }
-
     eprintln!("{}", "Error: Workspace root not found.");
     Err(io::Error::new(
         io::ErrorKind::NotFound,
@@ -113,29 +106,29 @@ fn main() {
     clear_screen();
 
     let programs = vec![
-        (format!("{}Combine YARA", " Combine YARA").green(), "cargo run --bin combine_yara"),
-        (format!("{}Extract Samples", " Extract Samples").green(), "cargo run --bin extract_samples"),
-        (format!("{}Hash It", " Hash It").green(), "cargo run --bin hashit"),
-        (format!("{}MStrings", " MStrings").green(), "cargo run --bin mstrings"),
-        (format!("{}MZCount", " MZCount").green(), "cargo run --bin mzcount"),
-        (format!("{}MZMD5", " MZMD5").green(), "cargo run --bin mzmd5"),
-        (format!("{}NSRL MD5 Lookup", " NSRL MD5 Lookup").green(), "cargo run --bin nsrlmd5"),
-        (format!("{}NSRL SHA1 Lookup", " NSRL SHA1 Lookup").green(), "cargo run --bin nsrlsha1"),
-        (format!("{}Strings to YARA", " Strings to YARA").green(), "cargo run --bin strings_to_yara"),
-        (format!("{}Malware Hash Lookup", "Malware Hash Lookup").green(), "cargo run --bin vthash"),
-        (format!("{}XMZMD5", "XMZMD5").green(), "cargo run --bin xmzmd5"),
-        (format!("{}About", "About").green(), "cargo run --bin about"),
+        ("  Combine YARA".green(), "cargo run --bin combine_yara"),
+        ("  Extract Samples".green(), "cargo run --bin extract_samples"),
+        ("  Hash It".green(), "cargo run --bin hashit"),
+        ("  MStrings".green(), "cargo run --bin mstrings"),
+        ("  MZCount".green(), "cargo run --bin mzcount"),
+        ("  MZMD5".green(), "cargo run --bin mzmd5"),
+        ("  NSRL MD5 Lookup".green(), "cargo run --bin nsrlmd5"),
+        ("  NSRL SHA1 Lookup".green(), "cargo run --bin nsrlsha1"),
+        ("  Strings to YARA".green(), "cargo run --bin strings_to_yara"),
+        (" Malware Hash Lookup".green(), "cargo run --bin vthash"),
+        (" XMZMD5".green(), "cargo run --bin xmzmd5"),
+        (" About".green(), "cargo run --bin about"),
     ];
 
     loop {
         println!("{}", crab_art);
-        println!("{}", "MalChela - YARA & Malware Analysis Toolkit".blue());
+        println!("{}", "MalChela - YARA & Malware Analysis Toolkit".yellow());
 
         println!("\nSelect a program to launch:");
         for (i, (name, _)) in programs.iter().enumerate() {
             println!("{}. {}", i + 1, name);
         }
-        println!("{}. {}", programs.len() + 1, "Exit".bright_black());
+        println!("{}. {}", programs.len() + 1, " Exit".bright_black());
 
         print!("\nEnter your choice: ");
         io::stdout().flush().unwrap();

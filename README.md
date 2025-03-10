@@ -1,5 +1,5 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="/images/malchela.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="340" width="404" src="/images/malchela.png"/>
  <p>
   <h1>
    Malchela

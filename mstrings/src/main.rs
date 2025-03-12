@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path; // Add this import
+use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_yaml;
 use regex::Regex;
@@ -8,6 +8,7 @@ use std::io;
 use std::process::Command;
 use serde_json;
 use colored::*;
+use std::env;
 
 #[derive(Debug, Deserialize, Clone, serde::Serialize)]
 struct MitreTechnique {
@@ -32,6 +33,15 @@ struct EnhancedMatchResult {
     mitre_techniques: Vec<MitreTechnique>,
     encoding: String,
     original_base64: Option<String>,
+}
+// fn to locate detections.yaml in workspace root
+fn get_absolute_path(relative_path: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut exe_path = env::current_exe()?;
+    exe_path.pop(); // Remove the executable name (mstrings)
+    exe_path.pop(); // Remove "debug" or "release"
+    exe_path.pop(); // Remove "target"
+    exe_path.push(relative_path); // Add the relative path
+    Ok(exe_path)
 }
 
 fn find_rule_matches(
@@ -124,11 +134,19 @@ fn find_potential_network_iocs(strings_content: &str) -> Result<HashSet<String>,
 
     Ok(network_iocs)
 }
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    const DETECTIONS_YAML_PATH: &str = "detections.yaml";
     const SAVED_RESULTS_DIR: &str = "Saved_Results";
 
-    let detections_yaml_content = fs::read_to_string(DETECTIONS_YAML_PATH)?;
+    let detections_yaml_path = get_absolute_path("detections.yaml")?;
+    let detections_yaml_path_str = detections_yaml_path.to_str().unwrap();
+
+    if !detections_yaml_path.exists() {
+        eprintln!("Error: detections.yaml not found at {}", detections_yaml_path_str);
+        return Err("detections.yaml not found".into());
+    }
+
+    let detections_yaml_content = fs::read_to_string(detections_yaml_path_str)?;
     let sigma_rules: HashMap<String, SigmaRule> = serde_yaml::from_str(&detections_yaml_content)?;
 
     println!("Enter the file path to scan:");

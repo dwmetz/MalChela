@@ -43,6 +43,7 @@ fn main() {
         "{}{}{}{}{}{}{}{}{}{}{}{}",
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Combine YARA", "Point it at a directory of YARA files and it will output one combined rule"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Extract Samples", "Point it at a directory of password protected malware files to extract all"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "File Analyzer", "Get the hash, entropy, packing, PE info, YARA and VT match status for a file"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Hash It", "Point it to a file and get the MD5, SHA1 and SHA256 hash"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "MSTRINGS", "Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex."),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "MZMD5", "Recurse a directory, for files with MZ header, create hash list"),
@@ -52,7 +53,6 @@ fn main() {
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Strings to YARA", "Prompts for metadata and strings (text file) to create a YARA rule"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Malware Hash Lookup", "Query a hash value against VirusTotal & Malware Bazaar*"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "XMZMD5", "Recurse a directory, for files without MZ, Zip or PDF header, create hash list"),
-        format!("  {:<feature_width$}|  {:<description_width$}\n", "About", "You are here"),
     );
 
     println!("{}", table_string);

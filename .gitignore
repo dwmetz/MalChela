@@ -18,3 +18,5 @@ generated_rule.yara
 images/.DS_Store
 images/.DS_Store
 images/.DS_Store
+*.yar
+*.yara

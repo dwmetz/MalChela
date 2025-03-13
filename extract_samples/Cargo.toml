@@ -1,0 +1,8 @@
+[package]
+name = "extract_samples"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+walkdir = "2"
+which = "7.0.2"

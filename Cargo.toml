@@ -1,3 +1,0 @@
-[workspace]
-resolver = "2"
-members = [ "about", "combine_yara", "extract_samples", "fileanalyzer", "hashit", "mstrings", "malchela", "malhash", "mzcount","mzmd5", "nsrlmd5", "nsrlsha1", "strings_to_yara", "vthash", "xmzmd5", "cached", "update-test"]

@@ -44,9 +44,16 @@
 > A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things;  just like these programs.
 
 <h3>
-Installation:
+Dependencies:
 </h3>
 
+```
+sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-essential
+```
+
+<h3>
+Installation:
+</h3>
 
 Install Rust - https://rustup.rs/</p>
 
@@ -57,7 +64,7 @@ cargo build
 ```
 
 <h3>
-   Run:
+Run:
 </h3>
 
 ```
@@ -65,4 +72,4 @@ cargo run -p malchela
 ```
 
 Caveat Emptor:
-Successfully tested on MacOS on Silicon and Ubuntu. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. Works on Windows in WSL! Testers (and contributors) appreciated. Yara, OpenSSL (and their development options) and Clang are the key packages. If you are having issues, many of the functions here are also available via Python and PowerShell scripts [here](https://github.com/dwmetz/Toolbox).
+Successfully tested on MacOS on Silicon and Ubuntu. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. Works on Windows in WSL! Testers (and contributors) appreciated.

@@ -12,7 +12,7 @@ pub fn get_output_dir(program_name: &str) -> PathBuf {
     let crate_dir = manifest_dir.parent().expect("Failed to get crate folder");
     let workspace_root = crate_dir.parent().expect("Failed to get workspace root");
 
-    let output_path = workspace_root.join("saved_output").join(program_name);
+    let output_path = workspace_root.join("MalChela/saved_output").join(program_name);
     fs::create_dir_all(&output_path).expect("Failed to create output directory");
 
     output_path

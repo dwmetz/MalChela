@@ -1,0 +1,11 @@
+[package]
+name = "mismatchminer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+walkdir = "2.5.0"
+yara = "0.30.0"
+colored = "2.1"
+common_config = { path = "../common_config" }
+sha2 = "0.10.8"

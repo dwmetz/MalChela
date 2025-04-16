@@ -313,6 +313,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common_config"
+version = "0.1.0"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1234,6 +1238,17 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mismatchminer"
+version = "0.1.0"
+dependencies = [
+ "colored 2.2.0",
+ "common_config",
+ "sha2",
+ "walkdir",
+ "yara",
 ]
 
 [[package]]

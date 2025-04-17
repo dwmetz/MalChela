@@ -1,19 +1,26 @@
+use serde::Deserialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::error::Error;
+use std::env;
 
-/// Returns the path to the output directory for a given program.
-/// Example: `<workspace_root>/saved_output/bin1/`
-pub fn get_output_dir(program_name: &str) -> PathBuf {
-    // Debug print to verify it's being called correctly
-    // println!("common_config::get_output_dir called for {}", program_name);
+#[derive(Debug, Deserialize, Default)]
+pub struct CommonConfig {
+    pub input_type: String,
+    pub description: Option<String>,
+}
 
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+impl CommonConfig {
+    pub fn from_yaml_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
+        let config_content = fs::read_to_string(path)?;
+        let config: CommonConfig = serde_yaml::from_str(&config_content)?;
+        Ok(config)
+    }
+}
 
-    let crate_dir = manifest_dir.parent().expect("Failed to get crate folder");
-    let workspace_root = crate_dir.parent().expect("Failed to get workspace root");
-
-    let output_path = workspace_root.join("MalChela/saved_output").join(program_name);
-    fs::create_dir_all(&output_path).expect("Failed to create output directory");
-
-    output_path
+pub fn get_output_dir(tool_name: &str) -> PathBuf {
+    let mut dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    dir.push("saved_output");
+    dir.push(tool_name);
+    dir
 }

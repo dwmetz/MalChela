@@ -8,7 +8,10 @@ use std::io;
 use std::process::Command;
 use serde_json;
 use colored::*;
-use std::env;
+use common_config::get_output_dir;
+
+// Use project-root for workspace root
+use project_root::get_project_root;
 
 #[derive(Debug, Deserialize, Clone, serde::Serialize)]
 struct MitreTechnique {
@@ -34,14 +37,10 @@ struct EnhancedMatchResult {
     encoding: String,
     original_base64: Option<String>,
 }
-// fn to locate detections.yaml in workspace root
-fn get_absolute_path(relative_path: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let mut exe_path = env::current_exe()?;
-    exe_path.pop(); // Remove the executable name (mstrings)
-    exe_path.pop(); // Remove "debug" or "release"
-    exe_path.pop(); // Remove "target"
-    exe_path.push(relative_path); // Add the relative path
-    Ok(exe_path)
+
+// Use project-root to find files in workspace root
+fn get_workspace_file(relative_path: &str) -> PathBuf {
+    get_project_root().unwrap().join(relative_path)
 }
 
 fn find_rule_matches(
@@ -85,7 +84,7 @@ fn find_rule_matches(
     Ok(matches)
 }
 
-fn call_strings_to_file(file_path: &str, output_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn call_strings_to_file(file_path: &str, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let output = Command::new("strings").arg(file_path).output()?;
 
     if !output.status.success() {
@@ -136,17 +135,15 @@ fn find_potential_network_iocs(strings_content: &str) -> Result<HashSet<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    const SAVED_RESULTS_DIR: &str = "Saved_Results";
-
-    let detections_yaml_path = get_absolute_path("detections.yaml")?;
-    let detections_yaml_path_str = detections_yaml_path.to_str().unwrap();
+    // Always find detections.yaml in workspace root
+    let detections_yaml_path = get_workspace_file("detections.yaml");
 
     if !detections_yaml_path.exists() {
-        eprintln!("Error: detections.yaml not found at {}", detections_yaml_path_str);
+        eprintln!("Error: detections.yaml not found at {}", detections_yaml_path.display());
         return Err("detections.yaml not found".into());
     }
 
-    let detections_yaml_content = fs::read_to_string(detections_yaml_path_str)?;
+    let detections_yaml_content = fs::read_to_string(&detections_yaml_path)?;
     let sigma_rules: HashMap<String, SigmaRule> = serde_yaml::from_str(&detections_yaml_content)?;
 
     println!("Enter the file path to scan:");
@@ -154,13 +151,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     io::stdin().read_line(&mut file_path)?;
     let file_path = file_path.trim();
 
-    if !Path::new(SAVED_RESULTS_DIR).exists() {
-        fs::create_dir(SAVED_RESULTS_DIR)?;
+    // Use shared output dir logic, e.g. for "mstrings"
+    let saved_results_dir = get_output_dir("mstrings");
+    if !saved_results_dir.exists() {
+        fs::create_dir_all(&saved_results_dir)?;
     }
 
     let file_name = Path::new(file_path).file_name().unwrap_or_default().to_string_lossy();
-    let strings_output_path = format!("{}/{}.strings.txt", SAVED_RESULTS_DIR, file_name);
-    let json_output_path = format!("{}/{}.detection.json", SAVED_RESULTS_DIR, file_name);
+    let strings_output_path = saved_results_dir.join(format!("{}.strings.txt", file_name));
+    let json_output_path = saved_results_dir.join(format!("{}.detection.json", file_name));
 
     call_strings_to_file(file_path, &strings_output_path)?;
 
@@ -210,8 +209,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(first_match) = matches.first() {
             if let Some(tech) = first_match.mitre_techniques.iter().find(|t| t.technique_id == *tech_id) {
                 println!("\nMITRE Technique: {} ({})", tech.technique_name.green(), tech_id.green());
-                let colored_tactics: Vec<String> = tech.tactics.iter().map(|tactic| tactic.green().to_string()).collect();
-                println!("Tactics: {:?}", colored_tactics);
+                // Print colored tactics directly for best output
+                print!("Tactics: [");
+                for (i, tactic) in tech.tactics.iter().enumerate() {
+                    if i > 0 {
+                        print!(", ");
+                    }
+                    print!("{}", tactic.green());
+                }
+                println!("]");
             }
         }
 
@@ -253,7 +259,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(
         "\nSaved strings output to: {}\nSaved detection results to: {}\n",
-        strings_output_path, json_output_path
+        strings_output_path.display(),
+        json_output_path.display()
     );
 
     println!("Do you want to review the raw strings output? (y/n)");

@@ -4,9 +4,12 @@ use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
-use std::io::{Write, stdin, stdout as std_stdout};
 use std::process;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use common_config::get_output_dir;
+use std::io::{stdin, stdout as std_stdout, Write};
+
+
 
 fn write_both<W: Write>(writer: &mut W, stdout: &mut StandardStream, message: &str, color: Option<Color>) {
     if let Some(c) = color {
@@ -222,9 +225,12 @@ fn format_mb_results<W: Write>(mb_results: &Value, writer: &mut W, stdout: &mut 
         write_both(writer, stdout, "Malware Bazaar: No Results found", Some(Color::Red));
     }
 }
+
+
 fn main() {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
 
+    // ASCII art
     write_console(&mut stdout, "                                                                                                                                                                                                                                    \n", Some(Color::Green));
     write_console(&mut stdout, "        ██████████████                        ░░░░░░████████                \n", Some(Color::Green));
     write_console(&mut stdout, "        ████░░░░████████████                ░░░░░░██████                      \n", Some(Color::Green));
@@ -239,37 +245,47 @@ fn main() {
     write_console(&mut stdout, "            ████████████████                                                \n", Some(Color::Green));
     write_console(&mut stdout, "                                                                    \n\n", Some(Color::Green));
 
+    // Banner
     write_console(&mut stdout, "               VTHash\n", Some(Color::Yellow));
-    write_console(&mut stdout, "     @dwmetz | bakerstreetforensics.com\n", Some(Color::Yellow));
+    write_console(&mut stdout, "     @dwmetz | bakerstreetforensics.com\n", Some(Color::White));
     write_console(&mut stdout, "   It submits the hash to VirusTotal or it\n", Some(Color::Yellow));
     write_console(&mut stdout, "   gets the hose again.\n\n", Some(Color::Yellow));
 
+    // API keys
     let vt_api_key = read_api_key("vt-api.txt");
     let mb_api_key = read_api_key("mb-api.txt");
 
+    // Prompt user
     let mut hash = String::new();
     print!("Enter the malware hash value: ");
     std_stdout().flush().unwrap();
     stdin().read_line(&mut hash).unwrap();
     let hash = hash.trim();
 
+    // Output file
     let timestamp = Utc::now().format("%Y%m%d%H%M").to_string();
-    let report_filename = format!("Saved_Output/malhash-{}-{}.txt", hash, timestamp);
+    let filename = format!("malhash-{}-{}.txt", hash, timestamp);
+    let output_dir = get_output_dir("").join("malhash");
+    let report_path = output_dir.join(&filename);
 
-    if let Err(e) = fs::create_dir_all("Saved_Output") {
-        eprintln!("Failed to create Saved_Output directory: {}", e);
-        process::exit(1);
+    if let Some(parent) = report_path.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!("Failed to create output directory: {}", e);
+            process::exit(1);
+        }
     }
 
     let mut report_file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&report_filename)
+        .open(&report_path)
         .expect("Failed to create report file");
 
+    // Write headers
     write_both(&mut report_file, &mut stdout, &format!("HASH: {}", hash), None);
     write_both(&mut report_file, &mut stdout, &format!("DATE/TIME UTC: {}", Utc::now()), None);
 
+    // VirusTotal submission
     write_both(&mut report_file, &mut stdout, &format!("\nSubmitting the hash {} to VirusTotal...\n", hash), None);
     let vt_url = format!(
         "https://www.virustotal.com/vtapi/v2/file/report?apikey={}&resource={}",
@@ -287,9 +303,9 @@ fn main() {
         }
     }
 
+    // Malware Bazaar submission
     write_both(&mut report_file, &mut stdout, &format!("\nSubmitting the hash {} to Malware Bazaar...\n", hash), None);
     let mb_url = "https://mb-api.abuse.ch/api/v1/";
-
     let mb_data = json!({
         "query": "get_info",
         "hash": hash,
@@ -308,5 +324,5 @@ fn main() {
 
     write_both(&mut report_file, &mut stdout, "** END REPORT **", None);
 
-    println!("\nThe results have been saved to: {}", report_filename);
+    println!("\nThe results have been saved to: {}", report_path.display());
 }

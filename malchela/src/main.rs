@@ -1,9 +1,14 @@
 use std::process::{Command, Stdio};
 use std::io::{self, Write};
-use colored::*;
 use std::env;
 use std::path::PathBuf;
 use std::fs;
+
+use colored::*;
+use dialoguer::Select;
+mod theme;
+use theme::NoPrefixTheme;
+mod menu;
 
 fn find_workspace_root() -> io::Result<PathBuf> {
     let exe_path = env::current_exe()?;
@@ -17,31 +22,20 @@ fn find_workspace_root() -> io::Result<PathBuf> {
             }
         }
     }
-    eprintln!("{}", "Error: Workspace root not found.");
+    eprintln!("{}", "Error: Workspace root not found.".red());
     Err(io::Error::new(
         io::ErrorKind::NotFound,
         "Workspace root not found",
     ))
 }
 
-
-fn check_for_updates(crab_art: &str) -> io::Result<()> {
-    let workspace_root = match find_workspace_root() {
-        Ok(path) => path,
-        Err(err) => {
-            eprintln!("{}", format!("Error finding workspace root: {}", err).red());
-            return Err(err);
-        }
-    };
-
-    if let Err(err) = env::set_current_dir(&workspace_root) {
-        eprintln!("{}", format!("Error changing directory: {}", err).red());
-        return Err(err);
-    }
+fn check_for_updates() -> io::Result<()> {
+    let workspace_root = find_workspace_root()?;
 
     let update_output = Command::new("git")
         .arg("remote")
         .arg("update")
+        .current_dir(&workspace_root)
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .output()?;
@@ -58,26 +52,39 @@ fn check_for_updates(crab_art: &str) -> io::Result<()> {
     let status_output = Command::new("git")
         .arg("status")
         .arg("-uno")
+        .current_dir(&workspace_root)
         .output()?;
 
     let status_str = String::from_utf8_lossy(&status_output.stdout);
 
     if status_str.contains("branch is behind") {
-        println!("{}", crab_art);
-        println!("{}", "Update available. Please run `git pull` from the workspace root.".yellow());
+        println!(
+            "{}",
+            "Update available. Please run `git pull` from the workspace root.".yellow()
+        );
     } else {
-        println!("{}", "Your branch is up to date.".green());
+        println!("{}", "MalChela is up to date!".green());
     }
 
     Ok(())
 }
 
-fn main() {
-    let crab_art = format!(
-        "{}",
-        r#"
-                                                                                    
-                                                                                        
+fn clear_screen() {
+    if cfg!(target_os = "windows") {
+        let _ = Command::new("cmd").arg("/C").arg("cls").status();
+    } else {
+        let _ = Command::new("clear").status();
+    }
+}
+
+fn pause() {
+    println!("\nPress Enter to continue...");
+    let mut buffer = String::new();
+    let _ = io::stdin().read_line(&mut buffer);
+}
+
+fn print_banner() {
+    let crab_art = r#"
                 ▒▒▒▒▒▒▒▒        ▒▒▒▒▒▒▒▒                                
               ▒▒▒▒▒▒                ▒▒▒▒▒▒                              
               ▒▒▒▒▒▒▒▒▒▒        ▒▒▒▒▒▒▒▒▒▒                              
@@ -91,97 +98,113 @@ fn main() {
             ▒▒▒▒    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    ▒▒▒▒                            
                   ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒                                  
                 ▒▒▒▒    ▒▒▒▒▒▒▒▒    ▒▒▒▒                                
+    "#;
+    println!("{}", crab_art.red());
+    println!("        {}", "    https://bakerstreetforensics.com".yellow());
+    println!();
+    println!("        {}", "MalChela - YARA & Malware Analysis Toolkit".white());
+    println!();
+}
 
-            https://bakerstreetforensics.com                                                                                                                                  
-"#
-        .red()
-    );
+fn main() {
+    print_banner();
 
-    if let Err(err) = check_for_updates(&crab_art) {
+    if let Err(err) = check_for_updates() {
         eprintln!("{}", format!("Error checking for updates: {}", err).red());
     }
 
     pause();
 
-    clear_screen();
-
-    let programs = vec![
-        ("  Combine YARA".green(), "cargo run --bin combine_yara"),
-        ("  Extract Samples".green(), "cargo run --bin extract_samples"),
-        ("  File Analyzer".green(), "cargo run --bin fileanalyzer"),
-        ("  Hash It".green(), "cargo run --bin hashit"),
-        ("  Mismatch Miner".green(), "cargo run --bin mismatchminer"),
-        ("  MStrings".green(), "cargo run --bin mstrings"),
-        ("  MZCount".green(), "cargo run --bin mzcount"),
-        ("  MZMD5".green(), "cargo run --bin mzmd5"),
-        ("  NSRL MD5 Lookup".green(), "cargo run --bin nsrlmd5"),
-        (" NSRL SHA1 Lookup".green(), "cargo run --bin nsrlsha1"),
-        (" Strings to YARA".green(), "cargo run --bin strings_to_yara"),
-        (" Malware Hash Lookup".green(), "cargo run --bin vthash"),
-        (" XMZMD5".green(), "cargo run --bin xmzmd5"),
-        (" About".green(), "cargo run --bin about"),
-    ];
-
     loop {
-        println!("{}", crab_art);
-        println!("{}", "MalChela - YARA & Malware Analysis Toolkit".yellow());
+        clear_screen();
+        print_banner();
 
-        println!("\nSelect a program to launch:");
-        for (i, (name, _)) in programs.iter().enumerate() {
-            println!("{}. {}", i + 1, name);
-        }
-        println!("{}. {}", programs.len() + 1, " Exit".bright_black());
+        let groups: Vec<(String, Vec<(String, Vec<String>)>)> = menu::grouped_menu()
+            .into_iter()
+            .map(|(group, items)| {
+                (
+                    group.to_string(),
+                    items
+                        .into_iter()
+                        .map(|(label, args)| {
+                            (label.to_string(), args.into_iter().map(|s| s.to_string()).collect())
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
 
-        print!("\nEnter your choice: ");
-        io::stdout().flush().unwrap();
+            let mut group_names: Vec<String> = groups
+            .iter()
+            .map(|(name, _)| match name.as_str() {
+                "File Analysis" => format!("\u{26A0}  {}", name),
+                "Hashing Tools" => format!("\u{2317}  {}", name),
+                "YARA Tools" => format!("\u{2620}  {}", name),
+                "Threat Intel" => format!("\u{2622}  {}", name),
+                "Utilities" => format!("\u{2699}  {}", name),
+                _ => name.to_string(),
+            })
+            .map(|s| format!("            {}", s.green()))
+            .collect();
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        let choice: usize = match input.trim().parse() {
-            Ok(num) => num,
-            Err(_) => {
-                println!("{}", "Invalid input. Please enter a number.".red());
-                continue;
+        group_names.push("    ⏻  Exit".to_string());
+
+        let theme = NoPrefixTheme;
+
+        let group_selection = Select::with_theme(&theme)
+            .with_prompt("    Choose a category:")
+            .items(&group_names)
+            .default(0)
+            .interact_opt()
+            .unwrap();
+
+        if let Some(group_index) = group_selection {
+            if group_index == group_names.len() - 1 {
+                println!("{}", "Exiting...".yellow());
+                break;
             }
-        };
 
-        if choice == programs.len() + 1 {
-            println!("{}", "Exiting...".yellow());
+            let (group_name, tools): &(String, Vec<(String, Vec<String>)>) = &groups[group_index];
+
+            loop {
+                clear_screen();
+                print_banner();
+
+                let mut items: Vec<String> = tools
+                    .iter()
+                    .map(|(name, _)| format!("        {}", name))
+                    .collect();
+
+                items.push("        ← Back".to_string());
+
+                let tool_selection = Select::with_theme(&theme)
+                    .with_prompt(format!("    {}", group_name))
+                    .items(&items)
+                    .default(0)
+                    .interact_opt()
+                    .unwrap();
+
+                if let Some(tool_index) = tool_selection {
+                    if tool_index == items.len() - 1 {
+                        break;
+                    }
+
+                    let (_name, command): &(String, Vec<String>) = &tools[tool_index];
+                    println!("{}", format!("Launching: {}", command.join(" ")).cyan());
+
+                    let _ = Command::new("cargo")
+                        .args(command)
+                        .spawn()
+                        .unwrap()
+                        .wait();
+
+                    pause();
+                } else {
+                    break;
+                }
+            }
+        } else {
             break;
         }
-
-        if let Some((_, command)) = programs.get(choice - 1) {
-            println!("{}", format!("Launching {}...", command).cyan());
-            match Command::new("sh")
-                .arg("-c")
-                .arg(command)
-                .spawn()
-            {
-                Ok(mut child) => {
-                    child.wait().unwrap();
-                }
-                Err(e) => {
-                    println!("{}", format!("Failed to launch program: {}", e).red());
-                }
-            }
-            pause();
-        } else {
-            println!("{}", "Invalid choice. Please try again.".red());
-        }
-        clear_screen();
     }
-}
-
-fn clear_screen() {
-    if cfg!(target_os = "windows") {
-        Command::new("cmd").arg("/C").arg("cls").status().unwrap();
-    } else {
-        Command::new("clear").status().unwrap();
-    }
-}
-
-fn pause() {
-    println!("\nPress Enter to return to the menu...");
-    let mut buffer = String::new();
-    io::stdin().read_line(&mut buffer).unwrap();
 }

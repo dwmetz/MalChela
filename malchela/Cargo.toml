@@ -8,3 +8,9 @@ edition = "2021"
 [dependencies]
 prettytable-rs = "0.10.0" # Or the latest version
 colored = "2.0" # Or the latest version
+dialoguer = "0.11"
+console = "0.15"
+
+[[bin]]
+name = "malchela"
+path = "src/main.rs"

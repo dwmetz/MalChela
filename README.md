@@ -23,7 +23,7 @@
 | Extract Samples | Point it at a directory of password protected malware files to extract all|
 | File Analyzer | Get the hash, entropy, packing, PE info, YARA and VT match status for a file |
 | Hash It | Point it to a file and get the MD5, SHA1 and SHA256 hash|
-| Mismatch Miner | Hunts fir exes disguised as other formats|
+| Mismatch Miner | Hunts for exes disguised as other formats|
 | mStrings | Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex |
 | MZMD5 | Recurse a directory, for files with MZ header, create hash list|
 | MZcount | Recurse a directory, uses YARA to count MZ, Zip, PDF, other| 

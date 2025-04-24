@@ -9,3 +9,5 @@ yara = "0.30.0"
 colored = "2.1"
 common_config = { path = "../common_config" }
 sha2 = "0.10.8"
+clap = { version = "4.0", features = ["derive"] }
+chrono = "0.4.40"

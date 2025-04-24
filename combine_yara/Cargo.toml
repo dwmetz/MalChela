@@ -6,3 +6,7 @@ edition = "2021"
 [dependencies]
 walkdir = "2" #Or newer
 colored = "2" #Or newer
+common_config = { path = "../common_config" }
+common_ui = { path = "../common_ui" }
+chrono = "0.4.40"
+clap = { version = "4", features = ["derive"] }

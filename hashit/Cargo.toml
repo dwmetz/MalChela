@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+
 md5 = "0.7"
 sha1 = "0.10"
 sha2 = "0.10"
+common_config = { path = "../common_config" }
+common_ui = { path = "../common_ui" }
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4.40"

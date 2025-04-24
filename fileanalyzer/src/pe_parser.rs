@@ -1,26 +1,60 @@
-use std::convert::TryInto;
+use goblin::pe::PE;
+use std::time::{UNIX_EPOCH, Duration};
 
-pub fn parse_pe_header(file_content: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
-    if file_content.len() < 0x40 {
-        return Ok("File too short to be a PE file".to_string());
+#[derive(Debug)]
+pub struct PEInfo {
+    pub summary: String,
+    pub compile_time: String,
+    pub imports: Vec<String>,
+    pub exports: Vec<String>,
+    pub sections: Vec<String>,
+}
+
+pub fn parse_pe_header(file_content: &[u8]) -> Result<PEInfo, Box<dyn std::error::Error>> {
+    let pe = PE::parse(file_content)?;
+
+    // Compile timestamp
+    let compile_time_raw = pe.header.coff_header.time_date_stamp;
+    let compile_time = UNIX_EPOCH
+        .checked_add(Duration::new(compile_time_raw as u64, 0))
+        .map(|ts| {
+            let datetime: chrono::DateTime<chrono::Utc> = chrono::DateTime::<chrono::Utc>::from(ts);
+            datetime.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+        })
+        .unwrap_or_else(|| "Invalid timestamp".to_string());
+
+    // Section names
+    let sections = pe.sections.iter().map(|s| {
+        let name = std::str::from_utf8(&s.name)
+            .unwrap_or("")
+            .trim_end_matches('\u{0}')
+            .to_string();
+        format!("{} ({} bytes)", name, s.virtual_size)
+    }).collect();
+
+    // Imports
+    let mut imports = vec![];
+    for import in pe.imports {
+        imports.push(import.name.to_string());
     }
 
-    if !file_content.starts_with(&[0x4D, 0x5A]) {
-        return Ok("Not a PE file".to_string());
+    // Exports
+    let mut exports = vec![];
+    for export in &pe.exports {
+        if let Some(name) = export.name {
+            exports.push(name.to_string());
+        }
     }
 
-    let pe_offset = u32::from_le_bytes(file_content[0x3C..0x40].try_into()?);
-
-    if file_content.len() < (pe_offset + 0x18) as usize {
-        return Ok("File too short to contain PE header".to_string());
-    }
-
-    if !file_content[pe_offset as usize..(pe_offset + 4) as usize].starts_with(&[0x50, 0x45, 0x00, 0x00]) {
-        return Ok("Invalid PE signature".to_string());
-    }
-
-    let machine = u16::from_le_bytes(file_content[(pe_offset + 4) as usize..(pe_offset + 6) as usize].try_into()?);
-    let number_of_sections = u16::from_le_bytes(file_content[(pe_offset + 6) as usize..(pe_offset + 8) as usize].try_into()?);
-
-    Ok(format!("Machine: 0x{:X}, Sections: {}", machine, number_of_sections))
+    Ok(PEInfo {
+        summary: format!(
+            "Machine: {:#x}, Number of sections: {}",
+            pe.header.coff_header.machine,
+            pe.header.coff_header.number_of_sections
+        ),
+        compile_time,
+        imports,
+        exports,
+        sections,
+    })
 }

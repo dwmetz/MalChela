@@ -1,36 +1,16 @@
-use std::fs::{self, File};
-use std::io::{self, BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::env;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Write};
+use std::path::Path;
+use common_config::get_output_dir;
 
-/// Prompts the user for input and returns the collected metadata.
-fn get_user_input() -> (String, String, String, String, String) {
-    let mut input = String::new();
-
-    println!("Enter the rule name: ");
-    io::stdin().read_line(&mut input).unwrap();
-    let rule_name = input.trim().to_string();
-    input.clear();
-
-    println!("Enter the author: ");
-    io::stdin().read_line(&mut input).unwrap();
-    let author = input.trim().to_string();
-    input.clear();
-
-    println!("Enter the description: ");
-    io::stdin().read_line(&mut input).unwrap();
-    let description = input.trim().to_string();
-    input.clear();
-
-    println!("Enter the hash value: ");
-    io::stdin().read_line(&mut input).unwrap();
-    let hash_value = input.trim().to_string();
-    input.clear();
-
-    println!("Enter the path to the source text file (e.g., strings.txt): ");
-    io::stdin().read_line(&mut input).unwrap();
-    let strings_file = input.trim().to_string();
-
-    (rule_name, author, description, hash_value, strings_file)
+/// Reads lines from a file and returns an iterator.
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    Ok(BufReader::new(file).lines())
 }
 
 /// Reads strings from a file and generates a YARA rule as a string.
@@ -38,7 +18,7 @@ fn create_yara_rule(
     rule_name: &str,
     author: &str,
     description: &str,
-    hash_value: &str,
+    hash_value: String,
     strings_file: &str,
 ) -> io::Result<String> {
     let mut yara_rule = format!(
@@ -51,11 +31,22 @@ fn create_yara_rule(
         rule_name, author, description, hash_value
     );
 
-    // Open the strings file and read its lines.
     if let Ok(lines) = read_lines(strings_file) {
-        for (id, line) in lines.enumerate() {
-            if let Ok(content) = line {
-                yara_rule.push_str(&format!("\t\t$s{} = \"{}\"\n", id + 1, content.trim()));
+        let mut id = 1;
+        for line in lines.flatten() {
+            let line_owned = line.to_string();
+            let trimmed = line_owned.trim();
+            if trimmed.to_lowercase().starts_with("hash:") {
+                let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let new_hash = parts[1].trim();
+                    yara_rule = yara_rule.replace(&format!("hash = \"{}\"", hash_value), &format!("hash = \"{}\"", new_hash));
+                }
+                continue;
+            }
+            if !trimmed.is_empty() {
+                yara_rule.push_str(&format!("\t\t$s{} = \"{}\"\n", id, line_owned));
+                id += 1;
             }
         }
     } else {
@@ -65,43 +56,62 @@ fn create_yara_rule(
         ));
     }
 
-    yara_rule.push_str("\n\tcondition:\n\t\tall of them\n}\n");
+    yara_rule.push_str("\n\tcondition:\n\t\tuint16be(0) == 0x4D5A and\n\t\tall of them\n}\n");
 
     Ok(yara_rule)
 }
 
-/// Reads lines from a file and returns an iterator.
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
+
+fn prompt(msg: &str) -> String {
+    print!("{}", msg);
+    std::io::stdout().flush().unwrap();
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).unwrap();
+    input.trim().to_string()
 }
 
 fn main() -> io::Result<()> {
-    // Gather user input for metadata and file location.
-    let (rule_name, author, description, hash_value, strings_file) = get_user_input();
+    let args: Vec<String> = env::args().collect();
 
-    // Generate the YARA rule.
-    match create_yara_rule(&rule_name, &author, &description, &hash_value, &strings_file) {
+    let rule_name = args.get(1).cloned().unwrap_or_else(|| prompt("Rule name: "));
+    let mut author = args.get(2).cloned().unwrap_or_else(|| prompt("Author (or leave blank for Anonymous): "));
+    if author.is_empty() {
+        author = "Anonymous".to_string();
+    }
+    if author == "Anonymous" {
+        if let Ok(env_author) = std::env::var("MALCHELA_AUTHOR") {
+            author = env_author;
+        }
+    }
+
+    let description = args.get(3).cloned().unwrap_or_else(|| prompt("Description (optional): "));
+    let hash_value = args.get(4).cloned().unwrap_or_else(|| prompt("Hash value (optional): "));
+    let strings_file = args.get(5).cloned().unwrap_or_else(|| prompt("Path to strings file: "));
+
+    println!("Using input file: {}", strings_file);
+    println!("Rule Name: {}", rule_name);
+    println!("Author: {}", author);
+    println!("Description: {}", description);
+    println!("Hash: {}", hash_value);
+    println!("Input file: {}", strings_file);
+
+    match create_yara_rule(&rule_name, &author, &description, hash_value, &strings_file) {
         Ok(yara_rule) => {
-            // Print the generated YARA rule.
-            println!("Generated YARA rule:\n{}", yara_rule);
+            println!("\n--- YARA Rule Content ---\n{}", yara_rule);
 
-            // Create the "Saved_Output" directory if it doesn't exist.
-            let output_dir = Path::new("Saved_Output");
-            fs::create_dir_all(output_dir)?;
+            let output_dir = get_output_dir("strings_to_yara");
+            std::fs::create_dir_all(&output_dir)?;
 
-            // Save the YARA rule to a file in the "Saved_Output" directory.
-            let yar_filename = format!("{}.yar", rule_name);
-            let mut yar_file_path = PathBuf::from(output_dir);
-            yar_file_path.push(yar_filename);
+            let filename = format!("{}.yar", rule_name);
+            let output_path = output_dir.join(&filename);
 
-            let mut yar_file = File::create(&yar_file_path)?;
-            yar_file.write_all(yara_rule.as_bytes())?;
+            let mut file = File::create(&output_path)?;
+            file.write_all(yara_rule.as_bytes())?;
 
-            println!("YARA rule saved to {}", yar_file_path.display());
+            println!(
+                "\nYARA rule saved to: {}",
+                output_path.display()
+            );
         }
         Err(e) => {
             eprintln!("Error generating YARA rule: {}", e);

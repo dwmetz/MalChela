@@ -1,5 +1,4 @@
 use yara::{Compiler, Rules};
-use std::fs;
 use walkdir::WalkDir;
 use std::path::PathBuf;
 use std::env;
@@ -13,9 +12,10 @@ pub fn scan_file_with_yara_rules(file_path: &str) -> Result<Vec<String>, Box<dyn
 
     for entry in WalkDir::new(rules_dir).into_iter().filter_map(Result::ok) {
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "yar") {
-            let rule_content = fs::read_to_string(path)?;
-            compiler = compiler.add_rules_str(&rule_content)?;
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if ext == "yar" || ext == "yara" {
+                compiler = compiler.add_rules_file(path)?;
+            }
         }
     }
 

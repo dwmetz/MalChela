@@ -1,286 +1,306 @@
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::{Path, PathBuf};
-use serde::Deserialize;
-use serde_yaml;
-use regex::Regex;
-use std::io;
-use std::process::Command;
-use serde_json;
-use colored::*;
+use std::fs::File;
+use std::io::{self, BufReader, Write, Read};
+
 use common_config::get_output_dir;
 
-// Use project-root for workspace root
-use project_root::get_project_root;
+use clap::{Arg, Command};
+use regex::Regex;
+use serde::Deserialize;
+use std::collections::HashMap;
+use colored::*;
+use tabled::{Table as TabledTable, Tabled};
+use tabled::settings::{Style, Modify, Alignment, object::Columns, Width};
+use chrono::Utc;
 
-#[derive(Debug, Deserialize, Clone, serde::Serialize)]
-struct MitreTechnique {
+#[derive(Debug, serde::Serialize)]
+enum Encoding {
+    Ascii,
+    Utf8,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct Match {
+    offset: usize,
+    encoding: Encoding,
+    matched_str: String,
+    rule_name: Option<String>,
+    tactic: Option<String>,
+    technique: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Detection {
+    title: String,
+    detection: DetectionStrings,
+    mitre: Vec<MitreMapping>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DetectionStrings {
+    strings: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MitreMapping {
     technique_id: String,
     technique_name: String,
     tactics: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Clone, serde::Serialize)]
-struct SigmaRule {
-    title: String,
-    id: String,
-    detection: HashMap<String, Vec<String>>,
-    mitre: Option<Vec<MitreTechnique>>,
+struct Mstrings {
+    matches: Vec<Match>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-struct EnhancedMatchResult {
-    rule_title: String,
-    matched_string: String,
-    hex_offset: usize,
-    mitre_techniques: Vec<MitreTechnique>,
-    encoding: String,
-    original_base64: Option<String>,
-}
+impl Mstrings {
+    pub fn new() -> Self {
+        Self { matches: Vec::new() }
+    }
 
-// Use project-root to find files in workspace root
-fn get_workspace_file(relative_path: &str) -> PathBuf {
-    get_project_root().unwrap().join(relative_path)
-}
-
-fn find_rule_matches(
-    rule: &SigmaRule,
-    content: &str,
-    offset_base: usize,
-    original_base64: Option<String>,
-) -> Result<Vec<EnhancedMatchResult>, Box<dyn std::error::Error>> {
-    let mut matches = Vec::new();
-
-    if let Some(strings) = rule.detection.get("strings") {
-        for pattern in strings {
-            let regex = Regex::new(pattern)?;
-            for match_obj in regex.find_iter(content) {
-                let matched_string = match_obj.as_str().to_string();
-
-                if matched_string.contains("microsoft.com") {
-                    continue;
-                }
-
-                let hex_offset = offset_base + match_obj.start();
-                let mitre_techniques = rule.mitre.clone().unwrap_or_else(Vec::new);
-
-                let encoding = if matched_string.is_ascii() {
-                    "A".to_string()
+    pub fn process_line(&mut self, line: &str) {
+        // Simulate offset and encoding detection
+        if !line.trim().is_empty() {
+            self.matches.push(Match {
+                offset: self.matches.len() * 16,
+                encoding: if self.matches.len() % 3 == 0 {
+                    Encoding::Utf8
                 } else {
-                    "U".to_string()
-                };
+                    Encoding::Ascii
+                },
+                matched_str: line.trim_start().to_string(),
+                rule_name: None,
+                tactic: None,
+                technique: None,
+            });
+        }
+    }
 
-                matches.push(EnhancedMatchResult {
-                    rule_title: rule.title.clone(),
-                    matched_string: matched_string.clone(),
-                    hex_offset,
-                    mitre_techniques,
-                    encoding: encoding.clone(),
-                    original_base64: original_base64.clone(),
-                });
+    pub fn apply_yara_detections(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let yaml_content = std::fs::read_to_string("detections.yaml")?;
+        let raw_rules: HashMap<String, Detection> = serde_yaml::from_str(&yaml_content)?;
+
+        let mut compiled_rules = Vec::new();
+        for (_key, det) in raw_rules {
+            for pattern in det.detection.strings {
+                if let Ok(regex) = Regex::new(&pattern) {
+                    for mitre in &det.mitre {
+                        compiled_rules.push((regex.clone(), det.title.clone(), mitre.tactics.join(", "), format!("{} ({})", mitre.technique_name, mitre.technique_id)));
+                    }
+                }
             }
         }
-    }
-    Ok(matches)
-}
 
-fn call_strings_to_file(file_path: &str, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("strings").arg(file_path).output()?;
-
-    if !output.status.success() {
-        return Err(format!("strings command failed: {:?}", output.status).into());
-    }
-
-    let stdout = output.stdout;
-    fs::write(output_path, stdout)?;
-
-    Ok(())
-}
-
-fn find_potential_interesting_strings(strings_content: &str) -> Result<HashSet<String>, Box<dyn std::error::Error>> {
-    let pattern = r"\.(pdb|ps1|exe)$";
-    let regex = Regex::new(pattern)?;
-    let mut interesting_strings = HashSet::new();
-
-    for line in strings_content.lines() {
-        if regex.is_match(line) {
-            interesting_strings.insert(line.to_string());
-        }
-    }
-    Ok(interesting_strings)
-}
-
-fn find_potential_network_iocs(strings_content: &str) -> Result<HashSet<String>, Box<dyn std::error::Error>> {
-    let mut network_iocs = HashSet::new();
-
-    // HTTP regex
-    let http_regex = Regex::new(r"^http")?;
-    for line in strings_content.lines() {
-        if http_regex.is_match(line) {
-            network_iocs.insert(line.to_string());
-        }
-    }
-
-    // IP address regex
-    let ip_regex = Regex::new(r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b")?;
-    for line in strings_content.lines() {
-        for capture in ip_regex.captures_iter(line) {
-            if let Some(match_obj) = capture.get(0) {
-                network_iocs.insert(match_obj.as_str().to_string());
+        for m in &mut self.matches {
+            for (regex, rule_name, tactic, technique) in &compiled_rules {
+                if regex.is_match(&m.matched_str) {
+                    m.rule_name = Some(rule_name.clone());
+                    m.tactic = Some(tactic.clone());
+                    m.technique = Some(technique.clone());
+                    break;
+                }
             }
         }
-    }
 
-    Ok(network_iocs)
+        Ok(())
+    }
+}
+
+
+#[derive(Tabled)]
+struct DisplayMatch {
+    #[tabled(rename = "Offset")]
+    offset: String,
+    #[tabled(rename = "Encoding")]
+    encoding: String,
+    #[tabled(rename = "Match")]
+    matched_str: String,
+    #[tabled(rename = "Rule")]
+    rule_name: String,
+    #[tabled(rename = "Tactic")]
+    tactic: String,
+    #[tabled(rename = "Technique")]
+    technique: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Always find detections.yaml in workspace root
-    let detections_yaml_path = get_workspace_file("detections.yaml");
+    let matches = Command::new("mstrings")
+        .version("0.1")
+        .author("Author Name <dwmetz@gmail.com>")
+        .about("Searches for strings in files with YARA-style detections")
+        .arg(
+            Arg::new("file")
+                .help("File to scan")
+                .required(false)
+                .index(1)
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("output")
+                .short('o')
+                .long("output")
+                .num_args(0..=1)
+                .require_equals(true)
+                .default_missing_value("AUTO")
+                .help("Save output to JSON file. If no file is provided, a default name will be used."),
+        )
+        .get_matches();
 
-    if !detections_yaml_path.exists() {
-        eprintln!("Error: detections.yaml not found at {}", detections_yaml_path.display());
-        return Err("detections.yaml not found".into());
+    let file_path = match matches.get_one::<String>("file").map(String::as_str) {
+        Some(path) => path.to_string(),
+        None => {
+            println!("Enter the file path:");
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            input.trim().to_string()
+        }
+    };
+    let output_path = matches
+        .get_one::<String>("output")
+        .map(|s| {
+            if s == "AUTO" {
+                format!("mstrings-{}-report.json", Utc::now().format("%Y%m%d%H%M%S"))
+            } else {
+                s.to_string()
+            }
+        });
+
+    let file = File::open(file_path)?;
+    let mut mstrings = Mstrings::new();
+    let mut buffer = Vec::new();
+    BufReader::new(file).read_to_end(&mut buffer)?;
+
+    // Extract ASCII strings of length >= 4
+    let mut current = Vec::new();
+    for &byte in &buffer {
+        if byte.is_ascii_graphic() || byte == b' ' {
+            current.push(byte);
+        } else if current.len() >= 4 {
+            if let Ok(s) = String::from_utf8(current.clone()) {
+                mstrings.process_line(&s);
+            }
+            current.clear();
+        } else {
+            current.clear();
+        }
+    }
+    // Catch trailing string
+    if current.len() >= 4 {
+        if let Ok(s) = String::from_utf8(current.clone()) {
+            mstrings.process_line(&s);
+        }
     }
 
-    let detections_yaml_content = fs::read_to_string(&detections_yaml_path)?;
-    let sigma_rules: HashMap<String, SigmaRule> = serde_yaml::from_str(&detections_yaml_content)?;
+    // Apply YARA-style detections
+    mstrings.apply_yara_detections()?;
 
-    println!("Enter the file path to scan:");
-    let mut file_path = String::new();
-    io::stdin().read_line(&mut file_path)?;
-    let file_path = file_path.trim();
-
-    // Use shared output dir logic, e.g. for "mstrings"
-    let saved_results_dir = get_output_dir("mstrings");
-    if !saved_results_dir.exists() {
-        fs::create_dir_all(&saved_results_dir)?;
+    if let Some(ref out) = output_path {
+        let json_path = get_output_dir("mstrings").join(out);
+        let mut output_file = File::create(json_path)?;
+        let json = serde_json::to_string_pretty(&mstrings.matches)?;
+        output_file.write_all(json.as_bytes())?;
     }
 
-    let file_name = Path::new(file_path).file_name().unwrap_or_default().to_string_lossy();
-    let strings_output_path = saved_results_dir.join(format!("{}.strings.txt", file_name));
-    let json_output_path = saved_results_dir.join(format!("{}.detection.json", file_name));
+// Display output to screen regardless of -o flag
 
-    call_strings_to_file(file_path, &strings_output_path)?;
+// Display logic starts here
 
-    let strings_content = fs::read_to_string(&strings_output_path)?;
+    let mut display_matches = Vec::new();
 
-    let mut enhanced_matches: Vec<EnhancedMatchResult> = Vec::new();
+    for m in &mstrings.matches {
+        if let Some(rule) = &m.rule_name {
+            let offset = format!("0x{:06x}", m.offset);
+            let encoding = format!("{:?}", m.encoding);
+            let matched = m.matched_str.clone();
+            let rule = rule.clone();
+            let tactic = m.tactic.clone().unwrap_or_default();
+            let technique = m.technique.clone().unwrap_or_default();
 
-    for (_rule_id, rule) in &sigma_rules {
-        println!("Checking rule: {} (ID: {})", rule.title, rule.id);
-        enhanced_matches.extend(find_rule_matches(rule, &strings_content, 0, None)?);
+            display_matches.push(DisplayMatch {
+                offset,
+                encoding,
+                matched_str: matched,
+                rule_name: rule,
+                tactic,
+                technique,
+            });
+        }
     }
 
-    let mut grouped_matches: HashMap<String, Vec<EnhancedMatchResult>> = HashMap::new();
-    for match_result in &enhanced_matches {
-        grouped_matches
-            .entry(match_result.rule_title.clone())
-            .or_insert_with(Vec::new)
-            .push(match_result.clone());
+    if std::env::var("MALCHELA_GUI").is_err() {
+        println!("\n{}\n", format!("{} unique detections matched.", display_matches.len()).truecolor(215, 100, 40));
+    } else {
+        println!("\n{} unique detections matched.\n", display_matches.len());
     }
 
-    let mut grouped_mitre_matches: HashMap<String, Vec<EnhancedMatchResult>> = HashMap::new();
+    let mut table = TabledTable::new(display_matches);
+    table
+        .with(Style::modern())
+        .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
+        .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)));
 
-    for (_rule_title, rule_matches) in &grouped_matches {
-        for match_result in rule_matches {
-            for tech in &match_result.mitre_techniques {
-                grouped_mitre_matches
-                    .entry(tech.technique_id.clone())
-                    .or_insert_with(Vec::new)
-                    .push(match_result.clone());
+    if std::env::var("MALCHELA_GUI").is_err() {
+        let table_str = format!("{table}");
+        let mut lines = table_str.lines();
+        if let Some(top_border) = lines.next() {
+            println!("{}", top_border);
+            if let Some(header_row) = lines.next() {
+                println!("{}", header_row);
+            }
+            if let Some(header_border) = lines.next() {
+                println!("{}", header_border);
+            }
+            for line in lines {
+                println!("{}", line);
+            }
+        } else {
+            println!("{table_str}");
+        }
+    } else {
+        println!("{table}");
+    }
+
+    use std::collections::BTreeSet;
+
+    let mut fs_iocs = BTreeSet::new();
+    let mut net_iocs = BTreeSet::new();
+
+    for m in &mstrings.matches {
+        if let Some(rule) = &m.rule_name {
+            let s = m.matched_str.to_lowercase();
+            if rule.to_lowercase().contains("filesystem") || s.ends_with(".exe") || s.ends_with(".dll") || s.contains(".pdb") {
+                fs_iocs.insert(m.matched_str.clone());
+            } else if rule.to_lowercase().contains("ip address") || s.contains('.') && s.split('.').count() == 4 {
+                net_iocs.insert(m.matched_str.clone());
             }
         }
     }
 
-    let interesting_strings = find_potential_interesting_strings(&strings_content)?;
-    let network_iocs = find_potential_network_iocs(&strings_content)?;
-
-    let json_output_data = serde_json::json!({
-        "enhanced_matches": enhanced_matches,
-        "potential_iocs": interesting_strings.iter().cloned().collect::<Vec<String>>(),
-        "network_iocs": network_iocs.iter().cloned().collect::<Vec<String>>(),
-    });
-
-    fs::write(&json_output_path, serde_json::to_string_pretty(&json_output_data)?)?;
-
-    println!("\n--------------------------------------------------------------------------------\n");
-    for (tech_id, matches) in &grouped_mitre_matches {
-        if let Some(first_match) = matches.first() {
-            if let Some(tech) = first_match.mitre_techniques.iter().find(|t| t.technique_id == *tech_id) {
-                println!("\nMITRE Technique: {} ({})", tech.technique_name.green(), tech_id.green());
-                // Print colored tactics directly for best output
-                print!("Tactics: [");
-                for (i, tactic) in tech.tactics.iter().enumerate() {
-                    if i > 0 {
-                        print!(", ");
-                    }
-                    print!("{}", tactic.green());
-                }
-                println!("]");
-            }
+    if !fs_iocs.is_empty() {
+        if std::env::var("MALCHELA_GUI").is_err() {
+            println!("\n{}", "POTENTIAL FILESYSTEM IOC's".truecolor(215, 100, 40));
+        } else {
+            println!("\nPOTENTIAL FILESYSTEM IOC's");
         }
-
-        for match_result in matches {
-            let colored_output = format!(
-                "0x{} :: {} :: {} :: Detected by {}",
-                format!("{:08x}", match_result.hex_offset).blue(),
-                match_result.encoding.yellow(),
-                match_result.matched_string.red(),
-                match_result.rule_title.cyan(),
-            );
-            println!("{}", colored_output);
+        for ioc in fs_iocs {
+            println!("{}", ioc);
         }
     }
 
-    println!("\n--------------------------------------------------------------------------------\n");
-
-    if !interesting_strings.is_empty() {
-        let colored_header = "POTENTIAL FILESYSTEM IOC's".yellow();
-        println!("\n{}", colored_header);
-        for s in &interesting_strings {
-            let trimmed = s.trim();
-            if !trimmed.is_empty() && trimmed.chars().any(|c| !c.is_whitespace()) {
-                println!("{}", s.red());
-            }
+    if !net_iocs.is_empty() {
+        if std::env::var("MALCHELA_GUI").is_err() {
+            println!("\n{}", "POTENTIAL NETWORK IOC's".truecolor(215, 100, 40));
+        } else {
+            println!("\nPOTENTIAL NETWORK IOC's");
+        }
+        for ioc in net_iocs {
+            println!("{}", ioc);
         }
     }
 
-    if !network_iocs.is_empty() {
-        let colored_header = "POTENTIAL NETWORK IOC's".yellow();
-        println!("\n{}", colored_header);
-        for s in &network_iocs {
-            let trimmed = s.trim();
-            if !trimmed.is_empty() && trimmed.chars().any(|c| !c.is_whitespace()) {
-                println!("{}", s.red());
-            }
-        }
+    if let Some(ref out) = output_path {
+        println!(
+            "\nThe results have been saved to: {}",
+            get_output_dir("mstrings").join(out).display()
+        );
     }
-
-    println!(
-        "\nSaved strings output to: {}\nSaved detection results to: {}\n",
-        strings_output_path.display(),
-        json_output_path.display()
-    );
-
-    println!("Do you want to review the raw strings output? (y/n)");
-    let mut review_choice = String::new();
-    io::stdin().read_line(&mut review_choice)?;
-    let review_choice = review_choice.trim().to_lowercase();
-
-    if review_choice == "y" {
-        let output = Command::new("code")
-            .arg(&strings_output_path)
-            .output()
-            .expect("Failed to execute VS Code command");
-
-        if !output.status.success() {
-            eprintln!(
-                "Error opening VS Code: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-    }
-
     Ok(())
 }

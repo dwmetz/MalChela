@@ -6,6 +6,22 @@ use std::fs;
 
 use colored::*;
 use dialoguer::Select;
+use rand::seq::SliceRandom;
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct Koans {
+    koans: Vec<String>,
+}
+
+fn load_random_koan() -> String {
+    std::fs::read_to_string("MalChelaGUI/koans/crabby_koans.yaml")
+        .ok()
+        .and_then(|content| serde_yaml::from_str::<Koans>(&content).ok())
+        .and_then(|k| k.koans.choose(&mut rand::thread_rng()).cloned())
+        .unwrap_or_else(|| "🦀 No koan today.".to_string())
+}
+
 mod theme;
 use theme::NoPrefixTheme;
 mod menu;
@@ -66,6 +82,10 @@ fn check_for_updates() -> io::Result<()> {
         println!("{}", "MalChela is up to date!".green());
     }
 
+    let koan = load_random_koan();
+    println!();
+    println!("{}", koan.truecolor(255, 121, 63));
+
     Ok(())
 }
 
@@ -100,9 +120,9 @@ fn print_banner() {
                 ▒▒▒▒    ▒▒▒▒▒▒▒▒    ▒▒▒▒                                
     "#;
     println!("{}", crab_art.red());
-    println!("        {}", "    https://bakerstreetforensics.com".yellow());
+    println!("        {}", "    https://bakerstreetforensics.com".truecolor(110, 130, 140));
     println!();
-    println!("        {}", "MalChela - YARA & Malware Analysis Toolkit".white());
+    println!("        {}", "MalChela - YARA & Malware Analysis Toolkit".yellow());
     println!();
 }
 
@@ -115,93 +135,85 @@ fn main() {
 
     pause();
 
+    let groups: Vec<(String, Vec<(String, Vec<String>)>)> = menu::grouped_menu()
+        .into_iter()
+        .map(|(group, items)| {
+            (
+                group.to_string(),
+                items
+                    .into_iter()
+                    .map(|(label, args)| {
+                        (label.to_string(), args.into_iter().map(|s| s.to_string()).collect())
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+
     loop {
         clear_screen();
         print_banner();
 
-        let groups: Vec<(String, Vec<(String, Vec<String>)>)> = menu::grouped_menu()
-            .into_iter()
-            .map(|(group, items)| {
-                (
-                    group.to_string(),
-                    items
-                        .into_iter()
-                        .map(|(label, args)| {
-                            (label.to_string(), args.into_iter().map(|s| s.to_string()).collect())
-                        })
-                        .collect(),
-                )
-            })
-            .collect();
+        let mut tool_entries = vec![];
+        for (group, tools) in &groups {
+            tool_entries.push(format!(
+                "{}  {}",
+                match group.as_str() {
+                    "File Analysis" => "⚠",
+                    "Hashing Tools" => "⌗",
+                    "YARA Tools" => "☠",
+                    "Threat Intel" => "☢",
+                    "Utilities" => "⚙",
+                    _ => "•",
+                },
+                group
+            ).green());
 
-            let mut group_names: Vec<String> = groups
-            .iter()
-            .map(|(name, _)| match name.as_str() {
-                "File Analysis" => format!("\u{26A0}  {}", name),
-                "Hashing Tools" => format!("\u{2317}  {}", name),
-                "YARA Tools" => format!("\u{2620}  {}", name),
-                "Threat Intel" => format!("\u{2622}  {}", name),
-                "Utilities" => format!("\u{2699}  {}", name),
-                _ => name.to_string(),
-            })
-            .map(|s| format!("            {}", s.green()))
-            .collect();
+            for (label, _) in tools {
+                tool_entries.push(format!("        • {}", label).into());
+            }
+        }
 
-        group_names.push("    ⏻  Exit".to_string());
+        tool_entries.push("⏻  Exit".to_string().green());
 
         let theme = NoPrefixTheme;
 
-        let group_selection = Select::with_theme(&theme)
-            .with_prompt("    Choose a category:")
-            .items(&group_names)
+        let selection = Select::with_theme(&theme)
+            .with_prompt("    Choose a tool:")
+            .items(&tool_entries)
             .default(0)
             .interact_opt()
             .unwrap();
 
-        if let Some(group_index) = group_selection {
-            if group_index == group_names.len() - 1 {
+        if let Some(index) = selection {
+            if tool_entries[index].contains("⏻") {
                 println!("{}", "Exiting...".yellow());
                 break;
             }
 
-            let (group_name, tools): &(String, Vec<(String, Vec<String>)>) = &groups[group_index];
-
-            loop {
-                clear_screen();
-                print_banner();
-
-                let mut items: Vec<String> = tools
-                    .iter()
-                    .map(|(name, _)| format!("        {}", name))
-                    .collect();
-
-                items.push("        ← Back".to_string());
-
-                let tool_selection = Select::with_theme(&theme)
-                    .with_prompt(format!("    {}", group_name))
-                    .items(&items)
-                    .default(0)
-                    .interact_opt()
-                    .unwrap();
-
-                if let Some(tool_index) = tool_selection {
-                    if tool_index == items.len() - 1 {
-                        break;
-                    }
-
-                    let (_name, command): &(String, Vec<String>) = &tools[tool_index];
-                    println!("{}", format!("Launching: {}", command.join(" ")).cyan());
-
-                    let _ = Command::new("cargo")
-                        .args(command)
-                        .spawn()
-                        .unwrap()
-                        .wait();
-
-                    pause();
-                } else {
-                    break;
+            let mut command_items = Vec::new();
+            for (_group, tools) in &groups {
+                for (_label, command) in tools {
+                    command_items.push(command);
                 }
+            }
+
+            // Count only actionable entries (ignoring headers and spacers)
+            let actionable_indices: Vec<usize> = tool_entries.iter()
+                .enumerate()
+                .filter(|(_, entry)| entry.to_string().contains("•"))
+                .map(|(i, _)| i)
+                .collect();
+
+            if let Some(cmd_index) = actionable_indices.iter().position(|&i| i == index) {
+                let command = &command_items[cmd_index];
+                println!("{}", format!("Launching: {}", command.join(" ")).cyan());
+                let _ = Command::new("cargo")
+                    .args(command.iter())
+                    .spawn()
+                    .unwrap()
+                    .wait();
+                pause();
             }
         } else {
             break;

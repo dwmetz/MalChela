@@ -1,3 +1,5 @@
+use atty;
+use atty::Stream;
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -5,7 +7,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use yara::{Compiler, Rules};
 use clearscreen;
-use colored::*;
+// use colored::*;
 
 #[derive(Debug)]
 struct Counts {
@@ -55,28 +57,28 @@ rule zip_header {
 }
 
 fn display_table(counts: &Counts) {
+    println!("[TABLE_UPDATE]");
     println!("\n+----------------------+---------+");
 
     println!(
         "{}",
         format!("| Total Files         | {:>7} |", counts.total_files)
-            .cyan()
     );
     println!(
         "{}",
-        format!("| MZ Header Files     | {:>7} |", counts.mz_header).red()
+        format!("| MZ Header Files     | {:>7} |", counts.mz_header)
     );
     println!(
         "{}",
-        format!("| PDF Header Files    | {:>7} |", counts.pdf_header).green()
+        format!("| PDF Header Files    | {:>7} |", counts.pdf_header)
     );
     println!(
         "{}",
-        format!("| ZIP Header Files    | {:>7} |", counts.zip_header).yellow()
+        format!("| ZIP Header Files    | {:>7} |", counts.zip_header)
     );
     println!(
         "{}",
-        format!("| Neither Header Files| {:>7} |", counts.neither_header).purple()
+        format!("| Neither Header Files| {:>7} |", counts.neither_header)
     );
     println!("+----------------------+---------+");
 }
@@ -113,11 +115,20 @@ fn scan_and_count_files(
                     }
 
                     if use_table_display {
-                        clearscreen::clear().expect("Failed to clear screen");
+                        if atty::is(Stream::Stdout) {
+                            clearscreen::clear().expect("Failed to clear screen");
+                        }
                         display_table(counts);
                     } else {
-                        println!("Scanned: {:?}", file_path.to_string_lossy().blue());
-                        println!("Current Counts: {:?}", counts);
+                        println!("Scanned: {:?}", file_path.to_string_lossy());
+                        println!(
+                            "Current Counts: Counts {{ total_files: {}, mz_header: {}, pdf_header: {}, zip_header: {}, neither_header: {} }}",
+                            counts.total_files,
+                            counts.mz_header,
+                            counts.pdf_header,
+                            counts.zip_header,
+                            counts.neither_header
+                        );
                     }
 
                     sleep(Duration::from_millis(100));
@@ -145,30 +156,33 @@ fn scan_file(file_path: &Path, rules: &Rules) -> Result<Vec<String>, io::Error> 
 }
 
 fn main() {
-    println!("Enter directory to scan:");
+    let input = std::env::var("MALCHELA_INPUT").unwrap_or_else(|_| {
+        println!("Enter directory to scan:");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).expect("Failed to read input");
+        input
+    });
 
-    let mut directory_to_scan = String::new();
-    std::io::stdin().read_line(&mut directory_to_scan).unwrap();
-
-    let directory_to_scan = directory_to_scan.trim();
-
-    let directory_path = match fs::canonicalize(directory_to_scan) {
+    let directory_path = match fs::canonicalize(input.trim()) {
         Ok(path) => path,
         Err(_) => {
             eprintln!(
                 "Error: The directory '{}' does not exist or cannot be accessed.",
-                directory_to_scan
+                input
             );
             return;
         }
     };
 
-    println!("Choose output format - (1) Detailed, (2) Table Display:");
-
-    let mut display_choice = String::new();
-    std::io::stdin().read_line(&mut display_choice).unwrap();
-
-    let use_table_display = display_choice.trim() == "2";
+    let use_table_display = match std::env::var("MZCOUNT_TABLE_DISPLAY") {
+        Ok(val) => val == "1",
+        Err(_) => {
+            println!("Choose output mode:\n1) Table View\n2) Detailed View");
+            let mut choice = String::new();
+            std::io::stdin().read_line(&mut choice).expect("Failed to read choice");
+            choice.trim() == "1"
+        }
+    };
 
     match compile_yara_rules() {
         Ok(rules) => {
@@ -192,6 +206,7 @@ fn main() {
 
             println!("\nFinal Results:");
             display_table(&counts);
+            std::env::remove_var("MZCOUNT_TABLE_DISPLAY");
 
             if counts.total_files == 0 {
                 println!("No files were scanned. Please check your directory.");

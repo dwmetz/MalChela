@@ -31,8 +31,7 @@ pub fn grouped_menu() -> Vec<MenuGroup> {
             "Threat Intel".to_string(),
             vec![
                 ("  Malware Hash Lookup".to_string(), vec!["run".to_string(), "--bin".to_string(), "malhash".to_string()]),
-                ("  NSRL MD5 Lookup".to_string(), vec!["run".to_string(), "--bin".to_string(), "nsrlmd5".to_string()]),
-                ("  NSRL SHA1 Lookup".to_string(), vec!["run".to_string(), "--bin".to_string(), "nsrlsha1".to_string()]),
+                ("  NSRL Hash Lookup".to_string(), vec!["run".to_string(), "--bin".to_string(), "nsrlquery".to_string()]),
             ],
         ),
         (

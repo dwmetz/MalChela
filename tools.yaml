@@ -1,0 +1,65 @@
+- name: Mismatch Miner
+  command: ["mismatchminer"]
+  input_type: folder
+  category: "File Analysis"
+
+- name: "mStrings"
+  command: ["mstrings"]
+  input_type: file
+  category: "File Analysis"
+
+- name: Malware Hash Lookup
+  command: ["malhash"]
+  input_type: hash
+  category: "Threat Intel"
+
+- name: Combine YARA
+  command: ["combine_yara"]
+  input_type: folder
+  category: "YARA Tools"
+
+- name: Extract Samples
+  command: ["extract_samples"]
+  input_type: folder
+  category: "Utilities"
+
+- name: File Analyzer
+  command: ["fileanalyzer"]
+  input_type: file
+  category: "File Analysis"
+
+- name: Hash It
+  command: ["hashit"]
+  input_type: file
+  category: "Hashing Tools"
+
+- name: MZMD5
+  command: ["mzmd5"]
+  input_type: folder
+  category: "Hashing Tools"
+
+- name: MZcount
+  command: ["mzcount"]
+  input_type: folder
+  category: "Hashing Tools"
+
+- name: NSRL Hash Lookup
+  command: ["nsrlquery"]
+  input_type: hash
+  category: "Threat Intel"
+
+- name: Strings to YARA
+  command: ["strings_to_yara"]
+  input_type: hash
+  category: "YARA Tools"
+
+- name: XMZMD5
+  command: ["xmzmd5"]
+  input_type: folder
+  category: "Hashing Tools"
+
+- name: capa
+  command: ["capa"]
+  input_type: file
+  category: "External"
+  optional_args: []

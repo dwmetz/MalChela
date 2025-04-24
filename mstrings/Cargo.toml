@@ -18,3 +18,9 @@ env_logger = "0.11.6"
 colored = "3.0.0"
 common_config = { path = "../common_config" }
 project-root = "0.2.2"
+clap = { version = "4.4", features = ["derive"] }
+common_ui = { path = "../common_ui" }
+egui = "0.31.1"
+prettytable = "0.10.0"
+terminal_size = "0.4.2"
+tabled = "0.18.0"

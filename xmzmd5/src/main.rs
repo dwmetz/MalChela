@@ -1,3 +1,4 @@
+use common_config::get_output_dir;
 use md5::{Digest, Md5};
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
@@ -61,6 +62,10 @@ fn calculate_md5(file_path: &Path) -> Option<String> {
 
 /// Recursively scans a directory for files that do not match YARA rules and calculates their MD5 hashes.
 fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path) -> io::Result<()> {
+    if let Some(parent) = output_file.parent() {
+        fs::create_dir_all(parent).expect("Failed to ensure output directory exists");
+    }
+
     let mut hash_count = 0;
     let mut output = File::create(output_file)?;
 
@@ -96,11 +101,13 @@ fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path) -> i
 }
 
 fn main() {
-    // Prompt user for directory to scan
-    println!("Enter directory to scan:");
-    let mut directory_to_scan = String::new();
-    io::stdin().read_line(&mut directory_to_scan).unwrap();
-    let directory_to_scan = PathBuf::from(directory_to_scan.trim());
+    let directory_to_scan = std::env::var("MALCHELA_INPUT").unwrap_or_else(|_| {
+        eprintln!("Please enter the directory to scan:");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).expect("Failed to read input.");
+        input.trim().to_string()
+    });
+    let directory_to_scan = PathBuf::from(directory_to_scan);
 
     if !directory_to_scan.is_dir() {
         eprintln!("[ERROR] The provided path is not a valid directory: {:?}", directory_to_scan);
@@ -116,22 +123,22 @@ fn main() {
         }
     };
 
-    // Output filename for unmatched files' MD5 hashes
-    let mut output_filename = PathBuf::from("Saved_Output");
-    fs::create_dir_all(&output_filename).unwrap();
-    output_filename.push("XMZMD5.txt");
+    let output_dir = get_output_dir("xmzmd5");
+    let output_filename = output_dir.join("XMZMD5.txt");
 
-    // Check if the output file already exists and prompt user for action
-    if output_filename.exists() {
-        println!(
-            "[WARNING] The file '{:?}' already exists. Do you want to overwrite it? (yes/no):",
-            output_filename
-        );
-        let mut response = String::new();
-        io::stdin().read_line(&mut response).unwrap();
-        if !matches!(response.trim().to_lowercase().as_str(), "yes" | "y") {
-            println!("[INFO] Operation canceled by user.");
+    let allow_overwrite = std::env::var("MZHASH_ALLOW_OVERWRITE").ok().as_deref() == Some("1");
+    if output_filename.exists() && !allow_overwrite {
+        if std::env::var("MALCHELA_GUI_MODE").is_ok() {
+            println!("File already exists. Enable 'Allow Overwrite' if you want to replace this file.");
             return;
+        } else {
+            println!("File already exists at {:?}. Do you want to overwrite it? (y/n):", output_filename);
+            let mut choice = String::new();
+            std::io::stdin().read_line(&mut choice).expect("Failed to read input.");
+            if !choice.trim().eq_ignore_ascii_case("y") {
+                println!("Aborted by user. No file was overwritten.");
+                return;
+            }
         }
     }
 

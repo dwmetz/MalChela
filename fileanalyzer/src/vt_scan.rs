@@ -44,7 +44,13 @@ fn find_workspace_root() -> io::Result<PathBuf> {
 fn read_api_key_from_file(workspace_root: &Path) -> io::Result<String> {
     let api_key_path = workspace_root.join("vt-api.txt");
     //println!("Attempting to read API key from: {:?}", api_key_path);
+    let display_path = api_key_path.clone();
     fs::read_to_string(api_key_path)
+        .map(|s| s.trim().to_string())
+        .map_err(|e| io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("VT API key not found at '{}'. Please set it in the Configuration menu. ({})", display_path.display(), e)
+        ))
 }
 
 async fn submit_request(url: &str, api_key: &str) -> Result<Value, Error> {

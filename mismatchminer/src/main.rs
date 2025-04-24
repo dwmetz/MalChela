@@ -1,3 +1,20 @@
+use clap::Parser;
+use chrono::Utc;
+
+fn is_gui_mode() -> bool {
+    std::env::var("MALCHELA_GUI_MODE").is_ok()
+}
+
+#[derive(Parser)]
+#[command(name = "MismatchMiner")]
+#[command(about = "Scans a directory for files with matching YARA rules and hashes", long_about = None)]
+struct Args {
+    #[arg(help = "Directory to scan")]
+    input: Option<PathBuf>,
+
+    #[arg(short, long, help = "Save output to file")]
+    output: bool,
+}
 use colored::*;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
@@ -56,9 +73,10 @@ fn scan_and_hash_matches(
     directory: &Path,
     rules: &Rules,
     output_file: &Path,
+    save_output: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut match_count = 0;
-    let mut output = File::create(output_file)?;
+    let mut output: Option<File> = None;
     let mut scanner = rules.scanner()?;
 
     let mut matches: Vec<(String, String, String)> = Vec::new();
@@ -78,7 +96,14 @@ fn scan_and_hash_matches(
                             let ext = path.extension().unwrap().to_string_lossy().to_string();
                             let path_str = path.display().to_string();
                             matches.push((sha256_hash.clone(), ext.clone(), path_str.clone()));
-                            writeln!(output, "{} {}", sha256_hash, path.display())?;
+                            if save_output {
+                                if output.is_none() {
+                                    output = Some(File::create(output_file)?);
+                                }
+                                if let Some(ref mut out) = output {
+                                    writeln!(out, "{} {}", sha256_hash, path.display())?;
+                                }
+                            }
                             match_count += 1;
                         }
                     }
@@ -95,14 +120,24 @@ fn scan_and_hash_matches(
     }
 
     if !matches.is_empty() {
-        println!("\n{}", "Scan Results:".bold().blue());
-    
-        for (i, (hash, ext, path)) in matches.iter().enumerate() {
-            println!("{}", format!("--- Match {} ---", i + 1).bold().blue());
-            println!("{} {}", "Hash     :".bold(), hash.green());
-            println!("{} {}", "Extension:".bold(), format!(".{}", ext).yellow());
-            println!("{} {}", "Path     :".bold(), path.cyan());
-            println!(); // blank line between blocks
+        if is_gui_mode() {
+            println!("[green]Scan Results:");
+            for (i, (hash, ext, path)) in matches.iter().enumerate() {
+                println!("[yellow]--- Match {} ---", i + 1);
+                println!("[bold]Hash     : [reset]{}", hash);
+                println!("[cyan]Extension: .{}", ext);
+                println!("[gray]Path     : {}", path);
+                println!();
+            }
+        } else {
+            println!("\n{}", "Scan Results:".bold().green());
+            for (i, (hash, ext, path)) in matches.iter().enumerate() {
+                println!("{}", format!("--- Match {} ---", i + 1).bold().yellow());
+                println!("{} {}", "Hash     :".bold(), hash.green());
+                println!("{} {}", "Extension:".bold(), format!(".{}", ext).cyan());
+                println!("{} {}", "Path     :".bold(), path);
+                println!();
+            }
         }
     } else {
         println!("{}", "No matches found.".bold().green());
@@ -115,13 +150,17 @@ fn scan_and_hash_matches(
         match_count.to_string().bold().green()
     );
 
-    let canonical = output_file.canonicalize()?;
-    let output_path = canonical.to_string_lossy();
-    println!(
-        "{} {}",
-        "Output file location:".bold(),
-        output_path.bold().green()
-    );
+    if save_output {
+        let canonical = output_file.canonicalize().unwrap_or_else(|_| output_file.to_path_buf());
+        let output_path = canonical.to_string_lossy();
+        println!(
+            "{} {}",
+            "Output file location:".bold(),
+            output_path.bold().green()
+        );
+    } else {
+        println!("{}", "Output was not saved.".bold().yellow());
+    }
 
     Ok(())
 }
@@ -134,17 +173,20 @@ fn prompt_for_directory() -> PathBuf {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let input_dir = prompt_for_directory();
+    let args = Args::parse();
+    let input_dir = args.input.unwrap_or_else(prompt_for_directory);
     if !input_dir.is_dir() {
         eprintln!("{}", "Provided path is not a directory.".bold().red());
         return Ok(());
     }
 
     let output_dir = get_output_dir("mismatchminer");
-    let output_file = output_dir.join("matches.txt");
+    let timestamp = Utc::now().format("cli_%Y%m%d_%H%M%S").to_string();
+    let output_file = output_dir.join(format!("report_{}.txt", timestamp));
 
     fs::create_dir_all(&output_dir)?;
-    scan_and_hash_matches(&input_dir, &compile_yara_rules()?, &output_file)?;
+    let save_output = args.output;
+    scan_and_hash_matches(&input_dir, &compile_yara_rules()?, &output_file, save_output)?;
 
     //println!("Text output saved to {}", output_file.display());
     println!(); // adds a final blank line

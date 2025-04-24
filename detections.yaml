@@ -1,4 +1,4 @@
-783656ed-90e1-413d-ab9f-e1a4de58c61b:
+SuspiciousURLStrangeDomain:
   title: "Suspicious URL (strange domain)"
   id: "b2e9a3d7-cf18-4b6f-997b-4d90d7a83b88"
   status: experimental
@@ -22,24 +22,6 @@
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
 
-SuspiciousBase64Encoding:
-  title: "Suspicious base64 encoding"
-  id: "z1c8d5b3-8b6f-4f2f-bb09-635cfb4df05b"
-  status: "experimental"
-  description: "Suspicious base64 encoding, commonly used for obfuscation"
-  logsource:
-    category: "file_event"
-    product: "windows"
-  detection:
-    strings:
-      - "([A-Za-z0-9+/=]{20,})"
-  tags:
-    - attack.t1132.001
-  level: high
-  mitre:
-    - technique_id: "T1132.001"
-      technique_name: "Data Encoding: Standard Encoding"
-      tactics: ["Command and Control", "Defense Evasion"]
 
 HardcodedIPAddress:
   title: "Hardcoded IP address"
@@ -60,7 +42,7 @@ HardcodedIPAddress:
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
 
-SuspiciousC2URL:
+SuspiciousC2ApiPhp:
   title: "Suspicious C2 URL (api.php, gate.php)"
   id: "c0f1d4f5-45b6-4a8f-b2f3-eabdf3c3f83a"
   status: "experimental"
@@ -78,7 +60,7 @@ SuspiciousC2URL:
     - technique_id: "T1071.001"
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
-SuspiciousDomainRandomCharacters:
+SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
   status: "experimental"
@@ -116,7 +98,7 @@ SuspiciousHxxpOrFxp:
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
 
-SuspiciousExecutableCmdPowershellWscript:
+SuspiciousExecutableCmdPowershell:
   title: "Suspicious executable (cmd, powershell, wscript)"
   id: "f3b9d5d7-45d2-44e5-b4a9-7891a47c4162"
   status: "experimental"
@@ -134,8 +116,65 @@ SuspiciousExecutableCmdPowershellWscript:
     - technique_id: "T1059"
       technique_name: "Command and Scripting Interpreter"
       tactics: ["Execution"]
+  
+LOLBinsExecution:
+  title: "LOLBins Used for Execution"
+  id: "lolbin-execution-001"
+  status: "experimental"
+  description: "Detects legitimate binaries commonly abused for execution."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(cmd\\.exe|powershell\\.exe|mshta\\.exe|cscript\\.exe|wscript\\.exe|wmic\\.exe|forfiles\\.exe|msbuild\\.exe|installutil\\.exe)"
+  tags:
+    - attack.T1059
+  level: high
+  mitre:
+    - technique_id: "T1059"
+      technique_name: "Command and Scripting Interpreter"
+      tactics: ["Execution"]
 
-SuspiciousExecutableRundll32Regsvr32:
+LOLBinsDefenseEvasion:
+  title: "LOLBins Used for Defense Evasion"
+  id: "lolbin-evasion-001"
+  status: "experimental"
+  description: "Detects LOLBins used to bypass security controls."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(rundll32\\.exe|regsvr32\\.exe|certutil\\.exe|sdbinst\\.exe|msbuild\\.exe|installutil\\.exe)"
+  tags:
+    - attack.T1218
+  level: high
+  mitre:
+    - technique_id: "T1218"
+      technique_name: "Signed Binary Proxy Execution"
+      tactics: ["Defense Evasion"]
+
+LOLBinsLateralMovement:
+  title: "LOLBins Used for Lateral Movement"
+  id: "lolbin-lateral-001"
+  status: "experimental"
+  description: "Detects LOLBins like wmic and xcopy potentially used for lateral movement."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(wmic\\.exe|xcopy\\.exe|bitsadmin\\.exe)"
+  tags:
+    - attack.T1021
+  level: medium
+  mitre:
+    - technique_id: "T1021"
+      technique_name: "Remote Services"
+      tactics: ["Lateral Movement"]
+
+SuspiciousExecutableRundll32:
   title: "Suspicious executable (rundll32, regsvr32)"
   id: "g0d7b9c1-2e84-4fd1-b9db-75a3cf79571b"
   status: "experimental"
@@ -485,7 +524,7 @@ UserActivityDetection:
       technique_name: "File and Directory Discovery"
       tactics: ["Discovery"]
 
-SuspiciousURL:
+SuspiciousURLDetection:
   title: "Refined Suspicious URL Detection (No Lookaround)"
   id: "b1c2d3e4-5f6g-7h8i-9j0k-1l2m3n4o5p6q"
   status: "experimental"
@@ -568,7 +607,7 @@ MaliciousPowerShellFunctions:
       technique_name: "Command and Scripting Interpreter: PowerShell"
       tactics: ["Execution"]
 
-SuspiciousExecutable:
+SuspiciousExecutableExtension:
   title: "Suspicious Executable File Extension with Filename"
   id: "123e4567-e89b-12d3-a456-426614174000"
   status: "experimental"
@@ -590,7 +629,8 @@ SuspiciousExecutable:
       technique_name: "Signed Binary Proxy Execution"
       tactics: ["Defense Evasion", "Execution"]
 
-SusURL:
+
+SuspiciousURLGeneric:
   title: "Suspicious URL Detection"
   id: "87654321-b98e-3d21-654a-266424710000"
   status: "experimental"
@@ -615,7 +655,7 @@ SusURL:
       
 SuspiciousExecutableFilename:
   title: "Suspicious Executable Filename Detection"
-  id: "your-unique-uuid-here" # Replace with a unique UUID
+  id: "67d278de-0fc6-4c9b-9e2d-7c3ebde59dcf" 
   status: "experimental"
   description: "Detects file paths containing suspicious executable extensions (.exe, .bat, .dll) and captures the full filename."
   logsource:
@@ -635,3 +675,264 @@ SuspiciousExecutableFilename:
     - technique_id: "T1218"
       technique_name: "Signed Binary Proxy Execution"
       tactics: ["Defense Evasion", "Execution"]
+
+SuspiciousWindowsAPIDiscovery:
+  title: "Suspicious Windows API Calls for System Discovery"
+  id: "a9c8b7d6-e5f4-4321-bacd-fedcba987654"
+  status: "experimental"
+  description: "Detects usage of API calls related to system and process discovery often abused by malware."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "NtQuerySystemInformation"
+      - "ZwQueryInformationProcess"
+      - "GetProcAddress"
+      - "LoadLibraryA"
+  tags:
+    - attack.T1082
+    - attack.T1106
+  level: high
+  mitre:
+    - technique_id: "T1082"
+      technique_name: "System Information Discovery"
+      tactics: ["Discovery"]
+    - technique_id: "T1106"
+      technique_name: "Native API"
+      tactics: ["Execution"]
+
+SuspiciousUserAgent:
+  title: "Suspicious or hardcoded User-Agent strings"
+  id: "abc12345-user-agent-detect"
+  status: "experimental"
+  description: "Detects suspicious or uncommon User-Agent values often used in malware HTTP requests."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(User-Agent: Mozilla/4.0|curl/|python-requests|Go-http-client|bot|scanner)"
+  tags:
+    - attack.T1071.001
+  level: medium
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+CredentialStrings:
+  title: "Credential-related strings"
+  id: "cred1234-detect"
+  status: "experimental"
+  description: "Detects hardcoded credential or authentication-related strings."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(password|passwd|username|login|credentials|auth_token|apikey)"
+  tags:
+    - attack.T1552
+  level: high
+  mitre:
+    - technique_id: "T1552"
+      technique_name: "Unsecured Credentials"
+      tactics: ["Credential Access"]
+
+SuspiciousEmailExfil:
+  title: "Suspicious email or SMTP strings"
+  id: "mail9876-exfil"
+  status: "experimental"
+  description: "Detects potential SMTP usage or hardcoded email destinations."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(smtp\\.|mail\\.to:|mailfrom:|starttls|EHLO|RCPT TO|MAIL FROM)"
+  tags:
+    - attack.T1048.003
+  level: medium
+  mitre:
+    - technique_id: "T1048.003"
+      technique_name: "Exfiltration Over Unencrypted/Obfuscated Non-C2 Protocol"
+      tactics: ["Exfiltration"]
+
+GeolocationCheck:
+  title: "Geolocation or IP check URLs"
+  id: "geo-ip-checker-2345"
+  status: "experimental"
+  description: "Detects geolocation services that may indicate regional targeting or sandbox evasion."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(ip-api\\.com|ipinfo\\.io|checkip\\.dyndns\\.org|icanhazip\\.com|ifconfig\\.me)"
+  tags:
+    - attack.T1592
+  level: high
+  mitre:
+    - technique_id: "T1592"
+      technique_name: "Gather Victim Host Information"
+      tactics: ["Reconnaissance"]
+
+SuspiciousDllExports:
+  title: "Suspicious DLL exports or Windows API hooks"
+  id: "dllhook-detect-8675309"
+  status: "experimental"
+  description: "Detects strings commonly seen in malicious DLLs for API hooking or injection."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(DllMain|LoadLibraryA|GetProcAddress|SetWindowsHookEx|CreateToolhelp32Snapshot|EnumProcesses)"
+  tags:
+    - attack.T1055
+  level: high
+  mitre:
+    - technique_id: "T1055"
+      technique_name: "Process Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+
+UACBypassHints:
+  title: "UAC bypass methods or auto-elevation indicators"
+  id: "uac-hint-bypass-2202"
+  status: "experimental"
+  description: "Detects signs of auto-elevate, fodhelper tricks, and bypass indicators."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(fodhelper\\.exe|eventvwr\\.exe|auto-elevate|uac bypass)"
+  tags:
+    - attack.T1548.002
+  level: high
+  mitre:
+    - technique_id: "T1548.002"
+      technique_name: "Abuse Elevation Control Mechanism: Bypass User Access Control"
+      tactics: ["Privilege Escalation"]
+
+PowerShellEncodedCommandUsage:
+  title: "PowerShell EncodedCommand Usage"
+  id: "ps-encodedcommand-usage-001"
+  status: "experimental"
+  description: "Detects usage of PowerShell's -EncodedCommand parameter"
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "powershell.*-EncodedCommand"
+  tags:
+    - attack.T1059.001
+  level: high
+  mitre:
+    - technique_id: "T1059.001"
+      technique_name: "Command and Scripting Interpreter: PowerShell"
+      tactics: ["Execution"]
+
+PowerShellInvokeExpression:
+  title: "PowerShell Invoke-Expression or IEX"
+  id: "ps-invoke-expression-001"
+  status: "experimental"
+  description: "Detects usage of Invoke-Expression or IEX in PowerShell scripts"
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "Invoke-Expression"
+      - "IEX"
+  tags:
+    - attack.T1059.001
+  level: high
+  mitre:
+    - technique_id: "T1059.001"
+      technique_name: "Command and Scripting Interpreter: PowerShell"
+      tactics: ["Execution"]
+
+PowerShellAMSIBypass:
+  title: "PowerShell AMSI Bypass Indicators"
+  id: "ps-amsi-bypass-001"
+  status: "experimental"
+  description: "Detects indicators of AMSI bypass techniques in PowerShell"
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "AmsiInitFailed"
+      - "amsi.dll"
+  tags:
+    - attack.T1059.001
+  level: high
+  mitre:
+    - technique_id: "T1059.001"
+      technique_name: "Command and Scripting Interpreter: PowerShell"
+      tactics: ["Execution"]
+
+PowerShellObfuscatedFlags:
+  title: "PowerShell Obfuscated Flags"
+  id: "ps-obfuscated-flags-001"
+  status: "experimental"
+  description: "Detects obfuscated flags in PowerShell command line arguments"
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "-EncodedCommand"
+      - "-NoProfile"
+      - "-ExecutionPolicy"
+  tags:
+    - attack.T1059.001
+  level: high
+  mitre:
+    - technique_id: "T1059.001"
+      technique_name: "Command and Scripting Interpreter: PowerShell"
+      tactics: ["Execution"]
+
+WMIPersistenceEventConsumers:
+  title: "WMI Persistence via Event Consumers"
+  id: "wmi-persistence-001"
+  status: "experimental"
+  description: "Detects WMI event consumer persistence mechanisms"
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "WMI"
+      - "EventConsumer"
+      - "ActiveScriptEventConsumer"
+  tags:
+    - attack.T1543.004
+  level: high
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Windows Service"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+WMIUsageDiscoveryExecution:
+  title: "WMI Usage for Discovery or Execution"
+  id: "wmi-usage-001"
+  status: "experimental"
+  description: "Detects usage of WMI for system discovery or command execution"
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "wmic"
+      - "WMI"
+  tags:
+    - attack.T1047
+  level: high
+  mitre:
+    - technique_id: "T1047"
+      technique_name: "Windows Management Instrumentation"
+      tactics: ["Discovery", "Execution"]

@@ -2,6 +2,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, exit};
 use walkdir::WalkDir;
+use std::env;
 
 fn main() {
     // Check if 7z or 7zz exists in PATH
@@ -12,8 +13,18 @@ fn main() {
     }
     let seven_zip = seven_zip.unwrap();
 
-    // Prompt the user for a directory to scan
-    let dir = prompt_for_directory();
+    // Accept input directory and password via args or prompt
+    let args: Vec<String> = env::args().collect();
+    let (dir, password) = if args.len() >= 3 {
+        // GUI mode: arguments provided
+        (args[1].clone(), args[2].clone())
+    } else {
+        // CLI mode: prompt user
+        let dir = prompt_for_directory();
+        let password = prompt_for_password();
+        (dir, password)
+    };
+
     if !Path::new(&dir).is_dir() {
         eprintln!("Error: Provided path is not a directory.");
         exit(1);
@@ -38,7 +49,7 @@ fn main() {
             let output = Command::new(&seven_zip)
                 .arg("x")
                 .arg(zip_file)
-                .arg(format!("-p{}", "infected")) // Password
+                .arg(format!("-p{}", password)) // Password
                 .arg(format!("-o{}", zip_file.parent().unwrap().display())) // Output directory
                 .output();
 
@@ -74,6 +85,19 @@ fn find_7zip() -> Option<String> {
 /// Prompts the user to enter a directory path.
 fn prompt_for_directory() -> String {
     print!("Enter the directory to scan: ");
+    io::stdout().flush().expect("Failed to flush stdout");
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read input");
+
+    input.trim().to_string()
+}
+
+/// Prompts the user to enter a password.
+fn prompt_for_password() -> String {
+    print!("Enter the password for zip files: ");
     io::stdout().flush().expect("Failed to flush stdout");
 
     let mut input = String::new();

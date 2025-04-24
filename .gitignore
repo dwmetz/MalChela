@@ -1,17 +1,20 @@
-mb-api.txt
-vt-api.txt
-MZMD5.txt
-XMZMD5.txt
-combined_rule.yar
-malhash-*
-/target/*
-images/.DS_Store
+# Build files
+/target
+
+# VS Code
+.vscode
+
+# MacOS
 .DS_Store
-combined_rules.yar
-scan_results.json
-mstrings-*
-/Saved_Results
-generated_rule.yara
-/Saved_Output
-*.yar
-*.yara
+
+# Scratchpad
+scratchpad.txt
+
+# Secrets
+vt-api.txt
+mb-api.txt
+
+# Output folders
+# Ignore everything in saved_output except .gitkeep
+/saved_output/*
+!/saved_output/.gitkeep

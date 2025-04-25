@@ -43,7 +43,6 @@ fn find_workspace_root() -> io::Result<PathBuf> {
 
 fn read_api_key_from_file(workspace_root: &Path) -> io::Result<String> {
     let api_key_path = workspace_root.join("vt-api.txt");
-    //println!("Attempting to read API key from: {:?}", api_key_path);
     let display_path = api_key_path.clone();
     fs::read_to_string(api_key_path)
         .map(|s| s.trim().to_string())
@@ -73,7 +72,7 @@ pub async fn check_virustotal(hash: &str) -> Result<bool, Box<dyn std::error::Er
             if let Some(malicious) = response["data"]["attributes"]["last_analysis_stats"]["malicious"].as_u64() {
                 return Ok(malicious > 0);
             }
-            Ok(false) // Default to "No" if no data is available
+            Ok(false)
         }
         Err(e) => Err(Box::new(e)),
     }

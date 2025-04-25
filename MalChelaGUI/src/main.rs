@@ -19,21 +19,10 @@ use std::{
     sync::{Arc, Mutex},
     thread,
 };
-// ANSI escape stripping removed; using raw CLI output
 
-// Color tag conventions for fileanalyzer output parsing in GUI:
-// [white]   - main header and key:value lines (file type, hash, size, time, PE header fields, PE section info, etc)
-// [stone]   - section summaries, neutral section block summaries (e.g., "Sections:", "Imports:", etc)
-// [yellow]  - warnings, YARA hits, suspicious findings
-// [rust]    - indicator lines (VT, entropy, packed), strong heuristic notices, PE summary headers
-// [gray]    - for less important info (not used here but reserved)
-// [green]   - positive/OK status
-// [red]     - errors
 
 const RUST_ORANGE: Color32 = Color32::from_rgb(200, 100, 50);
 const STONE_BEIGE: Color32 = Color32::from_rgb(225, 210, 180);
-// [white], [gray], and [NOTE] tags are handled in the ScrollArea output rendering logic below.
-// The following section ensures [white], [gray], and [NOTE] tags are handled and colored correctly.
 const LIGHT_CYAN: Color32 = Color32::from_rgb(0, 255, 255);
 const RED: Color32 = Color32::from_rgb(255, 0, 0);
 const GREEN: Color32 = Color32::from_rgb(0, 255, 0);
@@ -67,7 +56,6 @@ struct AppState {
     show_home: bool,
     author_name: String,
     zip_password: String,
-    // Config panel
     show_config: bool,
     vt_api_key: String,
     mb_api_key: String,
@@ -311,7 +299,6 @@ impl AppState {
 
                 let _ = child.wait();
 
-                // After the process completes, if fileanalyzer, read temp output file and display in GUI
                 if command.get(0).map(|s| s == "fileanalyzer").unwrap_or(false) {
                     let temp_path = std::env::temp_dir().join("malchela_temp_output.txt");
                     if let Ok(contents) = std::fs::read_to_string(temp_path) {
@@ -319,9 +306,7 @@ impl AppState {
                         let mut lines = output_lines.lock().unwrap();
                         out.clear();
                         lines.clear();
-                        // Use the same parse_and_push_line logic as in the About section for color tagging
                         fn parse_and_push_line(line: &str, out: &mut String) {
-                            // Always ensure [white] prefix for fileanalyzer headers and key:value lines
                             if line.starts_with("[CRAB]") {
                                 out.push_str("[CRAB]");
                                 out.push_str(line.trim_start_matches("[CRAB]"));
@@ -375,8 +360,6 @@ impl AppState {
                                 out.push_str(line.trim_start_matches("[stone]"));
                                 out.push('\n');
                             } else {
-                                // For fileanalyzer: Add [white] prefix to headers and key:value lines if missing
-                                // PE header grouping output formatting for GUI parsing and coloring
                                 if line.starts_with("--- PE Header Details ---") {
                                     out.push_str("[rust]--- PE Header Details ---\n");
                                     return;
@@ -509,7 +492,6 @@ impl AppState {
             out.clear();
             let mut lines = self.output_lines.lock().unwrap();
             lines.clear();
-            // out.push_str("Running...\n"); // Removed per instructions
         }
     }
 
@@ -585,10 +567,10 @@ impl AppState {
             for line in output.lines() {
                 lines.push(line.to_string());
             }
-        }); // closes thread
-    } // closes check_for_updates_in_thread
+        }); 
+    }
 
-} // closes impl AppState
+} 
 
 impl App for AppState {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
@@ -621,7 +603,7 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                     let tool_color = STONE_BEIGE;
                     if ui.button(RichText::new(&tool.name).color(tool_color)).clicked() {
                         self.selected_tool = Some(tool.clone());
-                        self.input_path.clear(); // Clear path when switching tools
+                        self.input_path.clear(); 
                     }
                 }
                     });
@@ -647,10 +629,10 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                     self.show_config = true;
                 }
                 if ui.button(RichText::new("About").color(STONE_BEIGE)).on_hover_text("About MalChela and included tools").clicked() {
-                    // Clear output buffer before parsing lines, ensuring fresh display for each run
+   
                     {
                         let mut out = self.command_output.lock().unwrap();
-                        out.clear(); // Ensures fresh display for each run
+                        out.clear(); 
                     }
                     let output = Arc::clone(&self.command_output);
                     let output_lines = Arc::clone(&self.output_lines);
@@ -663,9 +645,8 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             .spawn()
                             .expect("Failed to run about");
 
-                        // Helper to parse and tag lines with color tags, including GUI-style tags
+
                         fn parse_and_push_line(line: &str, out: &mut String) {
-                            // Always ensure [white] prefix for fileanalyzer headers and key:value lines
                             if line.starts_with("[CRAB]") {
                                 out.push_str("[CRAB]");
                                 out.push_str(line.trim_start_matches("[CRAB]"));
@@ -719,8 +700,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                                 out.push_str(line.trim_start_matches("[stone]"));
                                 out.push('\n');
                             } else {
-                                // For fileanalyzer: Add [white] prefix to headers and key:value lines if missing
-                                // PE header grouping output formatting for GUI parsing and coloring
                                 if line.starts_with("--- PE Header Details ---") {
                                     out.push_str("[rust]--- PE Header Details ---\n");
                                     return;
@@ -921,7 +900,7 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                         ui.label("String Source:");
                         if ui.button("Browse").clicked() {
                             if let Some(path) = FileDialog::new().pick_file() {
-                                self.string_source_path = path.display().to_string(); // only update string input path
+                                self.string_source_path = path.display().to_string(); 
                             }
                         }
                         if ui.button("Use Scratchpad").clicked() {
@@ -930,7 +909,7 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             if let Ok(mut file) = File::create(filename) {
                                 let _ = writeln!(file, "{}", content);
                             }
-                            self.string_source_path = filename.to_string(); // track this as the selected string input
+                            self.string_source_path = filename.to_string(); 
                         }
                         ui.label(
                             if self.string_source_path == "scratchpad.txt" {
@@ -943,7 +922,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                         );
                     });
                 } else if tool.command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
-                    // Always set the dropdown value based on custom_args before each run
                     let mut table_display_mode = self.custom_args.contains("MZCOUNT_TABLE_DISPLAY=1");
                     ui.horizontal(|ui| {
                         ui.label("Display Mode:");
@@ -958,7 +936,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                                 }
                             });
                     });
-                    // Update self.custom_args to always reflect the dropdown selection
                     self.custom_args = self
                         .custom_args
                         .split_whitespace()
@@ -969,7 +946,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                         " MZCOUNT_TABLE_DISPLAY={}",
                         if table_display_mode { "1" } else { "0" }
                     ));
-                    // Folder path browser block
                     ui.horizontal(|ui| {
                         ui.label("Folder Path:");
                         ui.text_edit_singleline(&mut self.input_path);
@@ -1023,7 +999,7 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             ui.text_edit_singleline(&mut self.custom_args);
                         });
                     }
-                    // Overwrite logic for mzmd5 and xmzmd5
+
                     if let Some(tool_name) = tool.command.get(0) {
                         if tool_name == "mzmd5" || tool_name == "xmzmd5" {
                             let overwrite_var = "MZHASH_ALLOW_OVERWRITE=1";
@@ -1054,9 +1030,8 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             }
                         }
                     }
-                    // Save Report checkbox and format (conditionally show)
+
                     if let Some(tool_name) = tool.command.get(0) {
-                        // Ensure skip_report_tools includes "mzcount"
                         let skip_report_tools = ["strings_to_yara", "combine_yara", "extract_samples", "mzcount", "mzmd5", "xmzmd5"];
                         if !skip_report_tools.contains(&tool_name.as_str()) {
                             ui.horizontal(|ui| {
@@ -1132,7 +1107,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             RichText::new(line.trim_start_matches("[ABOUT]")).monospace().color(GREEN)
                         } else if line.starts_with("[FEATURES]") {
                             RichText::new(line.trim_start_matches("[FEATURES]")).monospace().color(GREEN)
-                        // Begin mstrings/MITRE tag color mapping additions
                         } else if line.starts_with("[NOTE]") {
                             RichText::new(line.trim_start_matches("[NOTE]")).monospace().color(RUST_ORANGE)
                         } else if line.starts_with("[bold]") {
@@ -1143,14 +1117,12 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             RichText::new(line.trim_start_matches("[yellow]")).monospace().color(YELLOW)
                         } else if line.starts_with("[cyan]") {
                             RichText::new(line.trim_start_matches("[cyan]")).monospace().color(LIGHT_CYAN)
-                        // --- REPLACE THIS BLOCK ---
                         } else if line.starts_with("[stone]") {
                             RichText::new(line.trim_start_matches("[stone]")).monospace().color(STONE_BEIGE)
                         } else if line.starts_with("[highlight]") {
                             RichText::new(line.trim_start_matches("[highlight]")).monospace().color(LIGHT_GREEN)
                         } else if line.starts_with("[NOTE]") {
                             RichText::new(line.trim_start_matches("[NOTE]")).monospace().color(RUST_ORANGE)
-                        // --- END REPLACEMENT ---
                         } else if line.starts_with("[rust]") {
                             RichText::new(line.trim_start_matches("[rust]")).monospace().color(RUST_ORANGE)
                         } else if line.starts_with("[green]") {
@@ -1219,7 +1191,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                     });
             }
 
-            // Config panel window
             if self.show_config {
                 egui::Window::new("Configuration")
                     .default_width(400.0)
@@ -1260,7 +1231,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
             }
         });
 
-        // --- Footer Branding pinned to bottom panel ---
         use egui::widgets::Hyperlink;
         TopBottomPanel::bottom("footer").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -1304,7 +1274,7 @@ fn main() {
         save_report: (false, ".txt".to_string()),
         custom_args: String::new(),
     };
-    // Explicitly check for updates before launching the GUI
+
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default().with_inner_size([1200.0, 800.0]),

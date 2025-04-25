@@ -1,3 +1,28 @@
+# tools.yaml - MalChela Tool Configuration File
+#
+# This file defines tools that will appear in the MalChela GUI.
+# Each tool block consists of:
+#   - name: Unique name used for display and reference
+#   - category: Category under which the tool appears in the GUI
+#   - command: The command to run (must be in PATH or relative to workspace)
+#   - input_type: One of "file", "folder", or "hash"
+#
+# To disable a tool without deleting it, simply comment out its block using "#".
+#
+# Example usage:
+#
+# - name: fileanalyzer
+#   description: "Extracts metadata, entropy, hashes, and YARA matches"
+#   category: "File Analysis"
+#   command: "fileanalyzer"
+#   input_type: "file"
+#
+# Tools can be written in any language and don’t need to be Rust-based,
+# as long as they are executable and accept input via stdin, env vars,
+# or CLI arguments as expected.
+#
+# This file is loaded once at startup. Any changes require restarting the GUI.
+
 - name: Mismatch Miner
   command: ["mismatchminer"]
   input_type: folder
@@ -58,8 +83,13 @@
   input_type: folder
   category: "Hashing Tools"
 
-- name: capa
-  command: ["capa"]
-  input_type: file
-  category: "External"
-  optional_args: []
+# -------------------------------------
+# Example 3rd party integration:
+# Below is a disabled example for capa
+# Uncomment to enable if capa is in your PATH
+#
+# - name: capa
+#   command: "capa"
+#   input_type: "file"
+#   category: "External"
+#   optional_args: []

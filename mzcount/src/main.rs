@@ -7,7 +7,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use yara::{Compiler, Rules};
 use clearscreen;
-// use colored::*;
+
 
 #[derive(Debug)]
 struct Counts {

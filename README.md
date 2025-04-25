@@ -1,5 +1,5 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="/images/malchela.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="/images/malchela_featured.png"/>
  <p>
   <h1>
    Malchela
@@ -27,8 +27,7 @@
 | mStrings | Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex |
 | MZMD5 | Recurse a directory, for files with MZ header, create hash list|
 | MZcount | Recurse a directory, uses YARA to count MZ, Zip, PDF, other| 
-| NSRL MD5 Lookup | Query a MD5 hash against NSRL|
-| NSRL SHA1 Lookup | Query a SHA1hash against NSRL| 
+| NSRL Query | Query a MD5 or SHA1 hash against NSRL|
 | Strings to YARA | Prompts for metadata and strings (text file) to create a YARA rule|
 | Malware Hash Lookup | Query a hash value against VirusTotal & Malware Bazaar*|
 | XMZMD5 | Recurse a directory, for files without MZ, Zip or PDF header, create hash list|

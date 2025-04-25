@@ -199,10 +199,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         output_file.write_all(json.as_bytes())?;
     }
 
-// Display output to screen regardless of -o flag
-
-// Display logic starts here
-
     let mut display_matches = Vec::new();
 
     for m in &mstrings.matches {

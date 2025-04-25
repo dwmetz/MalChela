@@ -52,7 +52,7 @@ sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-esse
 ```
 
 <h3>
-Installation:
+Installation & Usage:
 </h3>
 
 Install Rust - https://rustup.rs/</p>
@@ -69,7 +69,16 @@ Run:
 
 ```
 cargo run -p malchela
+
 ```
+or 
+
+```
+cargo run -p MalChelaGUI
+
+```
+Check out the new [MalChela v2.0 User Guide](https://github.com/dwmetz/MalChela/blob/main/docs/MalChela_User_Guide_v2.md) for more details.
+
 
 Caveat Emptor:
 Successfully tested on MacOS on Silicon and Ubuntu. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. Works on Windows in WSL! Testers (and contributors) appreciated.

@@ -1,5 +1,5 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="/images/malchela_featured.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="/images/malchela.png"/>
  <p>
   <h1>
    Malchela
@@ -11,7 +11,7 @@
 <p>
  </div>
 <div align="center">
-  <img style="padding:0;vertical-align:bottom;" height="381" width="554" src="/images/malchela_screenshot.png"/>
+  <img style="padding:0;vertical-align:bottom;" height="381" width="554" src="/images/malchela_featured.png"/>
   <div align="left">
   <h3>
    Features:

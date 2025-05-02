@@ -710,7 +710,7 @@ impl App for AppState {
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new("MalChela v2.0 — YARA & Malware Analysis Toolkit")
+                    RichText::new("MalChela v2.1 — YARA & Malware Analysis Toolkit")
                         .font(FontId::proportional(22.0))
                         .color(RUST_ORANGE),
                 );

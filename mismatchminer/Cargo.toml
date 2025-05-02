@@ -1,6 +1,6 @@
 [package]
 name = "mismatchminer"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 
 [dependencies]
@@ -11,3 +11,4 @@ common_config = { path = "../common_config" }
 sha2 = "0.10.8"
 clap = { version = "4.0", features = ["derive"] }
 chrono = "0.4.40"
+common_ui = { path = "../common_ui" }

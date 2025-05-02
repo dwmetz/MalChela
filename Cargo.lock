@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "MalChelaGUI"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "ansi-parser",
  "chrono",
@@ -24,6 +24,7 @@ dependencies = [
  "shell-words",
  "shellwords",
  "strip-ansi-escapes",
+ "which",
 ]
 
 [[package]]
@@ -44,7 +45,7 @@ checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 
 [[package]]
 name = "about"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "colored 2.2.0",
  "common_ui",
@@ -830,7 +831,7 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
 name = "cached"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -1179,7 +1180,7 @@ dependencies = [
 
 [[package]]
 name = "combine_yara"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1191,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "common_config"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -1199,7 +1200,7 @@ dependencies = [
 
 [[package]]
 name = "common_ui"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "colored 3.0.0",
 ]
@@ -1215,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "2.0.0"
+version = "2.1.0"
 
 [[package]]
 name = "console"
@@ -1830,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "extract_samples"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "walkdir",
  "which",
@@ -1862,7 +1863,7 @@ dependencies = [
 
 [[package]]
 name = "fileanalyzer"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -2412,7 +2413,7 @@ checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 
 [[package]]
 name = "hashit"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3235,7 +3236,7 @@ dependencies = [
 
 [[package]]
 name = "malchela"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "colored 2.2.0",
  "common_ui",
@@ -3249,7 +3250,7 @@ dependencies = [
 
 [[package]]
 name = "malhash"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3380,12 +3381,13 @@ dependencies = [
 
 [[package]]
 name = "mismatchminer"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "chrono",
  "clap",
  "colored 2.2.0",
  "common_config",
+ "common_ui",
  "sha2",
  "walkdir",
  "yara",
@@ -3393,7 +3395,7 @@ dependencies = [
 
 [[package]]
 name = "mstrings"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -3419,7 +3421,7 @@ dependencies = [
 
 [[package]]
 name = "mzcount"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "atty",
  "clearscreen",
@@ -3431,7 +3433,7 @@ dependencies = [
 
 [[package]]
 name = "mzmd5"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "common_config",
  "md-5",
@@ -3562,7 +3564,7 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
 name = "nsrlquery"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "clap",
  "colored 3.0.0",
@@ -5114,7 +5116,7 @@ checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 
 [[package]]
 name = "strings_to_yara"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "common_config",
 ]
@@ -6790,7 +6792,7 @@ checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
 
 [[package]]
 name = "xmzmd5"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "common_config",
  "md-5",

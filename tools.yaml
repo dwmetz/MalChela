@@ -24,72 +24,118 @@
 # This file is loaded once at startup. Any changes require restarting the GUI.
 
 - name: Mismatch Miner
+  description: "Identifies mismatched file extensions and types"
   command: ["mismatchminer"]
   input_type: folder
   category: "File Analysis"
+  exec_type: cargo
 
 - name: "mStrings"
+  description: "Extracts strings with IOC and MITRE mapping"
   command: ["mstrings"]
   input_type: file
   category: "File Analysis"
+  exec_type: cargo
 
 - name: Malware Hash Lookup
+  description: "Checks hash against VT and MalwareBazaar"
   command: ["malhash"]
   input_type: hash
   category: "Threat Intel"
+  exec_type: cargo
 
 - name: Combine YARA
+  description: "Merges multiple YARA rules into one set"
   command: ["combine_yara"]
   input_type: folder
   category: "YARA Tools"
+  exec_type: cargo
 
 - name: Extract Samples
+  description: "Extracts contents from password-protected archives"
   command: ["extract_samples"]
   input_type: folder
   category: "Utilities"
+  exec_type: cargo
 
 - name: File Analyzer
+  description: "Parses file metadata and checks YARA rules"
   command: ["fileanalyzer"]
   input_type: file
   category: "File Analysis"
+  exec_type: cargo
 
 - name: Hash It
+  description: "Generates multiple hashes for a single file"
   command: ["hashit"]
   input_type: file
   category: "Hashing Tools"
+  exec_type: cargo
 
 - name: MZMD5
+  description: "Generates MD5 hashes for folder contents"
   command: ["mzmd5"]
   input_type: folder
   category: "Hashing Tools"
+  exec_type: cargo
 
 - name: MZcount
+  description: "Counts file types within a directory"
   command: ["mzcount"]
   input_type: folder
   category: "Hashing Tools"
+  exec_type: cargo
 
 - name: NSRL Hash Lookup
+  description: "Checks hash presence in NSRL database"
   command: ["nsrlquery"]
   input_type: hash
   category: "Threat Intel"
+  exec_type: cargo
 
 - name: Strings to YARA
+  description: "Converts string sets into YARA rules"
   command: ["strings_to_yara"]
   input_type: hash
   category: "YARA Tools"
+  exec_type: cargo
 
 - name: XMZMD5
+  description: "Generates MD5 hashes with extended output"
   command: ["xmzmd5"]
   input_type: folder
   category: "Hashing Tools"
+  exec_type: cargo
 
 # -------------------------------------
-# Example 3rd party integration:
+# Example 3rd party integrations:
 # Below is a disabled example for capa
-# Uncomment to enable if capa is in your PATH
+# Uncomment to enable if application is in your PATH
 #
 # - name: capa
-#   command: "capa"
+#   description: "Detects capabilities in binaries via rules"
+#   command: ["capa"]
 #   input_type: "file"
-#   category: "External"
+#   file_position: "last"
+#   category: "File Analysis"
 #   optional_args: []
+#   exec_type: binary
+# 
+# - name: strings
+#   description: "Extracts printable strings from binary files"
+#   command: ["strings"]
+#   input_type: "file"
+#   file_position: "first"
+#   category: "Utilities"
+#   optional_args: []
+#   exec_type: binary
+# 
+# - name: pdf-parser
+#   description: "Parses and analyzes suspicious PDF structures"
+#   command: ["python3"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "PDF Analysis"
+#   optional_args: ["full_path_to_script/pdf-parser.py"]
+#   exec_type: script
+# 

@@ -450,12 +450,14 @@ async fn main() {
         writeln!(temp_file).ok();
         println!();
     } else {
-        println!();
-        writeln!(temp_file).ok();
-        let line = styled_line("stone", "Output was not saved.");
-        println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
-        writeln!(temp_file).ok();
-        println!();
+        if std::env::var("MALCHELA_GUI_MODE").is_err() {
+            println!();
+            writeln!(temp_file).ok();
+            let line = styled_line("stone", "Output was not saved.");
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file).ok();
+            println!();
+        }
     }
 }

@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use yara::{Rules, Compiler};
 use common_config::get_output_dir;
+use common_ui::styled_line;
 
 const YARA_RULES: &str = r#"
 rule mz_header {
@@ -121,12 +122,13 @@ fn scan_and_hash_matches(
 
     if !matches.is_empty() {
         if is_gui_mode() {
-            println!("[green]Scan Results:");
+            println!("{}", styled_line("green", "Scan Results:"));
             for (i, (hash, ext, path)) in matches.iter().enumerate() {
-                println!("[yellow]--- Match {} ---", i + 1);
-                println!("[bold]Hash     : [reset]{}", hash);
-                println!("[cyan]Extension: .{}", ext);
-                println!("[gray]Path     : {}", path);
+                println!("{}", styled_line("yellow", &format!("--- Match {} ---", i + 1)));
+                println!("{}", styled_line("bold", "Hash     :"));
+                println!("{}", styled_line("green", hash));
+                println!("{}", styled_line("cyan", &format!("Extension: .{}", ext)));
+                println!("{}", styled_line("gray", &format!("Path     : {}", path)));
                 println!();
             }
         } else {
@@ -153,11 +155,12 @@ fn scan_and_hash_matches(
     if save_output {
         let canonical = output_file.canonicalize().unwrap_or_else(|_| output_file.to_path_buf());
         let output_path = canonical.to_string_lossy();
-        println!(
-            "{} {}",
-            "Output file location:".bold(),
-            output_path.bold().green()
-        );
+
+        if is_gui_mode() {
+            println!("{}", styled_line("green", &format!("Output file location: {}", output_path)));
+        } else {
+            println!("{}", format!("Output file location: {}", output_path).bold().green());
+        }
     } else {
         println!("{}", "Output was not saved.".bold().yellow());
     }
@@ -181,7 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let output_dir = get_output_dir("mismatchminer");
-    let timestamp = Utc::now().format("cli_%Y%m%d_%H%M%S").to_string();
+    let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
     let output_file = output_dir.join(format!("report_{}.txt", timestamp));
 
     fs::create_dir_all(&output_dir)?;

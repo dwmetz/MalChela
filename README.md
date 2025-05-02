@@ -115,7 +115,7 @@ You can extend MalChela by editing the `tools.yaml` file to include additional b
 - `exec_type` must be one of: `cargo`, `binary`, or `script`.
 - `file_position` controls where the input path is inserted in the command line (`first` or `last`).
 
-Check out the new [MalChela v2.1 User Guide](https://github.com/dwmetz/MalChela/blob/main/docs/MalChela_User_Guide_v2.1.md)) for more details.
+Check out the new [MalChela v2.1 User Guide](https://github.com/dwmetz/MalChela/blob/main/docs/MalChela_User_Guide_v2.1.md) for more details.
 
 
 Caveat Emptor:

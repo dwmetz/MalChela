@@ -11,7 +11,7 @@
 <p>
  </div>
 <div align="center">
-  <img style="padding:0;vertical-align:bottom;" height="381" width="554" src="/images/malchela_featured.png"/>
+  <img style="padding:0;vertical-align:bottom;" height="381" width="554" src="/images/malchela_screenshot.png"/>
   <div align="left">
   <h3>
    Features:

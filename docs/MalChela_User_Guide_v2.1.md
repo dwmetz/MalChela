@@ -1,6 +1,6 @@
 # MalChela User Guide
 
-📘 This guide covers MalChela v2.1.0 (April 2025)
+📘 This guide covers MalChela v2.1.0 (May 2025)
 
 ## 🦀 Introduction
 

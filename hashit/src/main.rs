@@ -68,21 +68,24 @@ fn main() {
     println!("{}", styled_line("stone", &format!("SHA256: {:x}", sha256_hash)));
 
     if save_output {
-        if let Some(parent) = report_path.parent() {
-            fs::create_dir_all(parent).expect("Failed to create output directory");
+        let in_gui = std::env::var("MALCHELA_GUI_MODE").is_ok();
+        if !in_gui {
+            if let Some(parent) = report_path.parent() {
+                fs::create_dir_all(parent).expect("Failed to create output directory");
+            }
+
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&report_path)
+                .expect("Failed to create report file");
+
+            writeln!(file, "{}", styled_line("stone", &format!("MD5: {:x}", md5_hash))).unwrap();
+            writeln!(file, "{}", styled_line("stone", &format!("SHA1: {:x}", sha1_hash))).unwrap();
+            writeln!(file, "{}", styled_line("stone", &format!("SHA256: {:x}", sha256_hash))).unwrap();
+
+            println!("{}", styled_line("green", &format!("The results have been saved to: {}", report_path.display())));
         }
-
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&report_path)
-            .expect("Failed to create report file");
-
-        writeln!(file, "{}", styled_line("stone", &format!("MD5: {:x}", md5_hash))).unwrap();
-        writeln!(file, "{}", styled_line("stone", &format!("SHA1: {:x}", sha1_hash))).unwrap();
-        writeln!(file, "{}", styled_line("stone", &format!("SHA256: {:x}", sha256_hash))).unwrap();
-
-        println!("{}", styled_line("green", &format!("The results have been saved to: {}", report_path.display())));
     } else {
         println!("{}", styled_line("stone", "Output was not saved."));
     }

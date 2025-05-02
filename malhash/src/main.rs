@@ -163,7 +163,8 @@ fn main() {
             input.trim().to_string()
         });
 
-    let (mut report_file, report_path) = if save_output {
+    let in_gui = std::env::var("MALCHELA_GUI_MODE").is_ok();
+    let (mut report_file, report_path) = if save_output && !in_gui {
         let timestamp = Utc::now().format("%Y%m%d%H%M").to_string();
         let filename = format!("malhash-{}-{}.txt", hash, timestamp);
         let output_dir: PathBuf = get_output_dir("malhash");

@@ -1,9 +1,9 @@
 <div align="center">
  <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="/images/malchela.png"/>
  <p>
-  <h1>
-   Malchela
-  </h1>
+ <h1>
+  Malchela v2.1
+ </h1>
   <h4>
       A YARA & Malware Analysis Toolkit written in Rust.
    </h4>
@@ -77,6 +77,44 @@ or
 cargo run -p MalChelaGUI
 
 ```
+<h3>🔧 Adding Custom Tools:</h3>
+
+You can extend MalChela by editing the `tools.yaml` file to include additional binaries, scripts, or Rust programs. Here's how:
+
+```yaml
+- name: capa
+  description: "Detects capabilities in binaries via rules"
+  command: ["capa"]
+  input_type: "file"
+  category: "File Analysis"
+  exec_type: binary
+  file_position: "last"
+  optional_args: []
+
+- name: strings
+  description: "Extracts printable strings from binaries"
+  command: ["strings"]
+  input_type: "file"
+  category: "Utilities"
+  exec_type: binary
+  file_position: "first"
+  optional_args: []
+
+- name: pdf-parser
+  description: "Parses and analyzes suspicious PDF structures"
+  command: ["python3"]
+  input_type: "file"
+  category: "PDF Analysis"
+  exec_type: script
+  file_position: "last"
+  optional_args: ["tools/pdf-parser/pdf-parser.py"]
+```
+
+📝 **Notes:**
+- Tools must be in your system `PATH` or specified with full or relative paths.
+- `exec_type` must be one of: `cargo`, `binary`, or `script`.
+- `file_position` controls where the input path is inserted in the command line (`first` or `last`).
+
 Check out the new [MalChela v2.0 User Guide](https://github.com/dwmetz/MalChela/blob/main/docs/MalChela_User_Guide_v2.md) for more details.
 
 

@@ -18,3 +18,6 @@ mb-api.txt
 # Ignore everything in saved_output except .gitkeep
 /saved_output/*
 !/saved_output/.gitkeep
+tools.yaml
+/yara_rules
+tools.yaml

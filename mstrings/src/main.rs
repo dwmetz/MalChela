@@ -290,7 +290,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 || s.contains(".pdb")
             {
                 fs_iocs.insert(m.matched_str.clone());
-            } else if rule.to_lowercase().contains("ip address") || (s.contains('.') && s.split('.').count() == 4) {
+            } else if rule.to_lowercase().contains("ip address")
+                || s.contains("http:")
+                || s.contains("https:")
+                || (s.contains('.') && s.split('.').count() == 4)
+            {
                 net_iocs.insert(m.matched_str.clone());
             }
         }

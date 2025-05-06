@@ -1,5 +1,6 @@
 use clap::Parser;
 use chrono::Utc;
+use serde_json;
 
 fn is_gui_mode() -> bool {
     std::env::var("MALCHELA_GUI_MODE").is_ok()
@@ -14,6 +15,15 @@ struct Args {
 
     #[arg(short, long, help = "Save output to file")]
     output: bool,
+
+    #[arg(short = 't', long, help = "Output as text format")]
+    text: bool,
+
+    #[arg(short = 'j', long, help = "Output as JSON format")]
+    json: bool,
+
+    #[arg(short = 'm', long, help = "Output as Markdown format")]
+    markdown: bool,
 }
 use colored::*;
 use sha2::{Digest, Sha256};
@@ -73,14 +83,15 @@ fn is_target_extension(path: &Path) -> bool {
 fn scan_and_hash_matches(
     directory: &Path,
     rules: &Rules,
-    output_file: &Path,
-    save_output: bool,
+    output_file: &Option<PathBuf>,
+    output_format: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut match_count = 0;
     let mut output: Option<File> = None;
     let mut scanner = rules.scanner()?;
 
     let mut matches: Vec<(String, String, String)> = Vec::new();
+    let save_output = output_file.is_some();
 
     for entry in WalkDir::new(directory)
         .follow_links(true)
@@ -99,11 +110,17 @@ fn scan_and_hash_matches(
                             matches.push((sha256_hash.clone(), ext.clone(), path_str.clone()));
                             if save_output {
                                 if output.is_none() {
-                                    output = Some(File::create(output_file)?);
+                                    if let Some(ref path) = output_file {
+                                        output = Some(File::create(path)?);
+                                    }
                                 }
-                                if let Some(ref mut out) = output {
-                                    writeln!(out, "{} {}", sha256_hash, path.display())?;
-                                }
+                            if let Some(ref mut out) = output {
+                                writeln!(out, "--- Match {} ---", match_count)?;
+                                writeln!(out, "Hash     : {}", sha256_hash)?;
+                                writeln!(out, "Extension: .{}", ext)?;
+                                writeln!(out, "Path     : {}", path.display())?;
+                                writeln!(out)?;
+                            }
                             }
                             match_count += 1;
                         }
@@ -152,16 +169,33 @@ fn scan_and_hash_matches(
         match_count.to_string().bold().green()
     );
 
-    if save_output {
-        let canonical = output_file.canonicalize().unwrap_or_else(|_| output_file.to_path_buf());
-        let output_path = canonical.to_string_lossy();
-
-        if is_gui_mode() {
-            println!("{}", styled_line("green", &format!("Output file location: {}", output_path)));
-        } else {
-            println!("{}", format!("Output file location: {}", output_path).bold().green());
+    if save_output && output_format == Some("json") {
+        if let Some(ref path) = output_file {
+            let json_output = serde_json::to_string_pretty(
+                &matches.iter().map(|(hash, ext, path)| {
+                    serde_json::json!({
+                        "hash": hash,
+                        "extension": ext,
+                        "path": path
+                    })
+                }).collect::<Vec<_>>()
+            )?;
+            fs::write(path, json_output)?;
         }
-    } else {
+    }
+
+    if save_output && !is_gui_mode() {
+        if let Some(path) = output_file {
+            let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            let msg = match output_format {
+                Some("txt") => format!("Text report was saved to: {}", canonical.display()),
+                Some("json") => format!("JSON report was saved to: {}", canonical.display()),
+                Some("md") => format!("Markdown report was saved to: {}", canonical.display()),
+                _ => format!("Report was saved to: {}", canonical.display()),
+            };
+            println!("{}", msg.bold().green());
+        }
+    } else if !save_output {
         println!("{}", "Output was not saved.".bold().yellow());
     }
 
@@ -185,11 +219,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let output_dir = get_output_dir("mismatchminer");
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
-    let output_file = output_dir.join(format!("report_{}.txt", timestamp));
+
+    let save_output = args.output;
+    let output_format = if args.text {
+        Some("txt")
+    } else if args.json {
+        Some("json")
+    } else if args.markdown {
+        Some("md")
+    } else {
+        None
+    };
+
+    if save_output && output_format.is_none() {
+        println!("{}", "Output format required. Use -t, -j, or -m with -o.".bold().red());
+        return Ok(());
+    }
+
+    let output_file = if let Some(fmt) = output_format {
+        let path = output_dir.join(format!("report_{}.{}", timestamp, fmt));
+        Some(path)
+    } else {
+        None
+    };
 
     fs::create_dir_all(&output_dir)?;
-    let save_output = args.output;
-    scan_and_hash_matches(&input_dir, &compile_yara_rules()?, &output_file, save_output)?;
+    scan_and_hash_matches(&input_dir, &compile_yara_rules()?, &output_file, output_format)?;
 
     //println!("Text output saved to {}", output_file.display());
     println!(); // adds a final blank line

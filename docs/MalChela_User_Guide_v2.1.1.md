@@ -1,6 +1,6 @@
 # MalChela User Guide
 
-📘 This guide covers MalChela v2.1.0 (May 2025)
+📘 This guide covers MalChela v2.1.1 (May 2025)
 
 ## 🦀 Introduction
 
@@ -56,7 +56,11 @@ MalChela supports three main workflows:
   cargo run -p fileanalyzer -- /path/to/file -o
   ```
 - The `-o` flag (or `--output`) enables report saving for tools that support it. By default cli output will not be saved.
-
+- When using `-o`, you **must specify** an output format (`-t`, `-j`, or `-m`) or you will receive an error.
+- Example:
+  ```bash
+  cargo run -p mstrings -- path/to/file -- -o -j
+  ```
 
 ## 📁 Adding Third-Party Tools
 
@@ -134,6 +138,9 @@ Configuration Panel
 	•	.json	Machine-parsable, structured output
 	•	.md 	Shareable in tickets, wikis, etc.
 
+All tools that support report saving now use the same format and location scheme:
+`saved_output/<tool>/report_<timestamp>.<ext>`
+
 ### 🧮 Tool-Specific Notes
 
 	•	fileanalyzer: YARA rules come from yara_rules/ folder (generates a single clean report in GUI mode)
@@ -155,7 +162,7 @@ Configuration Panel
 |---------------|-------------|----------------|---------------------|-------|
 | combine_yara | folder      | ❌             | ✅                  | Identifies mismatches || extract_samples | file      | ❌             | ✅                  | Extracts archive contents |
 | fileanalyzer  | file        | ✅             | ✅                  | Uses YARA + heuristics |
-| hashit | file      | ✅             | ✅                  | Generates hashes || malhash       | hash        | ✅             | ❌                  | Uses vt-cli + bazaar-cli |
+| hashit | file      | ✅             | ✅                  | Generates hashes || malhash       | hash        | ✅             | ✅                  | Uses vt-cli + bazaar-cli |
 | mismatchminer | folder      | ✅             | ✅                  | Identifies mismatches |
 | mstrings      | file        | ✅             | ✅                  | Maps strings to MITRE |
 | nsrlquery | file      | ✅             | ✅                  | Queries CIRCL || strings_to_yara | file      | ❌             | ✅                  | Generates YARA rules |
@@ -163,6 +170,15 @@ Configuration Panel
 | mzcount         | folder      | ❌             | ✅                  | file counts |
 | strings_to_yara        | text file and metadata      | ❌             | ✅                  | Combined yara rule |
 | xmzmd5        | folder      | ❌             | ✅                  | Extended MD5 scan |
+
+### 🔁 Consistent CLI Output Behavior
+
+As of version 2.1.1, all tools that support saving reports now follow **a standardized output system**:
+
+- `-o` enables saving
+- `-t` (text), `-j` (json), `-m` (markdown) specify format
+- If `-o` is passed without a format, a helpful error is shown
+- All saved files are named `report_<timestamp>.<ext>` and stored under `saved_output/<tool>/`
 
 ## 📝 Scratchpad Tips (strings_to_yara)
 
@@ -178,23 +194,6 @@ Configuration Panel
 	•	If `exec_type` is omitted or misconfigured in `tools.yaml`, the GUI may attempt to run the tool incorrectly.
 	•	GUI execution behavior no longer depends on the `category` field.
 
-## 🖥️ Advanced Installation (macOS)
-
-To install MalChela as a native macOS app:
-1. Build with `cargo build --release`
-2. Copy the binary and support files to an `.app` bundle
-3. Use Platypus or a wrapper to define icon and behavior
-
-Bundle as .app
-
-```
-cargo install cargo-bundle
-cd MalChelaGUI
-cargo bundle --release
-```
-
-	•	Output: target/release/bundle/osx/MalChela.app
-	•	Move to /Applications or Dock
 
 ### 🦀 Support & Contribution
 

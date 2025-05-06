@@ -397,11 +397,15 @@ impl AppState {
                 // End "first"/"last" logic
 
                 args.extend(gui_mode_args);
-                if command.get(0).map(|s| s == "mstrings").unwrap_or(false) && save_report.0 {
-                    args.push("--output".to_string());
-                }
-                if command.get(0).map(|s| s == "mismatchminer").unwrap_or(false) && save_report.0 {
+                // Consistent Save Report CLI argument logic for all tools:
+                if save_report.0 {
                     args.push("-o".to_string());
+                    match save_report.1.as_str() {
+                        ".txt" => args.push("-t".to_string()),
+                        ".json" => args.push("-j".to_string()),
+                        ".md" => args.push("-m".to_string()),
+                        _ => {}
+                    }
                 }
                 args.extend(tool_optional_args);
                 if command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
@@ -467,7 +471,8 @@ impl AppState {
                             }
                         }
                         // After the stdout loop, save the report if requested
-                        if save_report.0 {
+                        // Only save the report if MALCHELA_GUI_MODE is NOT set to "1"
+                        if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {
                             let output_dir = workspace_root
                                 .join("saved_output")
                                 .join(
@@ -710,7 +715,7 @@ impl App for AppState {
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new("MalChela v2.1 — YARA & Malware Analysis Toolkit")
+                    RichText::new("MalChela v2.1.1 — YARA & Malware Analysis Toolkit")
                         .font(FontId::proportional(22.0))
                         .color(RUST_ORANGE),
                 );
@@ -746,7 +751,12 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             exe_path = parent.to_path_buf();
                         }
                         let reports_path = exe_path.join("saved_output");
-                        let _ = Command::new("open").arg(reports_path).spawn();
+                        #[cfg(target_os = "macos")]
+                        let _ = Command::new("open").arg(&reports_path).spawn();
+                        #[cfg(target_os = "windows")]
+                        let _ = Command::new("explorer").arg(reports_path).spawn();
+                        #[cfg(target_os = "linux")]
+                        let _ = Command::new("xdg-open").arg(reports_path).spawn();
                     }
                 }
                 if ui.button(RichText::new("Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
@@ -1232,9 +1242,9 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                             RichText::new(&line).monospace().color(RUST_ORANGE)
                         } else if clean_line.starts_with("Output file location:") {
                             RichText::new(&line).monospace().color(STONE_BEIGE)
-                        } else if clean_line == "POTENTIAL FILESYSTEM IOC's" {
+                        } else if clean_line.to_lowercase().contains("potential filesystem ioc") {
                             RichText::new(&line).monospace().color(RUST_ORANGE)
-                        } else if clean_line == "POTENTIAL NETWORK IOC's" {
+                        } else if clean_line.to_lowercase().contains("potential network ioc") {
                             RichText::new(&line).monospace().color(RUST_ORANGE)
                         } else if clean_line.ends_with("unique detections matched.") {
                             RichText::new(&line).monospace().color(RUST_ORANGE)

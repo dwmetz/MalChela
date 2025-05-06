@@ -33,7 +33,7 @@ HardcodedIPAddress:
     product: "windows"
   detection:
     strings:
-      - "\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b"
+      - "\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b(?![^\\s]*version=)"
   tags:
     - attack.t1071.001
   level: high
@@ -936,3 +936,34 @@ WMIUsageDiscoveryExecution:
     - technique_id: "T1047"
       technique_name: "Windows Management Instrumentation"
       tactics: ["Discovery", "Execution"]
+
+PDB_File_Detection:
+  title: "Suspicious PDB file detection (Malware IOC)"
+  id: "abc12345-def6-7890-ghij-klmn98765432"
+  status: "experimental"
+  description: "Detects suspicious .pdb files, commonly associated with the build process of malware, which may indicate a malware development or debugging process."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "\\.pdb$"  # Look for .pdb file extensions
+  tags:
+    - attack.T1105      # Ingress Tool Transfer
+    - attack.T1071.001  # Application Layer Protocol: Web Protocols
+    - attack.T1543.003  # Create or Modify System Process: Windows Service
+    - attack.T1086      # PowerShell
+  level: high
+  mitre:
+    - technique_id: "T1105"
+      technique_name: "Ingress Tool Transfer"
+      tactics: ["Command and Control"]
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+    - technique_id: "T1543.003"
+      technique_name: "Create or Modify System Process: Windows Service"
+      tactics: ["Persistence"]
+    - technique_id: "T1086"
+      technique_name: "PowerShell"
+      tactics: ["Execution"]

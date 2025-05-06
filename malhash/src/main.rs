@@ -4,10 +4,10 @@ use chrono::Utc;
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use std::collections::HashSet;
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{stdin, stdout as std_stdout, Write};
-use std::path::PathBuf;
 use std::process;
+use std::path::PathBuf;
 use common_config::get_output_dir;
 use common_ui::styled_line;
 
@@ -57,17 +57,24 @@ fn format_vt_results<W: Write>(vt_results: &Value, writer: &mut W, stdout: &mut 
     ) {
         let detection_msg = format!("Detections: {} / {}", positives, total);
         let detection_tag = if positives > 0 { "red" } else { "stone" };
-        write_both(writer, stdout, &styled_line(detection_tag, &detection_msg));
+        writeln!(stdout, "{}", styled_line(detection_tag, &detection_msg)).unwrap();
+        writeln!(writer, "{}", &detection_msg).unwrap();
     }
 
     if let Some(md5) = vt_results.get("md5").and_then(|v| v.as_str()) {
-        write_both(writer, stdout, &styled_line("highlight", &format!("MD5: {}", md5)));
+        let msg = format!("MD5: {}", md5);
+        writeln!(stdout, "{}", styled_line("highlight", &msg)).unwrap();
+        writeln!(writer, "{}", &msg).unwrap();
     }
     if let Some(sha1) = vt_results.get("sha1").and_then(|v| v.as_str()) {
-        write_both(writer, stdout, &styled_line("highlight", &format!("SHA1: {}", sha1)));
+        let msg = format!("SHA1: {}", sha1);
+        writeln!(stdout, "{}", styled_line("highlight", &msg)).unwrap();
+        writeln!(writer, "{}", &msg).unwrap();
     }
     if let Some(sha256) = vt_results.get("sha256").and_then(|v| v.as_str()) {
-        write_both(writer, stdout, &styled_line("highlight", &format!("SHA256: {}", sha256)));
+        let msg = format!("SHA256: {}", sha256);
+        writeln!(stdout, "{}", styled_line("highlight", &msg)).unwrap();
+        writeln!(writer, "{}", &msg).unwrap();
     }
 
     if let Some(scans) = vt_results.get("scans").and_then(|v| v.as_object()) {
@@ -95,24 +102,28 @@ fn format_mb_results<W: Write>(mb_results: &Value, writer: &mut W, stdout: &mut 
         if let Some(item) = data.get(0) {
             for (key, val) in item.as_object().unwrap() {
                 if let Some(val) = val.as_str() {
-                    write_both(
-                        writer,
-                        stdout,
-                        &format!("Malware Bazaar {}: {}", key.replace("_", " ").to_uppercase(), val),
-                    );
+                    let msg = format!("Malware Bazaar {}: {}", key.replace("_", " ").to_uppercase(), val);
+                    // Console output (could later be styled if needed)
+                    writeln!(stdout, "{}", &msg).unwrap();
+                    // Plain output to file
+                    writeln!(writer, "{}", &msg).unwrap();
                 }
             }
         }
     } else {
-        write_both(writer, stdout, "Malware Bazaar: No Results found");
+        let msg = "Malware Bazaar: No Results found";
+        writeln!(stdout, "{}", msg).unwrap();
+        writeln!(writer, "{}", msg).unwrap();
     }
 }
 
 fn main() {
     let mut stdout = std_stdout();
     let args: Vec<String> = std::env::args().collect();
-    let save_output = args.iter().any(|arg| arg == "-o" || arg == "--output")
-        || std::env::var("MALCHELA_SAVE_OUTPUT").is_ok();
+    let save_output = args.contains(&"-o".to_string()) || args.contains(&"--output".to_string());
+    let text = args.contains(&"-t".to_string());
+    let json = args.contains(&"-j".to_string());
+    let markdown = args.contains(&"-m".to_string());
 
     let is_gui = args.len() > 1;
 
@@ -164,27 +175,35 @@ fn main() {
         });
 
     let in_gui = std::env::var("MALCHELA_GUI_MODE").is_ok();
-    let (mut report_file, report_path) = if save_output && !in_gui {
-        let timestamp = Utc::now().format("%Y%m%d%H%M").to_string();
-        let filename = format!("malhash-{}-{}.txt", hash, timestamp);
-        let output_dir: PathBuf = get_output_dir("malhash");
-        let report_path = output_dir.join(&filename);
+    let (mut report_file, report_path): (Box<dyn Write>, Option<(PathBuf, String)>) = if save_output && !in_gui {
+        let output_dir = get_output_dir("malhash");
+        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
 
+        let format = if text {
+            "txt"
+        } else if json {
+            "json"
+        } else if markdown {
+            "md"
+        } else {
+            println!("\n{}", styled_line("yellow", "Output format required. Use -t, -j, or -m with -o."));
+            println!("{}", styled_line("stone", "Output was not saved."));
+            return;
+        };
+
+        let report_path = output_dir.join(format!("report_{}.{}", timestamp, format));
         if let Some(parent) = report_path.parent() {
-            if let Err(e) = fs::create_dir_all(parent) {
-                eprintln!("Failed to create output directory: {}", e);
-                process::exit(1);
-            }
+            fs::create_dir_all(parent).expect("Failed to create output directory");
         }
 
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&report_path)
-            .expect("Failed to create report file");
-        (file, Some(report_path))
+        if format == "json" {
+            (Box::new(OpenOptions::new().write(true).open("/dev/null").unwrap()), Some((report_path, format.to_string())))
+        } else {
+            let file = File::create(&report_path).expect("Failed to create report file");
+            (Box::new(file), Some((report_path, format.to_string())))
+        }
     } else {
-        (OpenOptions::new().write(true).open("/dev/null").unwrap(), None)
+        (Box::new(OpenOptions::new().write(true).open("/dev/null").unwrap()), None)
     };
 
     write_both(&mut report_file, &mut stdout, &format!("HASH: {}", hash));
@@ -201,16 +220,19 @@ fn main() {
         vt_api_key, hash
     );
 
-    match submit_request(&vt_url) {
+    let final_vt_json = match submit_request(&vt_url) {
         Ok(vt_results) => {
-            write_both(&mut report_file, &mut stdout, &styled_line("NOTE", "VIRUS TOTAL RESULTS:"));
+            let line = "VIRUS TOTAL RESULTS:";
+            writeln!(stdout, "{}", styled_line("NOTE", line)).unwrap();
+            writeln!(report_file, "{}", line).unwrap();
             format_vt_results(&vt_results, &mut report_file, &mut stdout);
+            vt_results
         }
         Err(err) => {
             eprintln!("Failed to submit to VirusTotal: {}", err);
             process::exit(1);
         }
-    }
+    };
 
     write_both(
         &mut report_file,
@@ -221,19 +243,37 @@ fn main() {
     let mb_url = "https://mb-api.abuse.ch/api/v1/";
     let mb_data = json!({ "query": "get_info", "hash": hash });
 
-    match submit_post_request(mb_url, mb_data, &mb_api_key) {
+    let final_mb_json = match submit_post_request(mb_url, mb_data, &mb_api_key) {
         Ok(mb_results) => {
-            write_both(&mut report_file, &mut stdout, &styled_line("NOTE", "MALWARE BAZAAR RESULTS:"));
+            let line = "MALWARE BAZAAR RESULTS:";
+            writeln!(stdout, "{}", styled_line("NOTE", line)).unwrap();
+            writeln!(report_file, "{}", line).unwrap();
             format_mb_results(&mb_results, &mut report_file, &mut stdout);
+            mb_results
         }
         Err(err) => {
             eprintln!("Failed to submit to Malware Bazaar: {}", err);
             process::exit(1);
         }
-    }
+    };
 
-    write_both(&mut report_file, &mut stdout, &styled_line("green", "** END REPORT **"));
-    if let Some(path) = report_path {
+    let final_report_json = json!({
+        "hash": hash,
+        "timestamp": Utc::now().to_rfc3339(),
+        "virustotal": final_vt_json,
+        "malwarebazaar": final_mb_json
+    });
+
+    {
+        let line = "** END REPORT **";
+        writeln!(stdout, "{}", styled_line("green", line)).unwrap();
+        writeln!(report_file, "{}", line).unwrap();
+    }
+    if let Some((path, format)) = report_path {
+        if format == "json" {
+            let output_text = serde_json::to_string_pretty(&final_report_json).expect("Failed to serialize JSON report");
+            fs::write(&path, output_text).expect("Failed to write JSON output");
+        }
         println!("\n{}\n", styled_line("green", &format!("The results have been saved to: {}", path.display())));
     } else {
         println!("{}", styled_line("stone", "Output was not saved."));

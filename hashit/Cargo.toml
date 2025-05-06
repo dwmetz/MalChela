@@ -1,6 +1,6 @@
 [package]
 name = "hashit"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2021"
 
 [dependencies]
@@ -12,3 +12,4 @@ common_config = { path = "../common_config" }
 common_ui = { path = "../common_ui" }
 clap = { version = "4", features = ["derive"] }
 chrono = "0.4.40"
+serde_json = "1.0"

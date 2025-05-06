@@ -17,6 +17,15 @@ struct Args {
 
     #[arg(short, long, help = "Save output to file")]
     output: bool,
+
+    #[arg(short = 't', long, help = "Save as TXT format")]
+    text: bool,
+
+    #[arg(short = 'j', long, help = "Save as JSON format")]
+    json: bool,
+
+    #[arg(short = 'm', long, help = "Save as Markdown format")]
+    markdown: bool,
 }
 
 #[derive(Serialize)]
@@ -405,9 +414,20 @@ async fn main() {
     }
     if save_output {
         let output_dir = get_output_dir("fileanalyzer");
-
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let report_path = output_dir.join(format!("report_{}.json", timestamp));
+
+        let format = if args.text {
+            "txt"
+        } else if args.json {
+            "json"
+        } else if args.markdown {
+            "md"
+        } else {
+            let warn = styled_line("yellow", "Output format required. Use -t, -j, or -m with -o.");
+            println!("\n{}", warn);
+            writeln!(temp_file, "\n{}", warn).ok();
+            return;
+        };
 
         let report = FileAnalysisReport {
             file_type,
@@ -435,20 +455,25 @@ async fn main() {
             suspicious_compile_time,
         };
 
-        let mut file = File::create(&report_path).expect("Failed to create report file");
-        let json = serde_json::to_string_pretty(&report).expect("Failed to serialize report");
-        file.write_all(json.as_bytes()).expect("Failed to write report");
-
-        let text_path = output_dir.join(format!("report_{}.txt", timestamp));
-        fs::copy(&temp_path, &text_path).expect("Failed to save text report");
-
-        println!();
-        writeln!(temp_file).ok();
-        let line = styled_line("green", "Output successfully saved.");
-        println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
-        writeln!(temp_file).ok();
-        println!();
+        match format {
+            "txt" => {
+                let text_path = output_dir.join(format!("report_{}.txt", timestamp));
+                fs::copy(&temp_path, &text_path).expect("Failed to save text report");
+                println!("\n{}", styled_line("green", &format!("Text report saved to: {}", text_path.display())));
+            }
+            "md" => {
+                let md_path = output_dir.join(format!("report_{}.md", timestamp));
+                fs::copy(&temp_path, &md_path).expect("Failed to save markdown report");
+                println!("\n{}", styled_line("green", &format!("Markdown report saved to: {}", md_path.display())));
+            }
+            _ => {
+                let json_path = output_dir.join(format!("report_{}.json", timestamp));
+                let mut file = File::create(&json_path).expect("Failed to create report file");
+                let json = serde_json::to_string_pretty(&report).expect("Failed to serialize report");
+                file.write_all(json.as_bytes()).expect("Failed to write report");
+                println!("\n{}", styled_line("green", &format!("JSON report saved to: {}", json_path.display())));
+            }
+        }
     } else {
         if std::env::var("MALCHELA_GUI_MODE").is_err() {
             println!();

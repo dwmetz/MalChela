@@ -61,6 +61,15 @@ struct MitreMapping {
     tactics: Vec<String>,
 }
 
+// Helper function to truncate strings over a given length
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() > max_len {
+        format!("{}...", &s[..max_len])
+    } else {
+        s.to_string()
+    }
+}
+
 struct Mstrings {
     matches: Vec<Match>,
 }
@@ -227,9 +236,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter_map(|m| {
             if let Some(rule) = &m.rule_name {
                 Some(DisplayMatch {
-                    offset: format!("{}", m.offset),
+                    offset: format!("0x{:08X}", m.offset),
                     encoding: format!("{:?}", m.encoding),
-                    matched_str: m.matched_str.clone(),
+                    matched_str: truncate_string(&m.matched_str, 80),
                     rule_name: rule.clone(),
                     tactic: m.tactic.clone().unwrap_or_default(),
                     technique: m.technique.clone().unwrap_or_default(),
@@ -334,7 +343,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         };
 
-
         // Build the report content (reuse printed table and IOCs)
         let mut report_buffer = String::new();
 
@@ -346,9 +354,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter_map(|m| {
                 if let Some(rule) = &m.rule_name {
                     Some(DisplayMatch {
-                        offset: format!("{}", m.offset),
+                        offset: format!("0x{:08X}", m.offset),
                         encoding: format!("{:?}", m.encoding),
-                        matched_str: m.matched_str.clone(),
+                        matched_str: truncate_string(&m.matched_str, 80),
                         rule_name: rule.clone(),
                         tactic: m.tactic.clone().unwrap_or_default(),
                         technique: m.technique.clone().unwrap_or_default(),

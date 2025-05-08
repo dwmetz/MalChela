@@ -48,7 +48,7 @@ Dependencies:
 </h3>
 
 ```
-sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-essential
+sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-essential libglib2.0-dev libgtk-3-dev
 ```
 
 <h3>

@@ -1,5 +1,5 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="/images/malchela.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela.png"/>
  <p>
  <h1>
   Malchela v2.1.1
@@ -11,8 +11,17 @@
 <p>
  </div>
 <div align="center">
-  <img style="padding:0;vertical-align:bottom;" height="381" width="554" src="/images/malchela_screenshot.png"/>
-  <div align="left">
+  <table>
+    <tr>
+      <td><img src="images/malchela_screenshot.png" width="400"/></td>
+      <td><img src="images/malchela_cli_screenshot.png" width="400"/></td>
+    </tr>
+    <tr>
+      <td align="center"><strong>GUI View</strong></td>
+      <td align="center"><strong>CLI View</strong></td>
+    </tr>
+  </table>
+</div>
   <h3>
    Features:
   </h3>

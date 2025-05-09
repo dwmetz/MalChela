@@ -13,8 +13,8 @@
 <div align="center">
   <table>
     <tr>
-      <td><img src="images/malchela_screenshot.png" width="400"/></td>
-      <td><img src="images/malchela_cli_screenshot.png" width="400"/></td>
+      <td><img src="images/malchela_screenshot.png" style="height:280px; width:auto;"></td>
+      <td><img src="images/malchela_cli_screenshot.png" style="height:280px; width:auto;"></td>
     </tr>
     <tr>
       <td align="center"><strong>GUI View</strong></td>

@@ -784,6 +784,24 @@ impl App for AppState {
                     });
                 });
 
+                // --- User Guide Button ---
+                if ui.button(RichText::new("📖 User Guide").color(STONE_BEIGE)).on_hover_text("Open MalChela_User_Guide_v2.1.2.md").clicked() {
+                    let mut guide_path = std::env::current_exe().unwrap();
+                    while let Some(parent) = guide_path.parent() {
+                        if parent.join("Cargo.toml").exists() {
+                            guide_path = parent.join("docs/MalChela_User_Guide_v2.1.2.md");
+                            break;
+                        }
+                        guide_path = parent.to_path_buf();
+                    }
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(&guide_path).spawn();
+                    #[cfg(target_os = "linux")]
+                    let _ = std::process::Command::new("xdg-open").arg(&guide_path).spawn();
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("explorer").arg(&guide_path).spawn();
+                }
+
                 if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
                     self.show_scratchpad = !self.show_scratchpad;
                 }

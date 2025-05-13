@@ -158,7 +158,10 @@ impl AppState {
                 }
                 use std::io::{BufRead, BufReader};
                 // Special handling for Python tools (like pdf-parser.py)
-                if command.get(0).map(|s| s == "python3").unwrap_or(false) {
+                let is_python = command.get(0).map(|s| {
+                    s.ends_with("python3") || s.ends_with("python") || s.contains("python")
+                }).unwrap_or(false);
+                if is_python {
                     let tool_output_name = tool_optional_args.get(0)
                         .map(|s| std::path::Path::new(s))
                         .and_then(|p| p.file_stem())
@@ -168,22 +171,23 @@ impl AppState {
                     let output_dir = workspace_root.join("saved_output").join(tool_output_name);
                     let _ = std::fs::create_dir_all(&output_dir);
 
+                    // Build args for python: script first, then input_path, then others
                     let mut args: Vec<String> = Vec::new();
-
-                    // If optional_args includes the script path, use it as the first argument
-                    if !tool_optional_args.is_empty() {
-                        args.push(tool_optional_args[0].clone());
-                        args.extend(tool_optional_args.iter().skip(1).cloned());
+                    // Always treat optional_args[0] as the script, and input_path follows
+                    if let Some(script) = tool_optional_args.get(0) {
+                        args.push(script.clone());
                     }
-
+                    args.push(input_path.clone());
+                    // Add any additional gui_mode_args and custom_args after
                     args.extend(gui_mode_args);
-
                     if !custom_args.trim().is_empty() {
                         let parsed_custom_args = shell_words::split(&custom_args).unwrap_or_default();
                         args.extend(parsed_custom_args);
                     }
-
-                    args.push(input_path); // Input path always goes last
+                    // Add any remaining optional_args (after [0])
+                    if tool_optional_args.len() > 1 {
+                        args.extend(tool_optional_args.iter().skip(1).cloned());
+                    }
 
                     let mut command_builder = Command::new(&command[0]);
                     command_builder.args(&args);
@@ -715,7 +719,7 @@ impl App for AppState {
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new("MalChela v2.1.1 — YARA & Malware Analysis Toolkit")
+                    RichText::new("MalChela v2.1.2 — YARA & Malware Analysis Toolkit")
                         .font(FontId::proportional(22.0))
                         .color(RUST_ORANGE),
                 );
@@ -726,22 +730,65 @@ impl App for AppState {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.heading(RichText::new("Tools").color(RUST_ORANGE));
-                for (category, tools) in &self.categorized_tools {
-                    ui.vertical(|ui| {
-                        let clean_category = category.trim_start_matches('~');
-ui.label(RichText::new(clean_category).color(RUST_ORANGE));
-                for tool in tools {
-                    let tool_color = STONE_BEIGE;
-                    if ui.button(RichText::new(&tool.name).color(tool_color)).clicked() {
-                        self.selected_tool = Some(tool.clone());
-                        self.input_path.clear();
-                        self.custom_args.clear();
+                ScrollArea::vertical().show(ui, |ui| {
+                    for (category, tools) in &self.categorized_tools {
+                        ui.vertical(|ui| {
+                            let clean_category = category.trim_start_matches('~');
+                            ui.label(RichText::new(clean_category).color(RUST_ORANGE));
+                            for tool in tools {
+                                let tool_color = STONE_BEIGE;
+                                if ui.button(RichText::new(&tool.name).color(tool_color)).clicked() {
+                                    self.selected_tool = Some(tool.clone());
+                                    self.input_path.clear();
+                                    self.custom_args.clear();
+                                }
+                            }
+                        });
                     }
-                }
-                    });
-                }
+                });
                 ui.separator();
-                if ui.button(RichText::new("View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
+                // Section header for the application utility buttons
+                ui.label(RichText::new("Toolkit").color(RUST_ORANGE));
+                // Reordered and relabeled utility buttons
+                if ui.button(RichText::new("🏠 Home").color(STONE_BEIGE)).clicked() {
+                    self.show_home = true;
+                    self.banner_displayed = false;
+                    self.selected_tool = None;
+                    self.input_path.clear();
+                }
+
+                ui.horizontal(|ui| {
+                    ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
+                        if ui.button("API Keys & Settings").clicked() {
+                            self.show_config = true;
+                            ui.close_menu();
+                        }
+                        if ui.button("Edit tools.yaml").clicked() {
+                            let mut config_path = std::env::current_exe().unwrap();
+                            while let Some(parent) = config_path.parent() {
+                                if parent.join("Cargo.toml").exists() {
+                                    config_path = parent.join("tools.yaml");
+                                    break;
+                                }
+                                config_path = parent.to_path_buf();
+                            }
+                            #[cfg(target_os = "macos")]
+                            let _ = Command::new("open").arg(&config_path).spawn();
+                            #[cfg(target_os = "linux")]
+                            let _ = Command::new("xdg-open").arg(&config_path).spawn();
+                            #[cfg(target_os = "windows")]
+                            let _ = Command::new("explorer").arg(&config_path).spawn();
+
+                            ui.close_menu();
+                        }
+                    });
+                });
+
+                if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
+                    self.show_scratchpad = !self.show_scratchpad;
+                }
+
+                if ui.button(RichText::new("📁 View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
                     if let Ok(mut exe_path) = std::env::current_exe() {
                         while let Some(parent) = exe_path.parent() {
                             if parent.ends_with("MalChela") {
@@ -758,228 +805,6 @@ ui.label(RichText::new(clean_category).color(RUST_ORANGE));
                         #[cfg(target_os = "linux")]
                         let _ = Command::new("xdg-open").arg(reports_path).spawn();
                     }
-                }
-                if ui.button(RichText::new("Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
-                    self.show_scratchpad = !self.show_scratchpad;
-                }
-                if ui.button(RichText::new("Configuration").color(STONE_BEIGE)).on_hover_text("Set API keys and options").clicked() {
-                    self.show_config = true;
-                }
-                if ui.button(RichText::new("About").color(STONE_BEIGE)).on_hover_text("About MalChela and included tools").clicked() {
-   
-                    {
-                        let mut out = self.command_output.lock().unwrap();
-                        out.clear(); 
-                    }
-                    let output = Arc::clone(&self.command_output);
-                    let output_lines = Arc::clone(&self.output_lines);
-                    thread::spawn(move || {
-                        let mut child = Command::new("cargo")
-                            .args(&["run", "-q", "-p", "about"])
-                            .env("MALCHELA_GUI_MODE", "1")
-                            .stdout(Stdio::piped())
-                            .stderr(Stdio::piped())
-                            .spawn()
-                            .expect("Failed to run about");
-
-
-                        fn parse_and_push_line(line: &str, out: &mut String) {
-                            if line.starts_with("[CRAB]") {
-                                out.push_str("[CRAB]");
-                                out.push_str(line.trim_start_matches("[CRAB]"));
-                                out.push('\n');
-                            } else if line.starts_with("[URL]") {
-                                out.push_str("[URL]");
-                                out.push_str(line.trim_start_matches("[URL]"));
-                                out.push('\n');
-                            } else if line.starts_with("[STATUS]") {
-                                out.push_str("[STATUS]");
-                                out.push_str(line.trim_start_matches("[STATUS]"));
-                                out.push('\n');
-                            } else if line.starts_with("[KOAN_COLOR]") {
-                                out.push_str("[KOAN_COLOR]");
-                                out.push_str(line.trim_start_matches("[KOAN_COLOR]"));
-                                out.push('\n');
-                            } else if line.starts_with("[ABOUT]") {
-                                out.push_str("[ABOUT]");
-                                out.push_str(line.trim_start_matches("[ABOUT]"));
-                                out.push('\n');
-                            } else if line.starts_with("[FEATURES]") {
-                                out.push_str("[FEATURES]");
-                                out.push_str(line.trim_start_matches("[FEATURES]"));
-                                out.push('\n');
-                            } else if line.starts_with("[NOTE]") {
-                                out.push_str("[NOTE]");
-                                out.push_str(line.trim_start_matches("[NOTE]"));
-                                out.push('\n');
-                            } else if line.starts_with("[rust]") {
-                                out.push_str("[rust]");
-                                out.push_str(line.trim_start_matches("[rust]"));
-                                out.push('\n');
-                            } else if line.starts_with("[green]") {
-                                out.push_str("[green]");
-                                out.push_str(line.trim_start_matches("[green]"));
-                                out.push('\n');
-                            } else if line.starts_with("[yellow]") {
-                                out.push_str("[yellow]");
-                                out.push_str(line.trim_start_matches("[yellow]"));
-                                out.push('\n');
-                            } else if line.starts_with("[white]") {
-                                out.push_str("[white]");
-                                out.push_str(line.trim_start_matches("[white]"));
-                                out.push('\n');
-                            } else if line.starts_with("[gray]") {
-                                out.push_str("[gray]");
-                                out.push_str(line.trim_start_matches("[gray]"));
-                                out.push('\n');
-                            } else if line.starts_with("[stone]") {
-                                out.push_str("[stone]");
-                                out.push_str(line.trim_start_matches("[stone]"));
-                                out.push('\n');
-                            } else {
-                                if line.starts_with("--- PE Header Details ---") {
-                                    out.push_str("[rust]--- PE Header Details ---\n");
-                                    return;
-                                } else if line.starts_with("--- Heuristic Warnings ---") {
-                                    out.push_str("[rust]--- Heuristic Warnings ---\n");
-                                    return;
-                                } else if line.starts_with("--- Heuristic Indicators ---") {
-                                    out.push_str("[rust]--- Heuristic Indicators ---\n");
-                                    return;
-                                } else if line.trim_start().starts_with("PE Header parsed: ") {
-                                    out.push_str("[white]");
-                                    out.push_str(line.trim_start());
-                                    out.push('\n');
-                                } else if line.starts_with("  Summary: ") {
-                                    out.push_str("[stone]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("  Compile Time: ") {
-                                    out.push_str("[highlight]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("  Sections:") || line.trim_start().starts_with("Sections:") {
-                                    out.push_str("[stone]");
-                                    out.push_str(line.trim_start());
-                                    out.push('\n');
-                                } else if line.trim_start().starts_with("- ") && line.contains("(") && line.contains("bytes") && !line.contains("Imports") {
-                                    // e.g. - .text (203740 bytes)
-                                    out.push_str("[white]  ");
-                                    out.push_str(line.trim_start_matches("- "));
-                                    out.push('\n');
-                                } else if line.trim_start().starts_with("Imports (") {
-                                    out.push_str("[stone]");
-                                    out.push_str(line.trim_start());
-                                    out.push('\n');
-                                } else if line.trim_start().starts_with("- ") && !line.contains("(") && !line.contains("bytes") && !line.contains("Exports") {
-                                    // e.g. - GetLastError
-                                    out.push_str("[white]    ");
-                                    out.push_str(line.trim_start_matches("- "));
-                                    out.push('\n');
-                                } else if line.trim_start().starts_with("Exports (") {
-                                    out.push_str("[stone]");
-                                    out.push_str(line.trim_start());
-                                    out.push('\n');
-                                } else if line.starts_with("  Signed: ") || line.trim_start().starts_with("Signed: ") {
-                                    out.push_str("[white]");
-                                    out.push_str(line.trim_start());
-                                    out.push('\n');
-                                } else if line.starts_with("File Type: ") ||
-                                    line.starts_with("SHA-256 Hash: ") ||
-                                    line.starts_with("File Size: ") ||
-                                    line.starts_with("Last Modified: ") {
-                                    out.push_str("[white]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.contains("YARA: ") && line.contains("match") {
-                                    out.push_str("[yellow]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("- VirusTotal: ") {
-                                    out.push_str("[rust]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("- Entropy: ") {
-                                    out.push_str("[rust]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("- Packed: ") {
-                                    out.push_str("[rust]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("  Section: ") {
-                                    out.push_str("[stone]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("    Name: ") || line.starts_with("    Size: ") || line.starts_with("    Entropy: ") {
-                                    out.push_str("[white]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("  Import: ") {
-                                    out.push_str("[stone]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else if line.starts_with("    DLL: ") || line.starts_with("    Function: ") {
-                                    out.push_str("[white]");
-                                    out.push_str(line);
-                                    out.push('\n');
-                                } else {
-                                    out.push_str(line);
-                                    out.push('\n');
-                                }
-                            }
-                        }
-
-                        use std::io::Read;
-                        if let (Some(mut stdout), Some(mut stderr)) = (child.stdout.take(), child.stderr.take()) {
-                            let out_clone = Arc::clone(&output);
-                            let output_lines = Arc::clone(&output_lines);
-                            thread::spawn(move || {
-                                let mut combined = String::new();
-                                let mut buf = [0; 1024];
-
-                                loop {
-                                    let mut read_any = false;
-
-                                    if let Ok(n) = stdout.read(&mut buf) {
-                                        if n > 0 {
-                                            combined.push_str(&String::from_utf8_lossy(&buf[..n]));
-                                            read_any = true;
-                                        }
-                                    }
-
-                                    if let Ok(n) = stderr.read(&mut buf) {
-                                        if n > 0 {
-                                            combined.push_str(&String::from_utf8_lossy(&buf[..n]));
-                                            read_any = true;
-                                        }
-                                    }
-
-                                    if !read_any {
-                                        break;
-                                    }
-                                }
-
-                                let mut out = out_clone.lock().unwrap();
-                                for line in combined.lines() {
-                                    parse_and_push_line(line, &mut out);
-                                }
-                                let mut lines = output_lines.lock().unwrap();
-                                lines.clear();
-                                for line in out.lines() {
-                                    lines.push(line.to_string());
-                                }
-                            });
-                        }
-
-                        let _ = child.wait();
-                    });
-                }
-                if ui.button(RichText::new("Home").color(STONE_BEIGE)).clicked() {
-                    self.show_home = true;
-                    self.banner_displayed = false;
-                    self.selected_tool = None;
-                    self.input_path.clear();
                 }
             });
 
@@ -1451,7 +1276,7 @@ fn main() {
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 800.0])
+            .with_inner_size([1250.0, 850.0])
             .with_icon(icon.unwrap_or_else(|| std::sync::Arc::new(IconData { rgba: vec![0; 4], width: 1, height: 1 }))),
         ..Default::default()
     };

@@ -111,9 +111,19 @@ impl AppState {
             // self.custom_args.clear();  // <-- Removed per instructions
             // self.save_report = (false, ".txt".to_string()); // <-- Removed to preserve Save Report setting
             self.zip_password.clear();
-            self.scratchpad_path.clear();
+            // self.scratchpad_path.clear(); // <-- Removed to allow rule file persistence across runs
             self.string_source_path.clear();
             self.selected_format = ".txt".to_string();
+
+            // Special case for YARA-X (yr)
+            if tool.command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                if self.scratchpad_path.is_empty() || self.input_path.is_empty() {
+                    let mut out = self.command_output.lock().unwrap();
+                    out.clear();
+                    out.push_str("❌ Missing rule or target file.\n");
+                    return;
+                }
+            }
 
             // Set environment variables for the tool (if needed)
             if tool.input_type == "folder" {
@@ -368,11 +378,21 @@ impl AppState {
                 } else if let Some(pos) = command.iter().position(|s| s == "last") {
                     arg_insert_index = Some(pos);
                 }
-                let mut base_args: Vec<String> = command.iter()
-                    .filter(|&s| s != "first" && s != "last")
-                    .skip(1)
-                    .cloned()
-                    .collect();
+                let mut base_args: Vec<String> = if command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                    let mut args = vec!["scan".to_string()];
+                    if !custom_args.trim().is_empty() {
+                        args.extend(shell_words::split(&custom_args).unwrap_or_default());
+                    }
+                    args.push(scratchpad_path.clone());
+                    args.push(input_path.clone());
+                    args
+                } else {
+                    command.iter()
+                        .filter(|&s| s != "first" && s != "last")
+                        .skip(1)
+                        .cloned()
+                        .collect()
+                };
                 if let Some(idx) = arg_insert_index {
                     let insert_idx = if command.get(idx) == Some(&"first".to_string()) {
                         idx - 1
@@ -388,7 +408,7 @@ impl AppState {
                         scratchpad_path.clone(),
                         string_source_path.clone(),
                     ]);
-                } else {
+                } else if !command.get(0).map(|s| s == "yr").unwrap_or(false) {
                     base_args.insert(0, input_path.clone());
                     if command.get(0).map(|s| s == "combine_yara").unwrap_or(false) {
                         // Only path
@@ -419,7 +439,9 @@ impl AppState {
                         }
                     }
                 }
-                args.extend(parsed_custom_args);
+                if command.get(0).map(|s| s != "yr").unwrap_or(true) {
+                    args.extend(parsed_custom_args);
+                }
 
                 if save_report.0 {
                     std::env::set_var("MALCHELA_SAVE_OUTPUT", "1");
@@ -745,85 +767,84 @@ impl App for AppState {
                             }
                         });
                     }
-                });
-                ui.separator();
-                // Section header for the application utility buttons
-                ui.label(RichText::new("Toolkit").color(RUST_ORANGE));
-                // Reordered and relabeled utility buttons
-                if ui.button(RichText::new("🏠 Home").color(STONE_BEIGE)).clicked() {
-                    self.show_home = true;
-                    self.banner_displayed = false;
-                    self.selected_tool = None;
-                    self.input_path.clear();
-                }
 
-                ui.horizontal(|ui| {
-                    ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
-                        if ui.button("API Keys & Settings").clicked() {
-                            self.show_config = true;
-                            ui.close_menu();
-                        }
-                        if ui.button("Edit tools.yaml").clicked() {
-                            let mut config_path = std::env::current_exe().unwrap();
-                            while let Some(parent) = config_path.parent() {
-                                if parent.join("Cargo.toml").exists() {
-                                    config_path = parent.join("tools.yaml");
-                                    break;
-                                }
-                                config_path = parent.to_path_buf();
-                            }
-                            #[cfg(target_os = "macos")]
-                            let _ = Command::new("open").arg(&config_path).spawn();
-                            #[cfg(target_os = "linux")]
-                            let _ = Command::new("xdg-open").arg(&config_path).spawn();
-                            #[cfg(target_os = "windows")]
-                            let _ = Command::new("explorer").arg(&config_path).spawn();
+                    ui.separator();
+                    ui.label(RichText::new("Toolkit").color(RUST_ORANGE));
 
-                            ui.close_menu();
-                        }
-                    });
-                });
-
-                // --- User Guide Button ---
-                if ui.button(RichText::new("📖 User Guide").color(STONE_BEIGE)).on_hover_text("Open MalChela_User_Guide_v2.1.2.md").clicked() {
-                    let mut guide_path = std::env::current_exe().unwrap();
-                    while let Some(parent) = guide_path.parent() {
-                        if parent.join("Cargo.toml").exists() {
-                            guide_path = parent.join("docs/MalChela_User_Guide_v2.1.2.md");
-                            break;
-                        }
-                        guide_path = parent.to_path_buf();
+                    if ui.button(RichText::new("🏠 Home").color(STONE_BEIGE)).clicked() {
+                        self.show_home = true;
+                        self.banner_displayed = false;
+                        self.selected_tool = None;
+                        self.input_path.clear();
                     }
-                    #[cfg(target_os = "macos")]
-                    let _ = std::process::Command::new("open").arg(&guide_path).spawn();
-                    #[cfg(target_os = "linux")]
-                    let _ = std::process::Command::new("xdg-open").arg(&guide_path).spawn();
-                    #[cfg(target_os = "windows")]
-                    let _ = std::process::Command::new("explorer").arg(&guide_path).spawn();
-                }
 
-                if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
-                    self.show_scratchpad = !self.show_scratchpad;
-                }
+                    ui.horizontal(|ui| {
+                        ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
+                            if ui.button("API Keys & Settings").clicked() {
+                                self.show_config = true;
+                                ui.close_menu();
+                            }
+                            if ui.button("Edit tools.yaml").clicked() {
+                                let mut config_path = std::env::current_exe().unwrap();
+                                while let Some(parent) = config_path.parent() {
+                                    if parent.join("Cargo.toml").exists() {
+                                        config_path = parent.join("tools.yaml");
+                                        break;
+                                    }
+                                    config_path = parent.to_path_buf();
+                                }
+                                #[cfg(target_os = "macos")]
+                                let _ = Command::new("open").arg(&config_path).spawn();
+                                #[cfg(target_os = "linux")]
+                                let _ = Command::new("xdg-open").arg(&config_path).spawn();
+                                #[cfg(target_os = "windows")]
+                                let _ = Command::new("explorer").arg(&config_path).spawn();
 
-                if ui.button(RichText::new("📁 View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
-                    if let Ok(mut exe_path) = std::env::current_exe() {
-                        while let Some(parent) = exe_path.parent() {
-                            if parent.ends_with("MalChela") {
-                                exe_path = parent.to_path_buf();
+                                ui.close_menu();
+                            }
+                        });
+                    });
+
+                    if ui.button(RichText::new("📖 User Guide").color(STONE_BEIGE)).on_hover_text("Open MalChela_User_Guide_v2.1.2.md").clicked() {
+                        let mut guide_path = std::env::current_exe().unwrap();
+                        while let Some(parent) = guide_path.parent() {
+                            if parent.join("Cargo.toml").exists() {
+                                guide_path = parent.join("docs/MalChela_User_Guide_v2.1.2.md");
                                 break;
                             }
-                            exe_path = parent.to_path_buf();
+                            guide_path = parent.to_path_buf();
                         }
-                        let reports_path = exe_path.join("saved_output");
                         #[cfg(target_os = "macos")]
-                        let _ = Command::new("open").arg(&reports_path).spawn();
-                        #[cfg(target_os = "windows")]
-                        let _ = Command::new("explorer").arg(reports_path).spawn();
+                        let _ = std::process::Command::new("open").arg(&guide_path).spawn();
                         #[cfg(target_os = "linux")]
-                        let _ = Command::new("xdg-open").arg(reports_path).spawn();
+                        let _ = std::process::Command::new("xdg-open").arg(&guide_path).spawn();
+                        #[cfg(target_os = "windows")]
+                        let _ = std::process::Command::new("explorer").arg(&guide_path).spawn();
                     }
-                }
+
+                    if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
+                        self.show_scratchpad = !self.show_scratchpad;
+                    }
+
+                    if ui.button(RichText::new("📁 View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
+                        if let Ok(mut exe_path) = std::env::current_exe() {
+                            while let Some(parent) = exe_path.parent() {
+                                if parent.ends_with("MalChela") {
+                                    exe_path = parent.to_path_buf();
+                                    break;
+                                }
+                                exe_path = parent.to_path_buf();
+                            }
+                            let reports_path = exe_path.join("saved_output");
+                            #[cfg(target_os = "macos")]
+                            let _ = Command::new("open").arg(&reports_path).spawn();
+                            #[cfg(target_os = "windows")]
+                            let _ = Command::new("explorer").arg(reports_path).spawn();
+                            #[cfg(target_os = "linux")]
+                            let _ = Command::new("xdg-open").arg(reports_path).spawn();
+                        }
+                    }
+                });
             });
 
         CentralPanel::default().show(ctx, |ui| {
@@ -954,6 +975,51 @@ impl App for AppState {
                         }
                         if !self.input_path.trim().is_empty() {
                             ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
+                        }
+                    });
+                } else if tool.command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                    ui.label(RichText::new("YARA-X Configuration").strong().color(LIGHT_CYAN));
+
+                    ui.horizontal(|ui| {
+                        ui.label("Rule File:");
+                        ui.text_edit_singleline(&mut self.scratchpad_path);
+                        if ui.button("Browse").clicked() {
+                            if let Some(path) = FileDialog::new().add_filter("YARA Rules", &["yar", "yara"]).pick_file() {
+                                self.scratchpad_path = path.display().to_string();
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Target File:");
+                        ui.text_edit_singleline(&mut self.input_path);
+                        if ui.button("Browse").clicked() {
+                            if let Some(path) = FileDialog::new().pick_file() {
+                                self.input_path = path.display().to_string();
+                            }
+                        }
+                        if !self.input_path.trim().is_empty() {
+                            ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Arguments:");
+                        ui.text_edit_singleline(&mut self.custom_args);
+                    });
+
+                    // Override save report checkbox for YARA-X
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.save_report.0, "Save Report");
+                        if self.save_report.0 {
+                            ui.label("Format:");
+                            egui::ComboBox::from_id_source("save_format")
+                                .selected_text(&self.save_report.1)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.save_report.1, ".txt".to_string(), "txt");
+                                    ui.selectable_value(&mut self.save_report.1, ".json".to_string(), "json");
+                                    ui.selectable_value(&mut self.save_report.1, ".md".to_string(), "md");
+                                });
                         }
                     });
                 } else {

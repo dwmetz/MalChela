@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela.png"/>
  <p>
  <h1>
-  Malchela v2.1.1
+  Malchela v2.1.2
  </h1>
   <h4>
       A YARA & Malware Analysis Toolkit written in Rust.
@@ -88,7 +88,7 @@ cargo run -p MalChelaGUI
 ```
 <h3>🔧 Adding Custom Tools:</h3>
 
-You can extend MalChela by editing the `tools.yaml` file to include additional binaries, scripts, or Rust programs. Here's how:
+You can extend MalChela by editing the `tools.yaml` file to integrate new tools into the GUI. Each entry specifies how the tool is launched, what kind of input it takes, and any required arguments. Below are several examples demonstrating how to configure binaries, Python scripts, and Rust-based tools.
 
 ```yaml
 - name: capa
@@ -118,14 +118,15 @@ You can extend MalChela by editing the `tools.yaml` file to include additional b
   file_position: "last"
   optional_args: ["tools/pdf-parser/pdf-parser.py"]
 ```
+For advanced tool examples (including `oledump.py` and `olevba` integration with Python), see the [MalChela v2.1.2 User Guide](https://github.com/dwmetz/MalChela/blob/main/docs/MalChela_User_Guide_v2.1.2.md).
 
 📝 **Notes:**
 - Tools must be in your system `PATH` or specified with full or relative paths.
 - `exec_type` must be one of: `cargo`, `binary`, or `script`.
 - `file_position` controls where the input path is inserted in the command line (`first` or `last`).
 
-Check out the new [MalChela v2.1.1 User Guide](https://github.com/dwmetz/MalChela/blob/main/docs/MalChela_User_Guide_v2.1.1.md) for more details.
 
 
-Caveat Emptor:
+
+#### Caveat Emptor:
 Successfully tested on MacOS on Silicon and Ubuntu. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. Works on Windows in WSL! Testers (and contributors) appreciated.

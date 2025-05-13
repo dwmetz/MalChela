@@ -111,93 +111,32 @@
 # Example 3rd party integrations:
 # Below is a disabled example for capa
 # Uncomment to enable if capa is in your PATH
-#
-- name: binwalk
-  description: "Analyzes binaries for embedded files/signatures"
-  command: ["binwalk"]
-  input_type: "file"
-  file_position: "last"
-  category: "File Analysis"
-  optional_args: []
-  exec_type: binary
-  
-- name: capa
-  description: "Detects capabilities in binaries via rules"
-  command: ["capa"]
-  input_type: "file"
-  file_position: "last"
-  category: "File Analysis"
-  optional_args: []
-  exec_type: binary
-
-- name: exiftool
-  description: "Displays metadata for various file types"
-  command: ["exiftool"]
-  input_type: "file"
-  file_position: "last"
-  category: "Metadata Analysis"
-  optional_args: []
-  exec_type: binary
-
-- name: strings
-  description: "Extracts printable strings from binary files"
-  command: ["strings"]
-  input_type: "file"
-  file_position: "first"
-  category: "Utilities"
-  optional_args: []
-  exec_type: binary
-
-- name: python
-  description: "Runs a Python script on selected input"
-  command: ["python3"]
-  input_type: "file"
-  file_position: "last"
-  category: "Scripting"
-  optional_args: []
-  exec_type: script
-
-- name: pdf-parser
-  description: "Parses and analyzes suspicious PDF structures"
-  command: ["python3"]
-  input_type: "file"
-  file_position: "last"
-  category: "PDF Analysis"
-  optional_args: ["/Users/dmetz/Tools/pdfparser/pdf-parser.py"]
-  exec_type: script
-
-- name: pdfid
-  description: "Tool to test a PDF file"
-  command: ["python3"]
-  input_type: "file"
-  file_position: "last"
-  category: "PDF Analysis"
-  optional_args: ["/Users/dmetz/Tools/pdfid/pdfid.py"]
-  exec_type: script
-
-- name: zipdump
-  description: "ZIP dump utility"
-  command: ["python3"]
-  input_type: "file"
-  file_position: "last"
-  category: "Office Document Analysis"
-  optional_args: ["/Users/dmetz/Tools/zipdump/zipdump.py"]
-  exec_type: script
-
-- name: olevba
-  description: "OLE document macro utility"
-  command: ["/Users/dmetz/.local/bin/olevba"]
-  input_type: "file"
-  file_position: "last"  # still required to place file after the script
-  category: "Office Document Analysis"
-  optional_args: []
-  exec_type: script
-
-- name: oledump
-  description: "OLE Document Dump Utility"
-  command: ["/usr/local/bin/python3"]
-  input_type: "file"
-  file_position: "last"
-  category: "Office Document Analysis"
-  optional_args: ["/Users/dmetz/Tools/oledump/oledump.py"]
-  exec_type: script
+# 
+# - name: capa
+#   description: "Detects capabilities in binaries via rules"
+#   command: ["capa"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "File Analysis"
+#   optional_args: []
+#   exec_type: binary
+# 
+# - name: exiftool
+#   description: "Displays metadata for various file types"
+#   command: ["exiftool"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "Metadata Analysis"
+#   optional_args: []
+#   exec_type: binary
+# 
+# - name: pdf-parser
+#   description: "Parses and analyzes suspicious PDF structures"
+#   command: ["python3"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "PDF Analysis"
+#   optional_args: ["/Users/dmetz/Tools/pdfparser/pdf-parser.py"]
+#   exec_type: script
+# 
+#  ** Note: See User Guide for Python requirements

@@ -1,6 +1,6 @@
 # MalChela User Guide
 
-📘 This guide covers MalChela v2.1.1 (May 2025)
+📘 This guide covers MalChela v2.1.2 (May 2025)
 
 ## 🦀 Introduction
 
@@ -84,6 +84,94 @@ Ensure the tool:
 - Outputs results to stdout
 - Is installed and available in `$PATH`
 
+
+## 🐍 Configuring Python-Based Tools (oletools & oledump)
+
+MalChela supports Python-based tools as long as they are properly declared in `tools.yaml`. Below are examples and installation tips for two commonly used utilities:
+
+---
+
+### 🔧 `olevba` (from `oletools`)
+
+**Install via `pipx`:**
+
+```bash
+pipx install oletools
+```
+
+This installs `olevba` into your user path as a standalone CLI tool.
+
+**`tools.yaml` configuration:**
+
+```yaml
+- name: olevba
+  description: "OLE document macro utility"
+  command: ["/Users/youruser/.local/bin/olevba"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  optional_args: []
+  exec_type: script
+```
+
+✔ `olevba` is run directly (thanks to pipx)  
+✔ No need for a Python interpreter in `command`
+
+---
+
+### 🔧 `oledump` (standalone script)
+
+**Download manually:**
+
+```bash
+mkdir -p ~/Tools/oledump
+cd ~/Tools/oledump
+curl -O https://raw.githubusercontent.com/DidierStevens/DidierStevensSuite/master/oledump.py
+chmod +x oledump.py
+```
+
+> Ensure the script path in `optional_args` is absolute, and that the file is executable if it's being run directly (e.g., not through a Python interpreter in `command:`).
+
+**Ensure dependencies:**
+
+```bash
+python3 -m pip install olefile
+```
+
+> To isolate dependencies, you can also create a virtual environment:
+> ```bash
+> python3 -m venv ~/venvs/oledump-env
+> source ~/venvs/oledump-env/bin/activate
+> pip install olefile
+> ```
+
+**`tools.yaml` configuration:**
+
+```yaml
+- name: oledump
+  description: "OLE Document Dump Utility"
+  command: ["/usr/local/bin/python3"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  optional_args: ["/Users/youruser/Tools/oledump/oledump.py"]
+  exec_type: script
+```
+
+✔ The GUI now ensures correct argument order:  
+```bash
+python oledump.py <input_file>
+```
+
+---
+
+### ✅ Key Tips
+
+- Always use `file_position: "last"` unless the tool expects the input before the script.
+- For scripts that need `python`, keep the script in `optional_args[0]`.
+- For tools installed via `pipx`, just reference the binary path directly in `command`.
+
+
 ## 📂 YARA Rules
 
 YARA rules for tools like `fileanalyzer` are stored in the `yara_rules` folder in the workspace. You can modify or add rules here.
@@ -131,6 +219,7 @@ Configuration Panel
 
 	•	Stores API keys in vt-api.txt and mb-api.txt
 	•	Keys are required for malhash, fileanalyzer (for VT)
+	•	Quick-access button to edit `tools.yaml` from the GUI
 
 ### 📄 Output Formats
 

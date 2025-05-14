@@ -1,3 +1,5 @@
+mod tshark_panel;
+use tshark_panel::TsharkPanel;
 use eframe::{
     egui::{self, CentralPanel, Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Visuals},
     App,
@@ -74,6 +76,7 @@ struct AppState {
     custom_args: String,
     workspace_root: std::path::PathBuf,
     is_running: Arc<std::sync::atomic::AtomicBool>,
+    tshark_panel: TsharkPanel,
 }
 
 impl AppState {
@@ -852,6 +855,10 @@ impl App for AppState {
                 ui.label(egui::RichText::new("🏃  Running...").color(YELLOW).strong());
             }
             if let Some(tool) = &self.selected_tool {
+                if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
+                    self.tshark_panel.ui(ui);
+                    return;
+                }
                 ui.label(
                     RichText::new(format!(
                         "Selected Tool: {} (Input: {})",
@@ -1355,6 +1362,7 @@ fn main() {
         custom_args: String::new(),
         workspace_root,
         is_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        tshark_panel: TsharkPanel::default(),
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));

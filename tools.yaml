@@ -1,3 +1,6 @@
+edition: "REMnux Edition"
+
+tools:
 - name: Mismatch Miner
   description: "Identifies mismatched file extensions and types"
   command: ["mismatchminer"]

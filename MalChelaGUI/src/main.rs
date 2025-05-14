@@ -50,6 +50,8 @@ struct ToolConfig {
     optional_args: Vec<String>,
     #[serde(default)]
     exec_type: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
 }
 
 struct AppState {
@@ -77,12 +79,22 @@ struct AppState {
     workspace_root: std::path::PathBuf,
     is_running: Arc<std::sync::atomic::AtomicBool>,
     tshark_panel: TsharkPanel,
+    collapsed_categories: BTreeMap<String, bool>,
+    edition: String,
 }
 
 impl AppState {
-    fn load_tools_from_yaml() -> Vec<ToolConfig> {
+    fn load_tools_from_yaml() -> (Vec<ToolConfig>, String) {
         let yaml = include_str!("../../tools.yaml");
-        serde_yaml::from_str(yaml).expect("Failed to parse tools.yaml")
+        let value: serde_yaml::Value = serde_yaml::from_str(yaml).expect("Failed to parse tools.yaml");
+        let edition = value.get("edition").and_then(|e| e.as_str()).unwrap_or("").to_string();
+        let tools = if let Some(tools_val) = value.get("tools") {
+            serde_yaml::from_value::<Vec<ToolConfig>>(tools_val.clone()).unwrap_or_else(|_| vec![])
+        } else {
+            // fallback: try whole YAML as Vec<ToolConfig>
+            serde_yaml::from_str(yaml).unwrap_or_else(|_| vec![])
+        };
+        (tools, edition)
     }
 
     fn categorize_tools(tools: &[ToolConfig]) -> BTreeMap<String, Vec<ToolConfig>> {
@@ -743,8 +755,12 @@ impl App for AppState {
 
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                let mut title = "MalChela v2.1.2 — YARA & Malware Analysis Toolkit".to_string();
+                if !self.edition.trim().is_empty() {
+                    title.push_str(&format!(" ({})", self.edition));
+                }
                 ui.label(
-                    RichText::new("MalChela v2.1.2 — YARA & Malware Analysis Toolkit")
+                    RichText::new(title)
                         .font(FontId::proportional(22.0))
                         .color(RUST_ORANGE),
                 );
@@ -756,23 +772,55 @@ impl App for AppState {
             .show(ctx, |ui| {
                 ui.heading(RichText::new("Tools").color(RUST_ORANGE));
                 ScrollArea::vertical().show(ui, |ui| {
+                    // Expand/Collapse All buttons
+                    ui.horizontal(|ui| {
+                        if ui.button(RichText::new("🔽")).on_hover_text("Expand All").clicked() {
+                            for val in self.collapsed_categories.values_mut() {
+                                *val = false;
+                            }
+                        }
+                        if ui.button(RichText::new("🔼")).on_hover_text("Collapse All").clicked() {
+                            for val in self.collapsed_categories.values_mut() {
+                                *val = true;
+                            }
+                        }
+                    });
                     for (category, tools) in &self.categorized_tools {
+                        let clean_category = category.trim_start_matches('~');
+                        let collapsed = self.collapsed_categories.get(category).copied().unwrap_or(false);
                         ui.vertical(|ui| {
-                            let clean_category = category.trim_start_matches('~');
-                            ui.label(RichText::new(clean_category).color(RUST_ORANGE));
-                            for tool in tools {
-                                let tool_color = STONE_BEIGE;
-                                if ui.button(RichText::new(&tool.name).color(tool_color)).clicked() {
-                                    self.selected_tool = Some(tool.clone());
-                                    self.input_path.clear();
-                                    self.custom_args.clear();
+                            ui.horizontal(|ui| {
+                                let cat_label = clean_category.to_string();
+                                let resp = ui.button(RichText::new(cat_label).color(RUST_ORANGE).strong().font(FontId::proportional(15.0)));
+                                if resp.clicked() {
+                                    let entry = self.collapsed_categories.entry(category.clone()).or_insert(false);
+                                    *entry = !*entry;
+                                }
+                            });
+                            if !collapsed {
+                                for tool in tools {
+                                    let tool_color = STONE_BEIGE;
+                                    let mut btn = ui.button(RichText::new(&tool.name).color(tool_color).strong());
+                                    if let Some(desc) = &tool.description {
+                                        btn = btn.on_hover_text(desc);
+                                    }
+                                    if btn.clicked() {
+                                        self.selected_tool = Some(tool.clone());
+                                        self.input_path.clear();
+                                        self.custom_args.clear();
+                                    }
                                 }
                             }
                         });
                     }
 
                     ui.separator();
-                    ui.label(RichText::new("Toolkit").color(RUST_ORANGE));
+                    ui.label(
+                        RichText::new("Toolkit")
+                            .color(RUST_ORANGE)
+                            .strong()
+                            .font(FontId::proportional(15.0))
+                    );
 
                     if ui.button(RichText::new("🏠 Home").color(STONE_BEIGE)).clicked() {
                         self.show_home = true;
@@ -1336,8 +1384,13 @@ fn main() {
     let icon_path = std::path::Path::new("images/icon.png");
     let icon = load_icon(&icon_path).map(std::sync::Arc::new);
 
-    let tools = AppState::load_tools_from_yaml();
+    let (tools, edition) = AppState::load_tools_from_yaml();
     let categorized_tools = AppState::categorize_tools(&tools);
+    // Initialize all categories as expanded (collapsed = false)
+    let mut collapsed_categories = BTreeMap::new();
+    for k in categorized_tools.keys() {
+        collapsed_categories.insert(k.clone(), false);
+    }
     let app = AppState {
         categorized_tools,
         selected_tool: None,
@@ -1363,6 +1416,8 @@ fn main() {
         workspace_root,
         is_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         tshark_panel: TsharkPanel::default(),
+        collapsed_categories,
+        edition,
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));

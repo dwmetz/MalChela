@@ -1,6 +1,10 @@
 use md5;
 
-pub fn compute_imphash(imports: &[String]) -> String {
+pub fn calculate_imphash(imports: &[String]) -> Result<String, String> {
+    if imports.is_empty() {
+        return Err("No imports provided for imphash calculation.".to_string());
+    }
+
     let mut import_names: Vec<String> = imports
         .iter()
         .map(|s| s.to_lowercase())
@@ -8,5 +12,5 @@ pub fn compute_imphash(imports: &[String]) -> String {
     import_names.sort();
     let joined = import_names.join(",");
     let hash = md5::compute(joined.as_bytes());
-    format!("{:x}", hash)
+    Ok(format!("{:x}", hash))
 }

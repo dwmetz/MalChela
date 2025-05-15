@@ -81,6 +81,9 @@ struct AppState {
     tshark_panel: TsharkPanel,
     collapsed_categories: BTreeMap<String, bool>,
     edition: String,
+    show_tools_modal: bool,
+    tools_restore_success: bool,
+    restore_status_message: String,
 }
 
 impl AppState {
@@ -790,8 +793,10 @@ impl App for AppState {
                         let collapsed = self.collapsed_categories.get(category).copied().unwrap_or(false);
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
+                                // Use clickable label for category header (no button box)
+                                use egui::{Label, Sense};
                                 let cat_label = clean_category.to_string();
-                                let resp = ui.button(RichText::new(cat_label).color(RUST_ORANGE).strong().font(FontId::proportional(15.0)));
+                                let resp = ui.add(Label::new(RichText::new(cat_label).color(RUST_ORANGE).strong().font(FontId::proportional(15.0))).sense(Sense::click()));
                                 if resp.clicked() {
                                     let entry = self.collapsed_categories.entry(category.clone()).or_insert(false);
                                     *entry = !*entry;
@@ -828,29 +833,15 @@ impl App for AppState {
                         self.selected_tool = None;
                         self.input_path.clear();
                     }
-
                     ui.horizontal(|ui| {
                         ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
                             if ui.button("API Keys & Settings").clicked() {
                                 self.show_config = true;
                                 ui.close_menu();
                             }
-                            if ui.button("Edit tools.yaml").clicked() {
-                                let mut config_path = std::env::current_exe().unwrap();
-                                while let Some(parent) = config_path.parent() {
-                                    if parent.join("Cargo.toml").exists() {
-                                        config_path = parent.join("tools.yaml");
-                                        break;
-                                    }
-                                    config_path = parent.to_path_buf();
-                                }
-                                #[cfg(target_os = "macos")]
-                                let _ = Command::new("open").arg(&config_path).spawn();
-                                #[cfg(target_os = "linux")]
-                                let _ = Command::new("xdg-open").arg(&config_path).spawn();
-                                #[cfg(target_os = "windows")]
-                                let _ = Command::new("explorer").arg(&config_path).spawn();
-
+                            if ui.button("Tools.yaml").clicked() {
+                                self.show_tools_modal = true;
+                                self.tools_restore_success = false;
                                 ui.close_menu();
                             }
                         });
@@ -1350,6 +1341,147 @@ impl App for AppState {
             }
         });
 
+        // Modal for Backup / Restore tools.yaml
+        if self.show_tools_modal {
+            use egui::Align2;
+            use std::fs;
+            use std::io::Read;
+            use chrono::Utc;
+            let mut modal_open = self.show_tools_modal;
+            let mut should_close = false;
+            egui::Window::new("Backup / Restore tools.yaml")
+                .default_width(410.0)
+                .collapsible(false)
+                .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+                .open(&mut modal_open)
+                .show(ctx, |ui| {
+                    ui.label(RichText::new("Backup or restore your tools.yaml configuration.").color(LIGHT_CYAN));
+                    ui.separator();
+                    // Ensure saved_output/configuration exists
+                    let config_dir = self.workspace_root.join("saved_output").join("configuration");
+                    let _ = fs::create_dir_all(&config_dir);
+
+                    // --- Vertically centered justified layout for tools.yaml modal ---
+                    ui.vertical_centered_justified(|ui| {
+                        let button_width = 200.0;
+                        // Row 1: Back Up & Restore
+                        ui.horizontal(|ui| {
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Back Up"))
+                                .on_hover_text("Save a backup copy of tools.yaml")
+                                .clicked() {
+                                let mut config_path = self.workspace_root.clone();
+                                config_path = config_path.join("tools.yaml");
+                                let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
+                                let backup_path = config_dir.join(format!("tools_backup_{}.yaml", timestamp));
+                                if let Ok(contents) = fs::read(&config_path) {
+                                    let _ = fs::write(&backup_path, contents);
+                                }
+                            }
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Restore"))
+                                .on_hover_text("Restore tools.yaml from a backup file")
+                                .clicked() {
+                                if let Some(path) = FileDialog::new()
+                                    .set_directory(&config_dir)
+                                    .add_filter("YAML", &["yaml", "yml"])
+                                    .pick_file() {
+                                    if let Ok(mut file) = fs::File::open(&path) {
+                                        let mut contents = String::new();
+                                        if file.read_to_string(&mut contents).is_ok() {
+                                            if serde_yaml::from_str::<serde_yaml::Value>(&contents).is_ok() {
+                                                let mut config_path = self.workspace_root.clone();
+                                                config_path = config_path.join("tools.yaml");
+                                                if fs::write(&config_path, contents).is_ok() {
+                                                    self.tools_restore_success = true;
+                                                    self.restore_status_message = format!("✅ Loaded configuration from: {}", path.display());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        ui.add_space(6.0);
+
+                        // Row 2: REMnux & Default
+                        ui.horizontal(|ui| {
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Load REMnux Tools"))
+                                .on_hover_text("Load remnux_tools.yaml as your tools.yaml")
+                                .clicked() {
+                                let remnux_path = self.workspace_root.join("MalChelaGUI").join("remnux").join("remnux_tools.yaml");
+                                if remnux_path.exists() {
+                                    if let Ok(mut file) = fs::File::open(&remnux_path) {
+                                        let mut contents = String::new();
+                                        if file.read_to_string(&mut contents).is_ok() {
+                                            if serde_yaml::from_str::<serde_yaml::Value>(&contents).is_ok() {
+                                                let mut config_path = self.workspace_root.clone();
+                                                config_path = config_path.join("tools.yaml");
+                                                if fs::write(&config_path, contents).is_ok() {
+                                                    self.tools_restore_success = true;
+                                                    self.restore_status_message = format!("✅ Loaded configuration from: {}", remnux_path.display());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Load Default Tools"))
+                                .on_hover_text("Load the default tools.yaml shipped with MalChela")
+                                .clicked() {
+                                let default_path = self.workspace_root.join("MalChelaGUI").join("remnux").join("default_tools.yaml");
+                                if default_path.exists() {
+                                    if let Ok(mut file) = fs::File::open(&default_path) {
+                                        let mut contents = String::new();
+                                        if file.read_to_string(&mut contents).is_ok() {
+                                            if serde_yaml::from_str::<serde_yaml::Value>(&contents).is_ok() {
+                                                let mut config_path = self.workspace_root.clone();
+                                                config_path = config_path.join("tools.yaml");
+                                                if fs::write(&config_path, contents).is_ok() {
+                                                    self.tools_restore_success = true;
+                                                    self.restore_status_message = format!("✅ Loaded configuration from: {}", default_path.display());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        ui.add_space(6.0);
+
+                        // Row 3: Edit in VS Code
+                        if ui.add_sized([200.0, 30.0], egui::Button::new("Edit in VS Code")).clicked() {
+                            let mut config_path = std::env::current_exe().unwrap();
+                            while let Some(parent) = config_path.parent() {
+                                if parent.join("Cargo.toml").exists() {
+                                    config_path = parent.join("tools.yaml");
+                                    break;
+                                }
+                                config_path = parent.to_path_buf();
+                            }
+                            #[cfg(target_os = "macos")]
+                            let _ = std::process::Command::new("open").arg(&config_path).spawn();
+                            #[cfg(target_os = "linux")]
+                            let _ = std::process::Command::new("xdg-open").arg(&config_path).spawn();
+                            #[cfg(target_os = "windows")]
+                            let _ = std::process::Command::new("explorer").arg(&config_path).spawn();
+                        }
+                    });
+
+                    // Simplified status message
+                    if self.tools_restore_success && !self.restore_status_message.is_empty() {
+                        ui.separator();
+                        ui.colored_label(GREEN, format!("{} Please restart MalChela GUI for changes to take effect.", self.restore_status_message));
+                    }
+                    ui.separator();
+                    // --- Close button (own row) ---
+                    if ui.button("Close").clicked() {
+                        should_close = true;
+                    }
+                });
+            self.show_tools_modal = modal_open && !should_close;
+        }
+
         use egui::widgets::Hyperlink;
         TopBottomPanel::bottom("footer").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -1418,6 +1550,9 @@ fn main() {
         tshark_panel: TsharkPanel::default(),
         collapsed_categories,
         edition,
+        show_tools_modal: false,
+        tools_restore_success: false,
+        restore_status_message: String::new(),
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));

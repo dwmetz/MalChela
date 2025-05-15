@@ -1,6 +1,31 @@
 # MalChela User Guide
 
-📘 This guide covers MalChela v2.1.2 (May 2025)
+<small><sub>📘 This guide covers MalChela v2.1.2 (May 2025)</sub></small>
+---
+## 📚 Table of Contents
+
+- [🦀 Introduction](#-introduction)
+- [🛠 Installation](#-installation)
+- [🚀 Getting Started](#-getting-started)
+- [🔧 CLI Usage Notes](#-cli-usage-notes)
+- [📁 Adding Third-Party Tools](#-adding-third-party-tools)
+- [⚙️ Tool Configuration Mode (YAML)](#️-tool-configuration-mode-yaml)
+- [🐍 Configuring Python-Based Tools](#-configuring-python-based-tools-oletools--oledump)
+- [⚙️ Installing and Configuring YARA-X](#️-installing-and-configuring-yara-x)
+- [📂 YARA Rules](#-yara-rules)
+- [✨ GUI Features Summary](#-gui-features-summary)
+  - [🦈 TShark Field Reference Panel](#-tshark-field-reference-panel)
+- [💻 GUI Walkthrough](#-gui-walkthrough)
+  - [📄 Output Formats](#-output-formats)
+  - [🧮 Tool-Specific Notes](#-tool-specific-notes)
+  - [🧪 Tool Behavior Reference](#-tool-behavior-reference)
+  - [🔁 Consistent CLI Output Behavior](#-consistent-cli-output-behavior)
+- [📝 Scratchpad Tips](#-scratchpad-tips-strings_to_yara)
+- [⚠️ Known Limitations & WSL Notes](#️-known-limitations--wsl-notes)
+- [🦀 Support & Contribution](#-support--contribution)
+---
+
+
 
 ## 🦀 Introduction
 
@@ -14,6 +39,20 @@
 	•	Rust and Cargo
 	•	Git
 	•	Unix-like environment (Linux, macOS, or Windows with WSL)
+
+### 🔗 System Dependencies (Recommended)
+
+To ensure all tools build and run correctly, install the following packages (especially for Linux/REMnux):
+
+```bash
+sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-essential libglib2.0-dev libgtk-3-dev ssdeep
+```
+
+These are required for:
+- YARA and YARA-X support
+- Building Rust crates that link to native libraries (e.g., GUI dependencies)
+- TShark integration (via GTK/glib)
+- `ssdeep` is used for fuzzy hashing in tools like `fileanalyzer`. If not installed, fuzzy hash results may be unavailable.
 
 ### Clone the Repository
 ```
@@ -84,10 +123,46 @@ Ensure the tool:
 - Outputs results to stdout
 - Is installed and available in `$PATH`
 
+> You can switch to a prebuilt `tools.yaml` for REMnux mode via the GUI configuration panel — useful for quick setup in forensic VMs.
+
+## ⚙️ Tool Configuration Mode (YAML)
+
+MalChela uses a central `tools.yaml` file to define which tools appear in the GUI, along with their launch method, input types, categories, and optional arguments. This YAML-driven approach allows full control without editing source code.
+
+### Key Fields in Each Tool Entry
+
+| Field           | Purpose                                               |
+|-----------------|-------------------------------------------------------|
+| `name`          | Internal and display name of the tool                |
+| `description`   | Shown in GUI for clarity                             |
+| `command`       | How the tool is launched (binary path or interpreter)|
+| `exec_type`     | One of `cargo`, `binary`, or `script`                |
+| `input_type`    | One of `file`, `folder`, or `hash`                   |
+| `file_position` | Controls argument ordering                           |
+| `optional_args` | Additional CLI arguments passed to the tool          |
+| `category`      | Grouping used in the GUI left panel                  |
+
+> ⚠️ All fields except `optional_args` are required.
+
+### Swapping Configs: REMnux Mode and Beyond
+
+MalChela supports easy switching between tool configurations via the GUI.
+
+To switch:
+
+1. Open the **Configuration Panel**
+2. Use **“Select tools.yaml”** to point to a different config
+3. Restart the GUI or reload tools
+
+This allows forensic VMs like REMnux to use a tailored toolset while keeping your default config untouched.
+
+> A bundled `tools_remnux.yaml` is included in the repo for convenience.
+
+---
 
 ## 🐍 Configuring Python-Based Tools (oletools & oledump)
 
-MalChela supports Python-based tools as long as they are properly declared in `tools.yaml`. Below are examples and installation tips for two commonly used utilities:
+MalChela supports Python-based tools as long as they are properly declared in `tools.yaml`. Below are detailed examples and installation instructions for two commonly used utilities:
 
 ---
 
@@ -99,9 +174,9 @@ MalChela supports Python-based tools as long as they are properly declared in `t
 pipx install oletools
 ```
 
-This installs `olevba` into your user path as a standalone CLI tool.
+This installs `olevba` as a standalone CLI tool accessible in your user path.
 
-**`tools.yaml` configuration:**
+**`tools.yaml` configuration example:**
 
 ```yaml
 - name: olevba
@@ -114,14 +189,17 @@ This installs `olevba` into your user path as a standalone CLI tool.
   exec_type: script
 ```
 
-✔ `olevba` is run directly (thanks to pipx)  
-✔ No need for a Python interpreter in `command`
+**Notes:**
+
+- `olevba` is run directly (thanks to pipx)
+- No need to specify a Python interpreter in `command`
+- Ensure the path to `olevba` is correct and executable
 
 ---
 
 ### 🔧 `oledump` (standalone script)
 
-**Download manually:**
+**Manual installation:**
 
 ```bash
 mkdir -p ~/Tools/oledump
@@ -130,22 +208,23 @@ curl -O https://raw.githubusercontent.com/DidierStevens/DidierStevensSuite/maste
 chmod +x oledump.py
 ```
 
-> Ensure the script path in `optional_args` is absolute, and that the file is executable if it's being run directly (e.g., not through a Python interpreter in `command:`).
+> Make sure the script path in `optional_args` is absolute, and that the file is executable if it's run directly (not through a Python interpreter in `command`).
 
-**Ensure dependencies:**
+**Dependencies:**
 
 ```bash
 python3 -m pip install olefile
 ```
 
-> To isolate dependencies, you can also create a virtual environment:
-> ```bash
-> python3 -m venv ~/venvs/oledump-env
-> source ~/venvs/oledump-env/bin/activate
-> pip install olefile
-> ```
+Alternatively, create a virtual environment to isolate dependencies:
 
-**`tools.yaml` configuration:**
+```bash
+python3 -m venv ~/venvs/oledump-env
+source ~/venvs/oledump-env/bin/activate
+pip install olefile
+```
+
+**`tools.yaml` configuration example:**
 
 ```yaml
 - name: oledump
@@ -158,19 +237,69 @@ python3 -m pip install olefile
   exec_type: script
 ```
 
-✔ The GUI now ensures correct argument order:  
-```bash
-python oledump.py <input_file>
-```
+**Notes:**
+
+- The GUI ensures correct argument order: `python oledump.py <input_file>`
+- `command` points to the Python interpreter
+- `optional_args` contains the path to the script
 
 ---
 
 ### ✅ Key Tips
 
-- Always use `file_position: "last"` unless the tool expects the input before the script.
-- For scripts that need `python`, keep the script in `optional_args[0]`.
-- For tools installed via `pipx`, just reference the binary path directly in `command`.
+- Always use `file_position: "last"` unless the tool expects input before the script
+- For scripts requiring Python, keep the script path in `optional_args[0]`
+- For tools installed via `pipx`, reference the binary path directly in `command`
 
+## ⚙️ Installing and Configuring YARA-X
+
+YARA-X is an extended version of YARA with enhanced performance and features. To integrate YARA-X with MalChela, follow these steps:
+
+### Installation
+
+1. **Download the latest release:**
+
+Visit the official YARA-X GitHub releases page at [https://github.com/Yara-Rules/yara-x/releases](https://github.com/Yara-Rules/yara-x/releases) and download the appropriate binary for your platform.
+
+2. **Extract and install:**
+
+Extract the downloaded archive and place the `yara-x` binary in a directory included in your system's `$PATH`, or note its absolute path for configuration.
+
+3. **Verify installation:**
+
+Run the following command to confirm YARA-X is installed correctly:
+
+```bash
+yara-x --version
+```
+
+### Configuration in MalChela
+
+To use YARA-X within MalChela tools (especially `fileanalyzer`), update your `tools.yaml` with the following example entry:
+
+```yaml
+- name: yara-x
+  description: "High-performance YARA-X engine"
+  command: ["yara-x"]
+  input_type: "file"
+  file_position: "last"
+  category: "File Analysis"
+  optional_args: []
+  exec_type: binary
+```
+
+### Using YARA-X Rules
+
+- Place your YARA rules in the `yara_rules` folder within the workspace.
+- YARA-X supports recursive includes and extended features; ensure your rules are compatible.
+- The MalChela GUI and CLI will invoke YARA-X when configured as above, providing faster scans and improved detection.
+
+### Tips
+
+- If you want to use YARA-X as a drop-in replacement for the standard YARA engine, ensure your tool configurations point to the `yara-x` binary.
+- For advanced usage, consult the [YARA-X documentation](https://github.com/Yara-Rules/yara-x) for command-line options and rule syntax.
+
+---
 
 ## 📂 YARA Rules
 
@@ -186,6 +315,12 @@ YARA rules for tools like `fileanalyzer` are stored in the `yara_rules` folder i
 - Alphabetical sorting of tools within categories
 - Tool descriptions are now shown alongside tool names
 - Saved reports are cleaned of internal formatting tags like [green], [reset], etc.
+
+### 🦈 TShark Field Reference Panel
+
+- Launchable via the "?" icon next to filter fields
+- Provides examples, tooltips, and a copy-to-clipboard feature
+- Helps users construct and test display filters visually
 
 ## 💻 GUI Walkthrough
 
@@ -291,5 +426,4 @@ As of version 2.1.1, all tools that support saving reports now follow **a standa
 	•	Extend via tools.yaml for external tools
 ---
 For more information, visit [https://bakerstreetforensics.com](https://bakerstreetforensics.com).
-
 

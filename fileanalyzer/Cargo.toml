@@ -24,3 +24,4 @@ serde_derive = "1.0.219"
 common_config = { path = "../common_config" }
 common_ui = { path = "../common_ui" }
 clap = { version = "4", features = ["derive"] }
+pelite = "0.10.0"

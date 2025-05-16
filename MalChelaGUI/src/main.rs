@@ -500,19 +500,11 @@ impl AppState {
                 println!("Attempting to run binary at path: {}", binary_path.display());
                 println!("With arguments: {:?}", args);
 
-
-                let mut command_builder = Command::new(binary_path);
+                let mut command_builder = Command::new(&binary_path);
                 command_builder.args(&args);
                 command_builder.current_dir(&workspace_root);
                 command_builder.stdout(Stdio::piped());
                 command_builder.stderr(Stdio::piped());
-                for env_var in custom_args.split_whitespace() {
-                    if let Some((key, value)) = env_var.split_once('=') {
-                        if key.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
-                            command_builder.env(key, value);
-                        }
-                    }
-                }
 
                 match command_builder.spawn() {
                     Ok(mut child) => {

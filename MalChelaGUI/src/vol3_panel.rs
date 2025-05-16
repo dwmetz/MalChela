@@ -61,51 +61,54 @@ impl Vol3Panel {
             ui.label(RichText::new("⚠️ No plugins found in vol3_plugins.yaml").color(Color32::YELLOW));
         }
 
-        ComboBox::from_id_source("vol3_plugin_dropdown")
-            .selected_text(
-                if self.use_custom {
-                    "(other)".to_string()
-                } else {
-                    self.selected_plugin.clone().unwrap_or_else(|| "Select plugin".to_string())
-                }
-            )
-            .show_ui(ui, |ui| {
-                for (label, name) in &all_plugins {
-                    if ui.selectable_label(!self.use_custom && self.selected_plugin.as_deref() == Some(name), label).clicked() {
-                        self.selected_plugin = Some(name.clone());
-                        self.use_custom = false;
+        // Plugin selector and help button in a horizontal layout
+        ui.horizontal(|ui| {
+            ui.label("Plugin:");
+            ComboBox::from_id_source("vol3_plugin_dropdown")
+                .selected_text(
+                    if self.use_custom {
+                        "(other)".to_string()
+                    } else {
+                        self.selected_plugin.clone().unwrap_or_else(|| "Select plugin".to_string())
                     }
-                }
-                if ui.selectable_label(self.use_custom, "(other)").clicked() {
-                    self.use_custom = true;
-                }
-            });
+                )
+                .show_ui(ui, |ui| {
+                    for (label, name) in &all_plugins {
+                        if ui.selectable_label(!self.use_custom && self.selected_plugin.as_deref() == Some(name), label).clicked() {
+                            self.selected_plugin = Some(name.clone());
+                            self.use_custom = false;
+                        }
+                    }
+                    if ui.selectable_label(self.use_custom, "(other)").clicked() {
+                        self.use_custom = true;
+                    }
+                });
+            if ui.button("?").on_hover_text("View plugin reference").clicked() {
+                self.show_plugin_help = true;
+            }
+        });
 
-        // Plugin help toggle button
-        if ui.button("📘 Plugin Help").clicked() {
-            self.show_plugin_help = !self.show_plugin_help;
-        }
-
-        // Plugin help modal box
+        // Plugin help modal using egui::Window for interactive modal behavior
         if self.show_plugin_help {
-            use eframe::egui::containers::Frame;
-            Frame::popup(ui.style()).show(ui, |ui| {
-                ui.label(RichText::new("🔎 Volatility 3 Plugin Help").strong());
-                ui.separator();
-                for (_category, items) in plugins {
-                    for plugin in items {
-                        ui.label(format!("• {} — {}", plugin.name, plugin.label));
-                        if !plugin.args.is_empty() {
-                            for arg in &plugin.args {
-                                ui.label(format!("    ↳ {} ({})", arg.name, arg.arg_type));
+            use eframe::egui::Window;
+            Window::new("📘 Volatility Plugin Reference")
+                .open(&mut self.show_plugin_help)
+                .resizable(true)
+                .scroll2([true, true])
+                .show(ui.ctx(), |ui| {
+                    ui.label(RichText::new("🔎 Volatility 3 Plugin Help").strong());
+                    ui.separator();
+                    for (_category, items) in plugins {
+                        for plugin in items {
+                            ui.label(format!("• {} — {}", plugin.name, plugin.label));
+                            if !plugin.args.is_empty() {
+                                for arg in &plugin.args {
+                                    ui.label(format!("    ↳ {} ({})", arg.name, arg.arg_type));
+                                }
                             }
                         }
                     }
-                }
-                if ui.button("Close").clicked() {
-                    self.show_plugin_help = false;
-                }
-            });
+                });
         }
 
 

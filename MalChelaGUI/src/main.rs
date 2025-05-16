@@ -999,6 +999,7 @@ impl App for AppState {
                     self.output_lines.lock().unwrap().clear();
 
                     self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
+                    // Removed: Save Report checkbox and format selection for Vol3.
 
                     if ui.button("Run").clicked() {
                         // Debug log for Vol3 Run button click

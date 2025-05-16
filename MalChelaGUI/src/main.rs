@@ -500,8 +500,20 @@ impl AppState {
                 println!("Attempting to run binary at path: {}", binary_path.display());
                 println!("With arguments: {:?}", args);
 
-                let mut command_builder = Command::new(&binary_path);
-                command_builder.args(&args);
+                let mut command_builder = if is_external && command.get(0).map(|s| s == "vol3").unwrap_or(false) && !cfg!(windows) {
+                    let full_cmd = format!(
+                        "stdbuf -oL {} {}",
+                        binary_path.display(),
+                        args.iter().map(|s| shell_words::quote(s)).collect::<Vec<_>>().join(" ")
+                    );
+                    let mut cmd = Command::new("sh");
+                    cmd.arg("-c").arg(full_cmd);
+                    cmd
+                } else {
+                    let mut cmd = Command::new(&binary_path);
+                    cmd.args(&args);
+                    cmd
+                };
                 command_builder.current_dir(&workspace_root);
                 command_builder.stdout(Stdio::piped());
                 command_builder.stderr(Stdio::piped());

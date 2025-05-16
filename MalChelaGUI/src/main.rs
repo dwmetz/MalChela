@@ -538,6 +538,7 @@ impl AppState {
                             let workspace_root = workspace_root.clone();
                             let command = command.clone();
                             let is_running_clone = Arc::clone(&is_running);
+                            // 🖼️ No ctx_clone here
                             thread::spawn(move || {
                                 for line in stdout_reader.lines().flatten() {
                                     {
@@ -557,6 +558,7 @@ impl AppState {
                                     {
                                         let _ = writeln!(f, "stdout: {}", line);
                                     }
+                                    // 🖼️ Removed ctx_clone.request_repaint();
                                 }
                                 // After stdout loop, save report if needed
                                 if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {

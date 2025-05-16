@@ -355,10 +355,26 @@ impl AppState {
                     command[0].clone()
                 };
 
+                // Debug: Log binary check
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("vol3_command_debug.txt")
+                {
+                    let _ = writeln!(f, "Checking for binary: {:?}", &command[0]);
+                }
+
                 let binary_path = if is_external {
                     match which::which(&command[0]) {
                         Ok(path) => path,
                         Err(_) => {
+                            if let Ok(mut f) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("vol3_command_debug.txt")
+                            {
+                                let _ = writeln!(f, "Binary '{}' not found in PATH", command[0]);
+                            }
                             let mut out = output.lock().unwrap();
                             let mut lines = output_lines.lock().unwrap();
                             let msg = format!("[red]Binary '{}' not found in PATH\n", command[0]);
@@ -498,102 +514,119 @@ impl AppState {
                     }
                 }
 
-                let mut child = command_builder
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .expect("Failed to run built binary");
-
-
-
-                if let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) {
-                    let stdout_reader = BufReader::new(stdout);
-                    let stderr_reader = BufReader::new(stderr);
-
-                    let out_clone_stdout = Arc::clone(&output);
-                    let output_lines_clone_stdout = Arc::clone(&output_lines);
-                    let save_report = save_report.clone();
-                    let workspace_root = workspace_root.clone();
-                    let command = command.clone();
-                    let is_running_clone = Arc::clone(&is_running);
-                    thread::spawn(move || {
-                        for line in stdout_reader.lines().flatten() {
-                            {
-                                let mut lines = output_lines_clone_stdout.lock().unwrap();
-                                lines.push(line.clone());
-                            }
-                            {
-                                let mut out = out_clone_stdout.lock().unwrap();
-                                out.push_str(&line);
-                                out.push('\n');
-                            }
+                match command_builder.spawn() {
+                    Ok(mut child) => {
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open("vol3_command_debug.txt")
+                        {
+                            let _ = writeln!(f, "Command spawned successfully: {:?}", child.id());
                         }
-                        // After the stdout loop, save the report if requested
-                        // Only save the report if MALCHELA_GUI_MODE is NOT set to "1"
-                        if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {
-                            let output_dir = workspace_root
-                                .join("saved_output")
-                                .join(
-                                    std::path::Path::new(&command[0])
-                                        .file_stem()
-                                        .and_then(|s| s.to_str())
-                                        .unwrap_or_else(|| std::path::Path::new(&command[0]).file_stem().and_then(|s| s.to_str()).unwrap_or(&command[0]))
-                                );
-                            let _ = std::fs::create_dir_all(&output_dir);
-                            let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
-                            let report_path = output_dir.join(format!("report_{}{}", timestamp, save_report.1));
-                            if let Ok(mut file) = File::create(&report_path) {
-                                let final_output = out_clone_stdout.lock().unwrap();
-                                let cleaned_output = final_output
-                                    .lines()
-                                    .filter_map(|line| {
-                                        let mut trimmed = line.trim_start();
-                                        // Strip known tags
-                                        let tags = ["[reset]", "[bold]", "[green]", "[yellow]", "[cyan]", "[gray]", "[stone]", "[highlight]", "[red]", "[NOTE]"];
-                                        for tag in &tags {
-                                            if trimmed.starts_with(tag) {
-                                                trimmed = trimmed.strip_prefix(tag).unwrap_or(trimmed);
-                                            }
-                                        }
-                                        let trimmed = trimmed.trim_start();
-                                        if trimmed == "Output was not saved." || trimmed.is_empty() {
-                                            None
-                                        } else {
-                                            Some(trimmed)
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
-                                let _ = write!(file, "{}", cleaned_output);
-                            }
-                            {
-                                let mut out = out_clone_stdout.lock().unwrap();
-                                out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
-                            }
-                        }
-                        // Set is_running to false after report is saved (for non-Python tools)
-                        is_running_clone.store(false, std::sync::atomic::Ordering::Relaxed);
-                    });
 
-                    let out_clone_stderr = Arc::clone(&output);
-                    let output_lines_clone_stderr = Arc::clone(&output_lines);
-                    thread::spawn(move || {
-                        for line in stderr_reader.lines().flatten() {
-                            {
-                                let mut lines = output_lines_clone_stderr.lock().unwrap();
-                                lines.push(format!("[red]{}", line));
-                            }
-                            {
-                                let mut out = out_clone_stderr.lock().unwrap();
-                                out.push_str("[red]");
-                                out.push_str(&line);
-                                out.push('\n');
-                            }
+                        if let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) {
+                            let stdout_reader = BufReader::new(stdout);
+                            let stderr_reader = BufReader::new(stderr);
+
+                            let out_clone_stdout = Arc::clone(&output);
+                            let output_lines_clone_stdout = Arc::clone(&output_lines);
+                            let save_report = save_report.clone();
+                            let workspace_root = workspace_root.clone();
+                            let command = command.clone();
+                            let is_running_clone = Arc::clone(&is_running);
+                            thread::spawn(move || {
+                                for line in stdout_reader.lines().flatten() {
+                                    {
+                                        let mut lines = output_lines_clone_stdout.lock().unwrap();
+                                        lines.push(line.clone());
+                                    }
+                                    {
+                                        let mut out = out_clone_stdout.lock().unwrap();
+                                        out.push_str(&line);
+                                        out.push('\n');
+                                    }
+                                }
+                                // After the stdout loop, save the report if requested
+                                // Only save the report if MALCHELA_GUI_MODE is NOT set to "1"
+                                if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {
+                                    let output_dir = workspace_root
+                                        .join("saved_output")
+                                        .join(
+                                            std::path::Path::new(&command[0])
+                                                .file_stem()
+                                                .and_then(|s| s.to_str())
+                                                .unwrap_or_else(|| std::path::Path::new(&command[0]).file_stem().and_then(|s| s.to_str()).unwrap_or(&command[0]))
+                                        );
+                                    let _ = std::fs::create_dir_all(&output_dir);
+                                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+                                    let report_path = output_dir.join(format!("report_{}{}", timestamp, save_report.1));
+                                    if let Ok(mut file) = File::create(&report_path) {
+                                        let final_output = out_clone_stdout.lock().unwrap();
+                                        let cleaned_output = final_output
+                                            .lines()
+                                            .filter_map(|line| {
+                                                let mut trimmed = line.trim_start();
+                                                // Strip known tags
+                                                let tags = ["[reset]", "[bold]", "[green]", "[yellow]", "[cyan]", "[gray]", "[stone]", "[highlight]", "[red]", "[NOTE]"];
+                                                for tag in &tags {
+                                                    if trimmed.starts_with(tag) {
+                                                        trimmed = trimmed.strip_prefix(tag).unwrap_or(trimmed);
+                                                    }
+                                                }
+                                                let trimmed = trimmed.trim_start();
+                                                if trimmed == "Output was not saved." || trimmed.is_empty() {
+                                                    None
+                                                } else {
+                                                    Some(trimmed)
+                                                }
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n");
+                                        let _ = write!(file, "{}", cleaned_output);
+                                    }
+                                    {
+                                        let mut out = out_clone_stdout.lock().unwrap();
+                                        out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
+                                    }
+                                }
+                                // Set is_running to false after report is saved (for non-Python tools)
+                                is_running_clone.store(false, std::sync::atomic::Ordering::Relaxed);
+                            });
+
+                            let out_clone_stderr = Arc::clone(&output);
+                            let output_lines_clone_stderr = Arc::clone(&output_lines);
+                            thread::spawn(move || {
+                                for line in stderr_reader.lines().flatten() {
+                                    {
+                                        let mut lines = output_lines_clone_stderr.lock().unwrap();
+                                        lines.push(format!("[red]{}", line));
+                                    }
+                                    {
+                                        let mut out = out_clone_stderr.lock().unwrap();
+                                        out.push_str("[red]");
+                                        out.push_str(&line);
+                                        out.push('\n');
+                                    }
+                                }
+                            });
                         }
-                    });
+
+                        let _ = child.wait();
+                    }
+                    Err(e) => {
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open("vol3_command_debug.txt")
+                        {
+                            let _ = writeln!(f, "Command spawn failed: {}", e);
+                        }
+
+                        let mut out = output.lock().unwrap();
+                        out.push_str(&format!("[red]Command spawn failed: {}\n", e));
+                        return;
+                    }
                 }
-
-                let _ = child.wait();
 
                 if command.get(0).map(|s| s == "fileanalyzer").unwrap_or(false) {
                     let temp_path = std::env::temp_dir().join("malchela_temp_output.txt");

@@ -24,6 +24,7 @@ pub struct Vol3Panel {
     pub selected_plugin: Option<String>,
     pub custom_plugin_name: String,
     pub use_custom: bool,
+    pub show_plugin_help: bool,
 }
 
 impl Vol3Panel {
@@ -46,6 +47,7 @@ impl Vol3Panel {
             }
         );
         ui.label(RichText::new(format!("🛠 Command line: {}", preview_cmd)).color(Color32::from_rgb(0, 255, 0)));
+        ui.label(RichText::new("(Command will launch in a new terminal)").color(Color32::GRAY));
 
 
         let mut all_plugins = Vec::new();
@@ -79,12 +81,67 @@ impl Vol3Panel {
                 }
             });
 
+        // Plugin help toggle button
+        if ui.button("📘 Plugin Help").clicked() {
+            self.show_plugin_help = !self.show_plugin_help;
+        }
+
+        // Plugin help modal box
+        if self.show_plugin_help {
+            use eframe::egui::containers::Frame;
+            Frame::popup(ui.style()).show(ui, |ui| {
+                ui.label(RichText::new("🔎 Volatility 3 Plugin Help").strong());
+                ui.separator();
+                for (_category, items) in plugins {
+                    for plugin in items {
+                        ui.label(format!("• {} — {}", plugin.name, plugin.label));
+                        if !plugin.args.is_empty() {
+                            for arg in &plugin.args {
+                                ui.label(format!("    ↳ {} ({})", arg.name, arg.arg_type));
+                            }
+                        }
+                    }
+                }
+                if ui.button("Close").clicked() {
+                    self.show_plugin_help = false;
+                }
+            });
+        }
+
 
         if self.use_custom {
             ui.horizontal(|ui| {
                 ui.label("Custom Plugin:");
                 ui.text_edit_singleline(&mut self.custom_plugin_name);
             });
+        }
+
+        // Dynamically render input fields for plugin args if a plugin is selected and not using custom
+        if !self.use_custom {
+            if let Some(plugin_name) = &self.selected_plugin {
+                for (_category, items) in plugins {
+                    for plugin in items {
+                        if &plugin.name == plugin_name {
+                            for arg in &plugin.args {
+                                match arg.arg_type.as_str() {
+                                    "text" => {
+                                        ui.horizontal(|ui| {
+                                            ui.label(format!("{}:", arg.name));
+                                            let mut val = String::new();
+                                            ui.text_edit_singleline(&mut val);
+                                            if !val.trim().is_empty() {
+                                                custom_args.push(' ');
+                                                custom_args.push_str(&format!("{} {}", arg.name, val));
+                                            }
+                                        });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         ui.horizontal(|ui| {

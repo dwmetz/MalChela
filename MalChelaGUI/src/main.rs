@@ -529,7 +529,6 @@ impl AppState {
                         }
 
                         if let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) {
-                            let stdout_reader = BufReader::new(stdout);
                             let stderr_reader = BufReader::new(stderr);
 
                             let out_clone_stdout = Arc::clone(&output);
@@ -540,25 +539,33 @@ impl AppState {
                             let is_running_clone = Arc::clone(&is_running);
                             // 🖼️ No ctx_clone here
                             thread::spawn(move || {
-                                for line in stdout_reader.lines().flatten() {
-                                    {
-                                        let mut lines = output_lines_clone_stdout.lock().unwrap();
-                                        lines.push(line.clone());
+                                use std::io::{BufRead, BufReader};
+                                let stdout = stdout; // take ownership here for the thread
+                                let mut reader = BufReader::new(stdout);
+                                let mut buffer = String::new();
+                                loop {
+                                    match reader.read_line(&mut buffer) {
+                                        Ok(0) => break, // EOF
+                                        Ok(_) => {
+                                            {
+                                                let mut lines = output_lines_clone_stdout.lock().unwrap();
+                                                lines.push(buffer.trim_end().to_string());
+                                            }
+                                            {
+                                                let mut out = out_clone_stdout.lock().unwrap();
+                                                out.push_str(&buffer);
+                                            }
+                                            if let Ok(mut f) = std::fs::OpenOptions::new()
+                                                .create(true)
+                                                .append(true)
+                                                .open("vol3_command_debug.txt")
+                                            {
+                                                let _ = writeln!(f, "stdout: {}", buffer.trim_end());
+                                            }
+                                            buffer.clear();
+                                        }
+                                        Err(_) => break,
                                     }
-                                    {
-                                        let mut out = out_clone_stdout.lock().unwrap();
-                                        out.push_str(&line);
-                                        out.push('\n');
-                                    }
-                                    // Also log to vol3_command_debug.txt
-                                    if let Ok(mut f) = std::fs::OpenOptions::new()
-                                        .create(true)
-                                        .append(true)
-                                        .open("vol3_command_debug.txt")
-                                    {
-                                        let _ = writeln!(f, "stdout: {}", line);
-                                    }
-                                    // 🖼️ Removed ctx_clone.request_repaint();
                                 }
                                 // After stdout loop, save report if needed
                                 if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {

@@ -158,6 +158,34 @@ impl AppState {
             }
             std::env::set_var("MALCHELA_GUI_MODE", "1");
 
+            // Special case: Launch Vol3 in external terminal (outside of thread)
+            let is_external = tool.exec_type.as_deref() != Some("cargo");
+            let command = tool.command.clone();
+            let input_path = self.input_path.clone();
+            let custom_args = self.custom_args.clone();
+            if is_external && command.get(0).map(|s| s == "vol3").unwrap_or(false) && !cfg!(windows) {
+                let mut args = vec!["-f".to_string(), input_path.clone()];
+                if !custom_args.trim().is_empty() {
+                    args.push(custom_args.trim().to_string());
+                }
+                let joined_args = args.join(" ");
+                let full_cmd = format!("vol3 {} ; echo Press Enter to close; read", joined_args);
+                let mut cmd = Command::new("x-terminal-emulator");
+                cmd.arg("-e").arg("bash").arg("-c").arg(full_cmd);
+                let _ = cmd.spawn(); // run immediately, outside thread
+
+                {
+                    let mut out = self.command_output.lock().unwrap();
+                    out.clear();
+                    out.push_str("[green]🛠 Vol3 command launched in external terminal.\n");
+                    let mut lines = self.output_lines.lock().unwrap();
+                    lines.clear();
+                    lines.push("🛠 Vol3 command launched in external terminal.".to_string());
+                }
+                self.is_running.store(false, std::sync::atomic::Ordering::Relaxed);
+                return;
+            }
+
             self.show_running_command(ctx);
 
             let command = tool.command.clone();
@@ -500,25 +528,7 @@ impl AppState {
                 println!("Attempting to run binary at path: {}", binary_path.display());
                 println!("With arguments: {:?}", args);
 
-                let mut command_builder = if is_external && command.get(0).map(|s| s == "vol3").unwrap_or(false) && !cfg!(windows) {
-                    // Prepare Vol3 args: -f <image> <plugin>
-                    let mut args = vec!["-f".to_string(), input_path.clone()];
-                    if !custom_args.trim().is_empty() {
-                        args.push(custom_args.trim().to_string());
-                    }
-                    let joined_args = args.join(" ");
-                    let full_cmd = format!("vol3 {} ; echo Press Enter to close; read", joined_args);
-                    let mut cmd = Command::new("x-terminal-emulator");
-                    cmd.arg("-e").arg("bash").arg("-c").arg(full_cmd);
-                    {
-                        let mut out = output.lock().unwrap();
-                        out.push_str("[green]🛠 Vol3 command launched in external terminal.\n");
-                        let mut lines = output_lines.lock().unwrap();
-                        lines.push("🛠 Vol3 command launched in external terminal.".to_string());
-                    }
-                    is_running.store(false, std::sync::atomic::Ordering::Relaxed);
-                    cmd
-                } else {
+                let mut command_builder = {
                     let mut cmd = Command::new(&binary_path);
                     cmd.args(&args);
                     cmd

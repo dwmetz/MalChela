@@ -501,6 +501,11 @@ impl AppState {
                 println!("With arguments: {:?}", args);
 
                 let mut command_builder = if is_external && command.get(0).map(|s| s == "vol3").unwrap_or(false) && !cfg!(windows) {
+                    // Prepare Vol3 args: -f <image> <plugin>
+                    let mut args = vec!["-f".to_string(), input_path.clone()];
+                    if !custom_args.trim().is_empty() {
+                        args.push(custom_args.trim().to_string());
+                    }
                     let joined_args = args.join(" ");
                     let full_cmd = format!("vol3 {} ; echo Press Enter to close; read", joined_args);
                     let mut cmd = Command::new("x-terminal-emulator");

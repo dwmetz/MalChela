@@ -537,9 +537,16 @@ impl AppState {
                                         out.push_str(&line);
                                         out.push('\n');
                                     }
+                                    // Also log to vol3_command_debug.txt
+                                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                                        .create(true)
+                                        .append(true)
+                                        .open("vol3_command_debug.txt")
+                                    {
+                                        let _ = writeln!(f, "stdout: {}", line);
+                                    }
                                 }
-                                // After the stdout loop, save the report if requested
-                                // Only save the report if MALCHELA_GUI_MODE is NOT set to "1"
+                                // After stdout loop, save report if needed
                                 if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {
                                     let output_dir = workspace_root
                                         .join("saved_output")
@@ -558,7 +565,6 @@ impl AppState {
                                             .lines()
                                             .filter_map(|line| {
                                                 let mut trimmed = line.trim_start();
-                                                // Strip known tags
                                                 let tags = ["[reset]", "[bold]", "[green]", "[yellow]", "[cyan]", "[gray]", "[stone]", "[highlight]", "[red]", "[NOTE]"];
                                                 for tag in &tags {
                                                     if trimmed.starts_with(tag) {
@@ -581,7 +587,6 @@ impl AppState {
                                         out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
                                     }
                                 }
-                                // Set is_running to false after report is saved (for non-Python tools)
                                 is_running_clone.store(false, std::sync::atomic::Ordering::Relaxed);
                             });
 

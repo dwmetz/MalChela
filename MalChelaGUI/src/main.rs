@@ -510,6 +510,13 @@ impl AppState {
                     let full_cmd = format!("vol3 {} ; echo Press Enter to close; read", joined_args);
                     let mut cmd = Command::new("x-terminal-emulator");
                     cmd.arg("-e").arg("bash").arg("-c").arg(full_cmd);
+                    {
+                        let mut out = output.lock().unwrap();
+                        out.push_str("[green]🛠 Vol3 command launched in external terminal.\n");
+                        let mut lines = output_lines.lock().unwrap();
+                        lines.push("🛠 Vol3 command launched in external terminal.".to_string());
+                    }
+                    is_running.store(false, std::sync::atomic::Ordering::Relaxed);
                     cmd
                 } else {
                     let mut cmd = Command::new(&binary_path);
@@ -522,12 +529,23 @@ impl AppState {
 
                 match command_builder.spawn() {
                     Ok(mut child) => {
-                        if let Ok(mut f) = std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open("vol3_command_debug.txt")
-                        {
-                            let _ = writeln!(f, "Command spawned successfully: {:?}", child.id());
+                        // For terminal-driven Vol3, log after spawn as well
+                        if is_external && command.get(0).map(|s| s == "vol3").unwrap_or(false) && !cfg!(windows) {
+                            if let Ok(mut f) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("vol3_command_debug.txt")
+                            {
+                                let _ = writeln!(f, "Terminal-launched Vol3 command initiated successfully.");
+                            }
+                        } else {
+                            if let Ok(mut f) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("vol3_command_debug.txt")
+                            {
+                                let _ = writeln!(f, "Command spawned successfully: {:?}", child.id());
+                            }
                         }
 
                         if let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) {

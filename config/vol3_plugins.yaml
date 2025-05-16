@@ -1,0 +1,109 @@
+os_information:
+  - name: windows.info
+    label: OS Info
+    args: []
+
+process_information:
+  - name: windows.psscan
+    label: Process Scan
+    args: []
+
+  - name: windows.pstree
+    label: Process Tree
+    args: []
+
+  - name: windows.dumpfiles
+    label: Dump Process Files
+    args:
+      - name: --pid
+        type: int
+      - name: -o
+        type: path_out
+
+  - name: windows.memmap
+    label: Dump Memory Map
+    args:
+      - name: --pid
+        type: int
+      - name: --dump
+        type: flag
+      - name: -o
+        type: path_out
+
+  - name: windows.handles
+    label: Handles by PID
+    args:
+      - name: --pid
+        type: int
+
+  - name: windows.dlllist
+    label: DLL List
+    args:
+      - name: --pid
+        type: int
+
+  - name: windows.cmdline
+    label: Process Cmdline
+    args: []
+
+network_information:
+  - name: windows.netstat
+    label: Netstat
+    args: []
+
+registry:
+  - name: windows.registry.hivelist
+    label: Hive List
+    args: []
+
+  - name: windows.registry.printkey
+    label: Print Registry Key
+    args:
+      - name: --key
+        type: string
+
+files:
+  - name: windows.filescan
+    label: File Scan
+    args: []
+
+  - name: windows.dumpfiles
+    label: Dump File(s)
+    args:
+      - name: -o
+        type: path_out
+      - name: --virtaddr
+        type: string
+      - name: --physaddr
+        type: string
+
+misc:
+  - name: windows.malfind
+    label: Malfind
+    args: []
+
+  - name: windows.vadyarascan
+    label: YARA Scan (VAD)
+    args:
+      - name: --yara-rules
+        type: string
+      - name: --yara-file
+        type: path
+
+  - name: yarascan.yarascan
+    label: YARA Scan (Generic)
+    args:
+      - name: --yara-file
+        type: path
+
+# linux_plugins:
+#   - name: linux.bash
+#     label: Bash History (Coming Soon)
+#     args: []
+
+# mac_plugins:
+#   - name: mac.pslist
+#     label: Mac Process List (Coming Soon)
+#     args: []
+
+# Want to speed it up? Submit a Pull Request and help expand support!

@@ -226,15 +226,6 @@ tools:
   category: "File Analysis"
   exec_type: script
 
-- name: Volatility 2
-  description: "Memory analysis using Volatility 2"
-  command: ["vol.py"]
-  input_type: "file"
-  file_position: "first"
-  category: "Memory Forensics"
-  gui_mode_args: []
-  exec_type: script
-
 - name: Volatility 3
   description: "Memory analysis using Volatility 3"
   command: ["vol3"]

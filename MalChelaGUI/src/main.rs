@@ -1,5 +1,7 @@
 mod tshark_panel;
 use tshark_panel::TsharkPanel;
+mod vol3_panel;
+use vol3_panel::{Vol3Panel, Vol3Plugin};
 use eframe::{
     egui::{self, CentralPanel, Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Visuals},
     App,
@@ -84,6 +86,8 @@ struct AppState {
     show_tools_modal: bool,
     tools_restore_success: bool,
     restore_status_message: String,
+    vol3_panel: Vol3Panel,
+    vol3_plugins: BTreeMap<String, Vec<Vol3Plugin>>,
 }
 
 impl AppState {
@@ -461,6 +465,16 @@ impl AppState {
                     args.extend(parsed_custom_args);
                 }
 
+                // Write vol3_command_debug.txt after args are finalized
+                let _ = std::fs::write(
+                    "vol3_command_debug.txt",
+                    format!(
+                        "Binary path: {}\nArgs: {:?}\n",
+                        binary_path.display(),
+                        args
+                    ),
+                );
+
                 if save_report.0 {
                     std::env::set_var("MALCHELA_SAVE_OUTPUT", "1");
                 } else {
@@ -813,6 +827,7 @@ impl App for AppState {
                                         self.selected_tool = Some(tool.clone());
                                         self.input_path.clear();
                                         self.custom_args.clear();
+                                        self.show_home = false;
                                     }
                                 }
                             }
@@ -896,6 +911,36 @@ impl App for AppState {
             if let Some(tool) = &self.selected_tool {
                 if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
                     self.tshark_panel.ui(ui);
+                    return;
+                } else if tool.command.get(0).map(|s| s == "vol3").unwrap_or(false) {
+                    // Clear console output when selecting Vol3
+                    self.command_output.lock().unwrap().clear();
+                    self.output_lines.lock().unwrap().clear();
+
+                    self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
+
+                    if ui.button("Run").clicked() {
+                        // Debug log for Vol3 Run button click
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open("vol3_run_debug.log")
+                        {
+                            let _ = writeln!(f, "Run button clicked at: {}", chrono::Utc::now());
+                        }
+                        self.run_tool(ctx);
+                    }
+
+                    ui.separator();
+                    egui::ScrollArea::vertical()
+                        .stick_to_bottom(true)
+                        .show(ui, |ui| {
+                            let output_lines = self.output_lines.lock().unwrap();
+                            for line in output_lines.iter() {
+                                ui.label(line);
+                            }
+                        });
+
                     return;
                 }
                 ui.label(
@@ -1523,6 +1568,12 @@ fn main() {
     for k in categorized_tools.keys() {
         collapsed_categories.insert(k.clone(), false);
     }
+    let vol3_plugins_path = workspace_root.join("config/vol3_plugins.yaml");
+    let vol3_plugins: BTreeMap<String, Vec<Vol3Plugin>> = std::fs::read_to_string(&vol3_plugins_path)
+    .ok()
+    .and_then(|contents| serde_yaml::from_str(&contents).ok())
+    .unwrap_or_default();
+
     let app = AppState {
         categorized_tools,
         selected_tool: None,
@@ -1553,6 +1604,8 @@ fn main() {
         show_tools_modal: false,
         tools_restore_success: false,
         restore_status_message: String::new(),
+        vol3_panel: Vol3Panel::default(),
+        vol3_plugins,
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));

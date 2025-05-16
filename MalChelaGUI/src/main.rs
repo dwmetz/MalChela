@@ -962,6 +962,7 @@ impl App for AppState {
                     }
 
                     ui.separator();
+                    ui.heading(RichText::new("Console Output").color(LIGHT_CYAN));
                     egui::ScrollArea::vertical()
                         .stick_to_bottom(true)
                         .show(ui, |ui| {

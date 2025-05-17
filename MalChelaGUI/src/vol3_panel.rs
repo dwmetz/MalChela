@@ -97,8 +97,9 @@ impl Vol3Panel {
                 .open(&mut self.show_plugin_help)
                 .resizable(true)
                 .scroll2([true, true])
+                .movable(true)
                 .show(ui.ctx(), |ui| {
-                    ui.label(RichText::new("📘 Volatility Plugin Reference").color(Color32::from_rgb(255, 94, 0)).strong());
+                    ui.heading(RichText::new("📘 Volatility Plugin Reference").color(Color32::from_rgb(255, 94, 0)).strong());
                     ui.separator();
                     ui.horizontal(|ui| {
                         ui.label("Search:");

@@ -162,6 +162,19 @@ impl Vol3Panel {
                                     }
                                 });
                             }
+                            break; // stop after exact match
+                        }
+                    }
+                }
+            }
+        }
+
+        // Move custom_args building here to ensure it always updates
+        if !self.use_custom {
+            if let Some(plugin_name) = &self.selected_plugin {
+                for (_category, items) in plugins {
+                    for plugin in items {
+                        if &plugin.name == plugin_name {
                             let mut args = Vec::new();
                             for arg in &plugin.args {
                                 if let Some(val) = self.arg_values.get(&arg.name) {
@@ -171,7 +184,7 @@ impl Vol3Panel {
                                 }
                             }
                             *custom_args = args.join(" ");
-                            break; // stop after exact match
+                            break;
                         }
                     }
                 }
@@ -202,11 +215,6 @@ impl Vol3Panel {
             }
         });
 
-        *custom_args = if self.use_custom {
-            self.custom_plugin_name.clone()
-        } else {
-            self.selected_plugin.clone().unwrap_or_default()
-        };
 
 
         // Removed scroll area and output rendering; handled in main.rs.

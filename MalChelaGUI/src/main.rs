@@ -122,6 +122,8 @@ impl AppState {
 
     fn run_tool(&mut self, ctx: &eframe::egui::Context) {
         if let Some(tool) = &self.selected_tool {
+            // Use the actual selected plugin name from the Vol3Panel for Vol3
+            let plugin_name = self.vol3_panel.selected_plugin.clone().unwrap_or_default();
             ctx.request_repaint();
 
             // Reset output state when running a new tool
@@ -167,6 +169,7 @@ impl AppState {
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             if is_external && command.get(0).map(|s| s.contains("vol3")).unwrap_or(false) && !cfg!(windows) {
                 let mut args = vec!["-f".to_string(), input_path.clone()];
+                args.push(plugin_name.clone()); // Insert the plugin name (e.g., windows.vadyarascan)
                 if !custom_args.trim().is_empty() {
                     args.push(custom_args.trim().to_string());
                 }

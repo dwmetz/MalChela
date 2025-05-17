@@ -113,7 +113,7 @@ impl Vol3Panel {
                             ui.label(format!("• {} — {}", plugin.name, plugin.label));
                             if !plugin.args.is_empty() {
                                 for arg in &plugin.args {
-                                    ui.label(format!("    ↳ {} ({})", arg.name, arg.arg_type));
+                                    ui.label(format!("    -> {} ({})", arg.name, arg.arg_type));
                                 }
                             }
                         }

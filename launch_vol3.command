@@ -1,4 +1,4 @@
 #!/bin/bash
-vol3 -f /Users/dmetz/Desktop/Dumps/DESKTOP-9FOA7QG-20230802-123820.dmp windows.malfind
+vol3 -f /Users/dmetz/Desktop/Dumps/DESKTOP-9FOA7QG-20230802-123820.dmp windows.info
 echo
-read -p "Press Enter to close..."
+echo Press Enter to close; read

@@ -164,7 +164,7 @@ impl AppState {
             let input_path = self.input_path.clone();
             let custom_args = self.custom_args.clone();
             println!("Matched command path: {:?}", command.get(0));
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             if is_external && command.get(0).map(|s| s.contains("vol3")).unwrap_or(false) && !cfg!(windows) {
                 let mut args = vec!["-f".to_string(), input_path.clone()];
                 if !custom_args.trim().is_empty() {

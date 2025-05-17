@@ -92,12 +92,14 @@ impl Vol3Panel {
         // Plugin help modal using egui::Window for interactive modal behavior
         if self.show_plugin_help {
             use eframe::egui::Window;
-            Window::new("📘 Volatility Plugin Reference")
-                .title_bar(true)
+            Window::new("")
+                .title_bar(false)
                 .open(&mut self.show_plugin_help)
                 .resizable(true)
                 .scroll2([true, true])
                 .show(ui.ctx(), |ui| {
+                    ui.label(RichText::new("📘 Volatility Plugin Reference").color(Color32::from_rgb(255, 94, 0)).strong());
+                    ui.separator();
                     ui.horizontal(|ui| {
                         ui.label("Search:");
                         ui.text_edit_singleline(&mut self.plugin_search);
@@ -113,7 +115,7 @@ impl Vol3Panel {
                             ui.label(format!("• {} — {}", plugin.name, plugin.label));
                             if !plugin.args.is_empty() {
                                 for arg in &plugin.args {
-                                    ui.label(format!("    -> {} ({})", arg.name, arg.arg_type));
+                                    ui.label(format!("      {} ({})", arg.name, arg.arg_type));
                                 }
                             }
                         }

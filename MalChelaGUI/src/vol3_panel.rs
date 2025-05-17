@@ -162,6 +162,15 @@ impl Vol3Panel {
                                     }
                                 });
                             }
+                            let mut args = Vec::new();
+                            for arg in &plugin.args {
+                                if let Some(val) = self.arg_values.get(&arg.name) {
+                                    if !val.trim().is_empty() {
+                                        args.push(format!("{} {}", arg.name, val.trim()));
+                                    }
+                                }
+                            }
+                            *custom_args = args.join(" ");
                             break; // stop after exact match
                         }
                     }

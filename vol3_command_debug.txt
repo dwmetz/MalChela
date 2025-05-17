@@ -1,6 +1,4 @@
-Checking for binary: "vol3"
-Binary 'vol3' not found in PATH
-Checking for binary: "vol3"
-Binary 'vol3' not found in PATH
-Checking for binary: "vol3"
-Binary 'vol3' not found in PATH
+Binary path: /Users/dmetz/.local/bin/vol3
+Args: ["/Users/dmetz/Desktop/Dumps/DESKTOP-9FOA7QG-20230802-123820.dmp", "windows.psscan"]
+Command spawned successfully: 13039
+stdout: Volatility 3 Framework 2.11.0

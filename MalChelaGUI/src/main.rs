@@ -163,16 +163,43 @@ impl AppState {
             let command = tool.command.clone();
             let input_path = self.input_path.clone();
             let custom_args = self.custom_args.clone();
-            if is_external && command.get(0).map(|s| s == "vol3").unwrap_or(false) && !cfg!(windows) {
+            println!("Matched command path: {:?}", command.get(0));
+            #[cfg(target_os = "macos")]
+            if is_external && command.get(0).map(|s| s.contains("vol3")).unwrap_or(false) && !cfg!(windows) {
                 let mut args = vec!["-f".to_string(), input_path.clone()];
                 if !custom_args.trim().is_empty() {
                     args.push(custom_args.trim().to_string());
                 }
                 let joined_args = args.join(" ");
-                let full_cmd = format!("vol3 {} ; echo Press Enter to close; read", joined_args);
-                let mut cmd = Command::new("x-terminal-emulator");
-                cmd.arg("-e").arg("bash").arg("-c").arg(full_cmd);
-                let _ = cmd.spawn(); // run immediately, outside thread
+                // Use which::which to find the full path to vol3
+                let vol3_path = which::which("vol3").unwrap_or_else(|_| std::path::PathBuf::from("vol3"));
+                let full_cmd = format!("{} {}", vol3_path.display(), joined_args);
+
+                {
+                    let script_path = self.workspace_root.join("launch_vol3.command");
+                    println!("📁 Writing Vol3 launch script to: {}", script_path.display());
+
+                    match std::fs::write(
+                        &script_path,
+                        format!(
+                            "#!/bin/bash\n{}\necho\nread -p \"Press Enter to close...\"",
+                            full_cmd
+                        ),
+                    ) {
+                        Ok(_) => println!("✅ Script written successfully."),
+                        Err(e) => println!("❌ Failed to write script: {}", e),
+                    }
+
+                    match std::process::Command::new("chmod").arg("+x").arg(&script_path).status() {
+                        Ok(status) => println!("🔐 chmod status: {}", status),
+                        Err(e) => println!("❌ chmod error: {}", e),
+                    }
+
+                    match std::process::Command::new("open").arg("-a").arg("Terminal").arg(&script_path).spawn() {
+                        Ok(_) => println!("🚀 Terminal launch attempted."),
+                        Err(e) => println!("❌ Failed to open Terminal: {}", e),
+                    }
+                }
 
                 {
                     let mut out = self.command_output.lock().unwrap();
@@ -993,7 +1020,7 @@ impl App for AppState {
                 if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
                     self.tshark_panel.ui(ui);
                     return;
-                } else if tool.command.get(0).map(|s| s == "vol3").unwrap_or(false) {
+                } else if tool.command.get(0).map(|s| s.contains("vol3")).unwrap_or(false) {
                     // Clear console output when selecting Vol3
                     self.command_output.lock().unwrap().clear();
                     self.output_lines.lock().unwrap().clear();

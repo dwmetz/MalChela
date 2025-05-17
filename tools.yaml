@@ -139,7 +139,7 @@ tools:
 
 - name: Volatility 3
   description: "Memory analysis using Volatility 3"
-  command: ["vol3"]
+  command: ["/Users/dmetz/.local/bin/vol3"]
   input_type: "file"
   file_position: "first"
   category: "Memory Forensics"

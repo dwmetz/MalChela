@@ -146,6 +146,19 @@ impl Vol3Panel {
                                 ui.horizontal(|ui| {
                                     ui.label(format!("{}:", arg.name));
                                     let val = self.arg_values.entry(arg.name.clone()).or_default();
+                                    if arg.arg_type == "path" {
+                                        if ui.button("Browse").clicked() {
+                                            if let Some(path) = FileDialog::new().pick_file() {
+                                                *val = path.display().to_string();
+                                            }
+                                        }
+                                    } else if arg.arg_type == "folder" {
+                                        if ui.button("Browse").clicked() {
+                                            if let Some(path) = FileDialog::new().pick_folder() {
+                                                *val = path.display().to_string();
+                                            }
+                                        }
+                                    }
                                     ui.text_edit_singleline(val);
                                     if !val.trim().is_empty() {
                                         custom_args.push(' ');
@@ -153,6 +166,7 @@ impl Vol3Panel {
                                     }
                                 });
                             }
+                            break; // stop after exact match
                         }
                     }
                 }

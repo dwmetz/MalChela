@@ -36,7 +36,7 @@ impl Vol3Panel {
         plugins: &BTreeMap<String, Vec<Vol3Plugin>>,
         input_path: &mut String,
         custom_args: &mut String,
-        save_report: &mut (bool, String),
+        _save_report: &mut (bool, String),
     ) {
         ui.label(RichText::new("Selected Tool: Volatility 3 (Input: file)").color(Color32::from_rgb(0, 255, 255)).strong());
         let preview_cmd = format!(
@@ -49,7 +49,7 @@ impl Vol3Panel {
             }
         );
         ui.label(RichText::new(format!("🛠 Command line: {}", preview_cmd)).color(Color32::from_rgb(0, 255, 0)));
-        ui.label(RichText::new("(Command will launch in a new terminal)").color(Color32::GRAY));
+        // ui.label(RichText::new("(Command will launch in a new terminal)").color(Color32::GRAY));
 
 
         let mut all_plugins = Vec::new();
@@ -146,19 +146,35 @@ impl Vol3Panel {
                                 ui.horizontal(|ui| {
                                     ui.label(format!("{}:", arg.name));
                                     let val = self.arg_values.entry(arg.name.clone()).or_default();
-                                    ui.text_edit_singleline(val);
                                     if arg.arg_type == "path" {
+                                        ui.text_edit_singleline(val);
                                         if ui.button("Browse").clicked() {
                                             if let Some(path) = FileDialog::new().pick_file() {
                                                 *val = path.display().to_string();
                                             }
                                         }
                                     } else if arg.arg_type == "folder" {
+                                        ui.text_edit_singleline(val);
                                         if ui.button("Browse").clicked() {
                                             if let Some(path) = FileDialog::new().pick_folder() {
                                                 *val = path.display().to_string();
                                             }
                                         }
+                                    } else if arg.arg_type == "path_out" {
+                                        ui.text_edit_singleline(val);
+                                        if ui.button("Browse").clicked() {
+                                            if let Some(path) = FileDialog::new().pick_folder() {
+                                                *val = path.display().to_string();
+                                            }
+                                        }
+                                    } else if arg.arg_type == "flag" {
+                                        let checked = self.arg_values.entry(arg.name.clone()).or_insert("false".to_string());
+                                        let mut is_checked = checked == "true";
+                                        if ui.checkbox(&mut is_checked, "").changed() {
+                                            *checked = is_checked.to_string();
+                                        }
+                                    } else {
+                                        ui.text_edit_singleline(val);
                                     }
                                 });
                             }
@@ -178,7 +194,11 @@ impl Vol3Panel {
                             let mut args = Vec::new();
                             for arg in &plugin.args {
                                 if let Some(val) = self.arg_values.get(&arg.name) {
-                                    if !val.trim().is_empty() {
+                                    if arg.arg_type == "flag" {
+                                        if val.trim() == "true" {
+                                            args.push(arg.name.clone());
+                                        }
+                                    } else if !val.trim().is_empty() {
                                         args.push(format!("{} {}", arg.name, val.trim()));
                                     }
                                 }
@@ -201,19 +221,6 @@ impl Vol3Panel {
             }
         });
 
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut save_report.0, "Save Report");
-            if save_report.0 {
-                ui.label("Format:");
-                ComboBox::from_id_source("vol3_save_format")
-                    .selected_text(&save_report.1)
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut save_report.1, ".txt".to_string(), "txt");
-                        ui.selectable_value(&mut save_report.1, ".json".to_string(), "json");
-                        ui.selectable_value(&mut save_report.1, ".md".to_string(), "md");
-                    });
-            }
-        });
 
 
 

@@ -218,14 +218,6 @@ impl AppState {
                     }
                 }
 
-                {
-                    let mut out = self.command_output.lock().unwrap();
-                    out.clear();
-                    out.push_str("[green]🛠 Vol3 command launched in external terminal.\n");
-                    let mut lines = self.output_lines.lock().unwrap();
-                    lines.clear();
-                    lines.push("🛠 Vol3 command launched in external terminal.".to_string());
-                }
                 self.is_running.store(false, std::sync::atomic::Ordering::Relaxed);
                 return;
             }
@@ -1045,18 +1037,20 @@ impl App for AppState {
                     self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
                     // Removed: Save Report checkbox and format selection for Vol3.
 
-                    if ui.button("Run").clicked() {
-                        // Debug log for Vol3 Run button click
-                        if let Ok(mut f) = std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open("vol3_run_debug.log")
-                        {
-                            let _ = writeln!(f, "Run button clicked at: {}", chrono::Utc::now());
+                    ui.horizontal(|ui| {
+                        if ui.button("Run").clicked() {
+                            // Debug log for Vol3 Run button click
+                            if let Ok(mut f) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("vol3_run_debug.log")
+                            {
+                                let _ = writeln!(f, "Run button clicked at: {}", chrono::Utc::now());
+                            }
+                            self.run_tool(ctx);
                         }
-                        self.run_tool(ctx);
-                    }
-                    ui.label(RichText::new("(Vol3 command will launch in a separate terminal)").color(Color32::GRAY));
+                        ui.label(RichText::new("(Vol3 command will launch in a separate terminal)").color(Color32::GRAY));
+                    });
 
                     ui.separator();
                     ui.heading(RichText::new("Console Output").color(LIGHT_CYAN));

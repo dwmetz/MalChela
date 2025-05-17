@@ -21,8 +21,6 @@ process_information:
         type: string
       - name: --physaddr
         type: string
-      - name: -o
-        type: path_out
 
   - name: windows.memmap
     label: Dump Memory Map
@@ -31,8 +29,6 @@ process_information:
         type: int
       - name: --dump
         type: flag
-      - name: -o
-        type: path_out
 
   - name: windows.handles
     label: Handles by PID
@@ -83,7 +79,7 @@ misc:
       - name: --yara-file
         type: path
 
-  - name: yarascan.yarascan
+  - name: yarascan.YaraScan
     label: YARA Scan (Generic)
     args:
       - name: --yara-file

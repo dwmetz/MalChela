@@ -91,12 +91,12 @@ impl Vol3Panel {
         // Plugin help modal using egui::Window for interactive modal behavior
         if self.show_plugin_help {
             use eframe::egui::Window;
-            Window::new("📘 Volatility Plugin Reference")
+            Window::new("Volatility Plugin Reference")
                 .open(&mut self.show_plugin_help)
                 .resizable(true)
                 .scroll2([true, true])
                 .show(ui.ctx(), |ui| {
-                    ui.label(RichText::new("🔎 Volatility 3 Plugin Help").strong());
+                    ui.label(RichText::new("📘 Volatility Plugin Reference").color(Color32::from_rgb(255, 94, 0)).strong());
                     ui.separator();
                     for (_category, items) in plugins {
                         for plugin in items {

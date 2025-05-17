@@ -1012,6 +1012,7 @@ impl App for AppState {
                         }
                         self.run_tool(ctx);
                     }
+                    ui.label(RichText::new("(Vol3 command will launch in a separate terminal)").color(Color32::GRAY));
 
                     ui.separator();
                     ui.heading(RichText::new("Console Output").color(LIGHT_CYAN));

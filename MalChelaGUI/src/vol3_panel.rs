@@ -143,20 +143,15 @@ impl Vol3Panel {
                     for plugin in items {
                         if &plugin.name == plugin_name {
                             for arg in &plugin.args {
-                                match arg.arg_type.as_str() {
-                                    "text" => {
-                                        ui.horizontal(|ui| {
-                                            ui.label(format!("{}:", arg.name));
-                                            let val = self.arg_values.entry(arg.name.clone()).or_default();
-                                            ui.text_edit_singleline(val);
-                                            if !val.trim().is_empty() {
-                                                custom_args.push(' ');
-                                                custom_args.push_str(&format!("--{} {}", arg.name, val));
-                                            }
-                                        });
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("{}:", arg.name));
+                                    let val = self.arg_values.entry(arg.name.clone()).or_default();
+                                    ui.text_edit_singleline(val);
+                                    if !val.trim().is_empty() {
+                                        custom_args.push(' ');
+                                        custom_args.push_str(&format!("--{} {}", arg.name, val));
                                     }
-                                    _ => {}
-                                }
+                                });
                             }
                         }
                     }

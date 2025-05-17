@@ -195,7 +195,21 @@ impl AppState {
                         Err(e) => println!("❌ chmod error: {}", e),
                     }
 
-                    match std::process::Command::new("open").arg("-a").arg("Terminal").arg(&script_path).spawn() {
+                    // Platform-specific terminal launch logic
+                    #[cfg(target_os = "macos")]
+                    let terminal_launch = std::process::Command::new("open")
+                        .arg("-a")
+                        .arg("Terminal")
+                        .arg(&script_path)
+                        .spawn();
+
+                    #[cfg(target_os = "linux")]
+                    let terminal_launch = std::process::Command::new("x-terminal-emulator")
+                        .arg("-e")
+                        .arg(&script_path)
+                        .spawn();
+
+                    match terminal_launch {
                         Ok(_) => println!("🚀 Terminal launch attempted."),
                         Err(e) => println!("❌ Failed to open Terminal: {}", e),
                     }

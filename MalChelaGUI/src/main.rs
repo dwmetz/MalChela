@@ -182,7 +182,7 @@ impl AppState {
                     match std::fs::write(
                         &script_path,
                         format!(
-                            "#!/bin/bash\n{}\necho\nread -p \"Press Enter to close...\"",
+                            "#!/bin/bash\n{}\necho\necho Press Enter to close; read",
                             full_cmd
                         ),
                     ) {

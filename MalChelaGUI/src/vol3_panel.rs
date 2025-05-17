@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use eframe::egui::{Ui, RichText, ComboBox, Color32};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use rfd::FileDialog;
 
 #[allow(dead_code)]
@@ -26,6 +26,7 @@ pub struct Vol3Panel {
     pub use_custom: bool,
     pub show_plugin_help: bool,
     pub plugin_search: String,
+    pub arg_values: HashMap<String, String>,
 }
 
 impl Vol3Panel {
@@ -93,7 +94,7 @@ impl Vol3Panel {
         if self.show_plugin_help {
             use eframe::egui::Window;
             Window::new(
-                RichText::new("📘 Volatility Plugin Reference")
+                RichText::new("Volatility Plugin Reference")
                     .color(Color32::from_rgb(250, 109, 28))
                     .strong()
             )
@@ -146,11 +147,11 @@ impl Vol3Panel {
                                     "text" => {
                                         ui.horizontal(|ui| {
                                             ui.label(format!("{}:", arg.name));
-                                            let mut val = String::new();
-                                            ui.text_edit_singleline(&mut val);
+                                            let val = self.arg_values.entry(arg.name.clone()).or_default();
+                                            ui.text_edit_singleline(val);
                                             if !val.trim().is_empty() {
                                                 custom_args.push(' ');
-                                                custom_args.push_str(&format!("{} {}", arg.name, val));
+                                                custom_args.push_str(&format!("--{} {}", arg.name, val));
                                             }
                                         });
                                     }

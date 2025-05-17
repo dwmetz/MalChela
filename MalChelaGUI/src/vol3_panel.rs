@@ -94,12 +94,17 @@ impl Vol3Panel {
             use eframe::egui::Window;
             Window::new("")
                 .title_bar(false)
-                .open(&mut self.show_plugin_help)
                 .resizable(true)
                 .scroll2([true, true])
                 .movable(true)
+                .open(&mut self.show_plugin_help)
                 .show(ui.ctx(), |ui| {
-                    ui.heading(RichText::new("📘 Volatility Plugin Reference").color(Color32::from_rgb(255, 94, 0)).strong());
+                    ui.heading(
+                        RichText::new("📘 Volatility Plugin Reference")
+                            .color(Color32::from_rgb(255, 94, 0))
+                            .strong()
+                            .size(28.0)
+                    );
                     ui.separator();
                     ui.horizontal(|ui| {
                         ui.label("Search:");

@@ -146,6 +146,7 @@ impl Vol3Panel {
                                 ui.horizontal(|ui| {
                                     ui.label(format!("{}:", arg.name));
                                     let val = self.arg_values.entry(arg.name.clone()).or_default();
+                                    ui.text_edit_singleline(val);
                                     if arg.arg_type == "path" {
                                         if ui.button("Browse").clicked() {
                                             if let Some(path) = FileDialog::new().pick_file() {
@@ -158,11 +159,6 @@ impl Vol3Panel {
                                                 *val = path.display().to_string();
                                             }
                                         }
-                                    }
-                                    ui.text_edit_singleline(val);
-                                    if !val.trim().is_empty() {
-                                        custom_args.push(' ');
-                                        custom_args.push_str(&format!("--{} {}", arg.name, val));
                                     }
                                 });
                             }

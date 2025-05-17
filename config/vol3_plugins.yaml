@@ -13,10 +13,14 @@ process_information:
     args: []
 
   - name: windows.dumpfiles
-    label: Dump Process Files
+    label: Dump File(s)
     args:
       - name: --pid
         type: int
+      - name: --virtaddr
+        type: string
+      - name: --physaddr
+        type: string
       - name: -o
         type: path_out
 
@@ -67,15 +71,6 @@ files:
     label: File Scan
     args: []
 
-  - name: windows.dumpfiles
-    label: Dump File(s)
-    args:
-      - name: -o
-        type: path_out
-      - name: --virtaddr
-        type: string
-      - name: --physaddr
-        type: string
 
 misc:
   - name: windows.malfind
@@ -85,8 +80,6 @@ misc:
   - name: windows.vadyarascan
     label: YARA Scan (VAD)
     args:
-      - name: --yara-rules
-        type: string
       - name: --yara-file
         type: path
 

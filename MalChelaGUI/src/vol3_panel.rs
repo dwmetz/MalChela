@@ -25,6 +25,7 @@ pub struct Vol3Panel {
     pub custom_plugin_name: String,
     pub use_custom: bool,
     pub show_plugin_help: bool,
+    pub plugin_search: String,
 }
 
 impl Vol3Panel {
@@ -91,19 +92,27 @@ impl Vol3Panel {
         // Plugin help modal using egui::Window for interactive modal behavior
         if self.show_plugin_help {
             use eframe::egui::Window;
-            Window::new("Volatility Plugin Reference")
+            Window::new(RichText::new("📘 Volatility Plugin Reference").color(Color32::from_rgb(255, 94, 0)))
                 .open(&mut self.show_plugin_help)
                 .resizable(true)
                 .scroll2([true, true])
                 .show(ui.ctx(), |ui| {
-                    ui.label(RichText::new("📘 Volatility Plugin Reference").color(Color32::from_rgb(255, 94, 0)).strong());
+                    ui.horizontal(|ui| {
+                        ui.label("Search:");
+                        ui.text_edit_singleline(&mut self.plugin_search);
+                    });
                     ui.separator();
                     for (_category, items) in plugins {
                         for plugin in items {
+                            if !self.plugin_search.is_empty() &&
+                               !plugin.name.contains(&self.plugin_search) &&
+                               !plugin.label.contains(&self.plugin_search) {
+                                continue;
+                            }
                             ui.label(format!("• {} — {}", plugin.name, plugin.label));
                             if !plugin.args.is_empty() {
                                 for arg in &plugin.args {
-                                    ui.label(format!("    ↳ {} ({})", arg.name, arg.arg_type));
+                                    ui.label(format!("    ☐ {} ({})", arg.name, arg.arg_type));
                                 }
                             }
                         }

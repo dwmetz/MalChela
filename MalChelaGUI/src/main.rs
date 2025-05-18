@@ -550,6 +550,20 @@ impl AppState {
 
                 // (removed println! for binary_path and args)
 
+                // Log the full command line to vol3_command_debug.txt before launching external tool
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("vol3_command_debug.txt")
+                {
+                    let cmd_preview = format!(
+                        "FULL CMD: {} {}",
+                        binary_path.display(),
+                        args.join(" ")
+                    );
+                    let _ = writeln!(f, "{}", cmd_preview);
+                }
+
                 let mut command_builder = {
                     let mut cmd = Command::new(&binary_path);
                     cmd.args(&args);

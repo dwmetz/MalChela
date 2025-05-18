@@ -7,3 +7,13 @@
 .md-typeset a {
   color: #00cfc1 !important;
 }
+
+/* Cyan nav links (top nav and sidebar) */
+.md-nav__link {
+  color: #00cfc1 !important;
+}
+
+/* Cyan active nav link */
+.md-nav__link--active {
+  color: #00cfc1 !important;
+}

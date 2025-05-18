@@ -1000,6 +1000,18 @@ impl App for AppState {
                     self.command_output.lock().unwrap().clear();
                     self.output_lines.lock().unwrap().clear();
 
+                    // --- PATCH: Ensure selected plugin is first in custom_args for Vol/Vol3 ---
+                    // This logic ensures the selected plugin appears at the beginning of custom_args.
+                    if let Some(plugin_name) = &self.vol3_panel.selected_plugin {
+                        if !plugin_name.is_empty() {
+                            let mut tokens: Vec<String> = self.custom_args.split_whitespace().map(str::to_string).collect();
+                            if tokens.first().map(|s| s != plugin_name).unwrap_or(true) {
+                                tokens.insert(0, plugin_name.clone());
+                                self.custom_args = tokens.join(" ");
+                            }
+                        }
+                    }
+
                     self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
                     // Removed: Save Report checkbox and format selection for Vol3.
 

@@ -173,22 +173,22 @@ impl AppState {
             }
             std::env::set_var("MALCHELA_GUI_MODE", "1");
 
-            // Special case: Launch Vol3 in external terminal (outside of thread)
+            // Special case: Launch Vol/Vol3 in external terminal (outside of thread)
             let is_external = tool.exec_type.as_deref() != Some("cargo");
             let command = tool.command.clone();
             let input_path = self.input_path.clone();
             let custom_args = self.custom_args.clone();
             #[cfg(any(target_os = "macos", target_os = "linux"))]
-            if is_external && command.get(0).map(|s| s.contains("vol3")).unwrap_or(false) && !cfg!(windows) {
+            if is_external && command.get(0).map(|s| s.contains("vol")).unwrap_or(false) && !cfg!(windows) {
                 let mut args = vec!["-f".to_string(), input_path.clone()];
                 args.push(plugin_name.clone()); // Insert the plugin name (e.g., windows.vadyarascan)
                 if !custom_args.trim().is_empty() {
                     args.push(custom_args.trim().to_string());
                 }
                 let joined_args = args.join(" ");
-                // Use which::which to find the full path to vol3
-                let vol3_path = which::which("vol3").unwrap_or_else(|_| std::path::PathBuf::from("vol3"));
-                let full_cmd = format!("{} {}", vol3_path.display(), joined_args);
+                // Use which::which to find the full path to vol or vol3
+                let vol_path = which::which(&command[0]).unwrap_or_else(|_| std::path::PathBuf::from(&command[0]));
+                let full_cmd = format!("{} {}", vol_path.display(), joined_args);
 
                 // Log the full command line to vol3_command_debug.txt
                 if let Ok(mut f) = std::fs::OpenOptions::new()

@@ -190,15 +190,6 @@ impl AppState {
                 let vol_path = which::which(&command[0]).unwrap_or_else(|_| std::path::PathBuf::from(&command[0]));
                 let full_cmd = format!("{} {}", vol_path.display(), joined_args);
 
-                // Log the full command line to vol3_command_debug.txt
-                if let Ok(mut f) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("vol3_command_debug.txt")
-                {
-                    let _ = writeln!(f, "TERMINAL CMD: {}", full_cmd);
-                }
-
                 {
                     let script_path = self.workspace_root.join("launch_vol3.command");
                     let _ = std::fs::write(
@@ -425,26 +416,12 @@ impl AppState {
                 command[0].clone()
             };
 
-                // Debug: Log binary check
-                if let Ok(mut f) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("vol3_command_debug.txt")
-                {
-                    let _ = writeln!(f, "Checking for binary: {:?}", &command[0]);
-                }
+                // Debug: Log binary check (removed)
 
                 let binary_path = if is_external {
                     match which::which(&command[0]) {
                         Ok(path) => path,
                         Err(_) => {
-                            if let Ok(mut f) = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("vol3_command_debug.txt")
-                            {
-                                let _ = writeln!(f, "Binary '{}' not found in PATH", command[0]);
-                            }
                             let mut out = output.lock().unwrap();
                             let mut lines = output_lines.lock().unwrap();
                             let msg = format!("[red]Binary '{}' not found in PATH\n", command[0]);
@@ -559,19 +536,7 @@ impl AppState {
 
                 // (removed println! for binary_path and args)
 
-                // Log the full command line to vol3_command_debug.txt before launching external tool
-                if let Ok(mut f) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("vol3_command_debug.txt")
-                {
-                    let cmd_preview = format!(
-                        "FULL CMD: {} {}",
-                        binary_path.display(),
-                        args.join(" ")
-                    );
-                    let _ = writeln!(f, "{}", cmd_preview);
-                }
+                // Log the full command line to vol3_command_debug.txt before launching external tool (removed)
 
                 let mut command_builder = {
                     let mut cmd = Command::new(&binary_path);
@@ -610,13 +575,6 @@ impl AppState {
                                             {
                                                 let mut out = out_clone_stdout.lock().unwrap();
                                                 out.push_str(&buffer);
-                                            }
-                                            if let Ok(mut f) = std::fs::OpenOptions::new()
-                                                .create(true)
-                                                .append(true)
-                                                .open("vol3_command_debug.txt")
-                                            {
-                                                let _ = writeln!(f, "stdout: {}", buffer.trim_end());
                                             }
                                             buffer.clear();
                                         }
@@ -687,14 +645,6 @@ impl AppState {
                         let _ = child.wait();
                     }
                     Err(e) => {
-                        if let Ok(mut f) = std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open("vol3_command_debug.txt")
-                        {
-                            let _ = writeln!(f, "Command spawn failed: {}", e);
-                        }
-
                         let mut out = output.lock().unwrap();
                         out.push_str(&format!("[red]Command spawn failed: {}\n", e));
                         return;
@@ -1034,14 +984,6 @@ impl App for AppState {
                             }
                         }
 
-                        // Log the final custom_args to debug file
-                        if let Ok(mut f) = std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open("vol3_command_debug.txt")
-                        {
-                            let _ = writeln!(f, "DEBUG - Vol3 custom_args: {}", self.custom_args);
-                        }
                     }
 
                     self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
@@ -1716,6 +1658,8 @@ impl App for AppState {
                                 let backup_path = config_dir.join(format!("tools_backup_{}.yaml", timestamp));
                                 if let Ok(contents) = fs::read(&config_path) {
                                     let _ = fs::write(&backup_path, contents);
+                                    self.restore_status_message = format!("✅ Backup saved as: {}", backup_path.display());
+                                    self.tools_restore_success = true;
                                 }
                             }
                             if ui.add_sized([button_width, 30.0], egui::Button::new("Restore"))

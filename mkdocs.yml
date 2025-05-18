@@ -1,0 +1,19 @@
+site_name: MalChela Documentation
+repo_url: https://github.com/dwmetz/MalChela
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: grey
+    accent: cyan
+  features:
+    - navigation.tabs
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+extra_css:
+  - stylesheets/colors.css
+nav:
+  - Home: index.md
+  - User Guide: user-guide.md
+  - tools.yaml Example: ../tools.yaml

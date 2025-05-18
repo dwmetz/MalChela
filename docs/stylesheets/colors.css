@@ -1,0 +1,12 @@
+
+
+
+/* Rust orange for headings */
+.md-typeset h1, .md-typeset h2, .md-typeset h3 {
+  color: #d65a31;
+}
+
+/* Cyan links */
+a {
+  color: #00cfc1;
+}

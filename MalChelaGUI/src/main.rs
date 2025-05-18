@@ -1010,6 +1010,15 @@ impl App for AppState {
                                 self.custom_args = tokens.join(" ");
                             }
                         }
+
+                        // Log the final custom_args to debug file
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open("vol3_command_debug.txt")
+                        {
+                            let _ = writeln!(f, "DEBUG - Vol3 custom_args: {}", self.custom_args);
+                        }
                     }
 
                     self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);

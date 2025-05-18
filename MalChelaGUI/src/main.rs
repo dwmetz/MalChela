@@ -1032,44 +1032,13 @@ impl App for AppState {
                     .strong(),
                 );
                 if !self.input_path.trim().is_empty() {
-                    let mut command_line = if let Some(exec_type) = tool.exec_type.as_deref() {
-                        match exec_type {
-                            "cargo" => {
-                                let mut cmd = format!("cargo run -p {}", tool.command[0]);
-                                if tool.input_type != "hash" {
-                                    cmd.push_str(" --");
-                                }
-                                cmd
-                            }
-                            "binary" | "script" => {
-                                let script_display = tool.optional_args.get(0)
-                                    .and_then(|s| std::path::Path::new(s).file_name())
-                                    .and_then(|s| s.to_str())
-                                    .unwrap_or(&tool.command[0]);
-                                format!("{} {}", tool.command[0], script_display)
-                            }
-                            _ => tool.command[0].clone(),
-                        }
-                    } else {
-                        tool.command[0].clone()
-                    };
+                    let mut command_line = tool.command.join(" ");
 
-                    // Append input path if not a hash tool
-                    if tool.input_type != "hash" {
-                        command_line.push(' ');
-                        command_line.push_str(&self.input_path);
-                    } else {
-                        command_line.push(' ');
-                        command_line.push_str(&self.input_path);
-                    }
-
-                    // Add parsed flags
                     if !self.custom_args.trim().is_empty() {
                         command_line.push(' ');
                         command_line.push_str(&self.custom_args);
                     }
 
-                    // Add save report if selected
                     if self.save_report.0 {
                         command_line.push_str(" -o");
                         match self.save_report.1.as_str() {

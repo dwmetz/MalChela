@@ -10,9 +10,8 @@
 - [🔧 CLI Usage Notes](#-cli-usage-notes)
 - [📁 Adding Third-Party Tools](#-adding-third-party-tools)
 - [⚙️ Tool Configuration Mode (YAML)](#️-tool-configuration-mode-yaml)
-- [🐍 Configuring Python-Based Tools](#-configuring-python-based-tools-oletools--oledump)
-- [⚙️ Installing and Configuring YARA-X](#️-installing-and-configuring-yara-x)
 - [📂 YARA Rules](#-yara-rules)
+- [🔌 Integrating Third-Party Tools](#-integrating-third-party-tools)
 - [✨ GUI Features Summary](#-gui-features-summary)
   - [🦈 TShark Field Reference Panel](#-tshark-field-reference-panel)
 - [💻 GUI Walkthrough](#-gui-walkthrough)
@@ -23,6 +22,7 @@
 - [📝 Scratchpad Tips](#-scratchpad-tips-strings_to_yara)
 - [⚠️ Known Limitations & WSL Notes](#️-known-limitations--wsl-notes)
 - [🦀 Support & Contribution](#-support--contribution)
+
 ---
 
 
@@ -89,41 +89,91 @@ MalChela supports three main workflows:
    ```
 
 ## 🔧 CLI Usage Notes
+### 📄 Output Formats
 
-- Tools that accept paths (files or folders) can be run with `--` after the `cargo run` command to specify inputs and save output:
-  ```bash
-  cargo run -p fileanalyzer -- /path/to/file -o
-  ```
-- The `-o` flag (or `--output`) enables report saving for tools that support it. By default cli output will not be saved.
-- When using `-o`, you **must specify** an output format (`-t`, `-j`, or `-m`) or you will receive an error.
-- Example:
-  ```bash
-  cargo run -p mstrings -- path/to/file -- -o -j
-  ```
+All tools that support saving reports use the following scheme:
+`saved_output/<tool>/report_<timestamp>.<ext>`
 
-## 📁 Adding Third-Party Tools
+To save output, use:
 
-To integrate a new tool into the GUI:
-
-```yaml
-- name: toolname
-  description: "Short summary of tool purpose"
-  command: ["toolname"]
-  input_type: file  # or folder or hash
-  category: "File Analysis"  # or other GUI category
-  optional_args: []
-  exec_type: binary  # or cargo / script
-  file_position: last  # or first, if required
+```bash
+-o -t   # text
+-o -j   # json
+-o -m   # markdown
 ```
 
-> Tools now require `exec_type` (e.g., `cargo`, `binary`, `script`) to define how they are launched, and `file_position` to clarify argument order when needed.
+- `-o` enables saving (CLI output is not saved by default)
 
-Ensure the tool:
-- Accepts CLI arguments in the form `toolname [args] [input]`
-- Outputs results to stdout
-- Is installed and available in `$PATH`
 
-> You can switch to a prebuilt `tools.yaml` for REMnux mode via the GUI configuration panel — useful for quick setup in forensic VMs.
+Example:
+
+```bash
+cargo run -p mstrings -- path/to/file -- -o -j
+```
+- If `-o` is used without a format (`-t`, `-j`, or `-m`), an error will be shown
+
+---
+
+
+## 💻 GUI Walkthrough
+
+Layout
+
+	•	Top Bar: Title and status
+	•	Left Panel: Tool categories and selections
+	•	Center Panel: Dynamic tool input options
+	•	Bottom Panel: Console output
+
+Running Tools
+
+	1.	Select a tool
+	2.	Fill in input fields
+	3.	Configure options (save report, format, etc.)
+	4.	Click Run
+	> - The GUI uses `exec_type` to determine whether a tool is launched using `cargo`, a native binary, or a script like `python3`.
+	> - Input file position is handled based on the `file_position` value in `tools.yaml`.
+
+Save Report
+
+	•	Formats: .txt, .json, .md
+	•	Location: saved_output/<tool>/report_<timestamp>.<ext> (only one file is generated per run)
+
+Scratchpad
+
+	•	Save as .txt, .md, or .yaml
+	•	Tip: hash: lines are ignored when used for strings_to_yara
+
+Configuration Panel
+
+	•	Stores API keys in vt-api.txt and mb-api.txt
+	•	Keys are required for malhash, fileanalyzer (for VT)
+	•	Quick-access button to edit `tools.yaml` from the GUI
+
+
+
+
+### 🧪 Tool Behavior Reference
+
+| Tool          | Input Type | Supports `-o` | Prompts if Missing | Notes |
+|---------------|-------------|----------------|---------------------|-------|
+| combine_yara | folder      | ❌             | ✅                  | Identifies mismatches || extract_samples | file      | ❌             | ✅                  | Extracts archive contents |
+| fileanalyzer  | file        | ✅             | ✅                  | Uses YARA + heuristics |
+| hashit | file      | ✅             | ✅                  | Generates hashes || malhash       | hash        | ✅             | ✅                  | Uses vt-cli + bazaar-cli |
+| mismatchminer | folder      | ✅             | ✅                  | Identifies mismatches |
+| mstrings      | file        | ✅             | ✅                  | Maps strings to MITRE |
+| nsrlquery | file      | ✅             | ✅                  | Queries CIRCL || strings_to_yara | file      | ❌             | ✅                  | Generates YARA rules |
+| mzmd5         | folder      | ❌             | ✅                  | MD5 only; no output flag |
+| mzcount         | folder      | ❌             | ✅                  | file counts |
+| strings_to_yara        | text file and metadata      | ❌             | ✅                  | Combined yara rule |
+| xmzmd5        | folder      | ❌             | ✅                  | Extended MD5 scan |
+
+### 🧮 Tool-Specific Notes
+
+	•	fileanalyzer: YARA rules for tools like `fileanalyzer` are stored in the `yara_rules` folder in the workspace. You can modify or add rules here.
+	•	mstrings: Maps strings to MITRE ATT&CK from detections.yaml
+	•	strings_to_yara: CLI/GUI dual support; hash: lines from **scratchpad** ignored
+	•	malhash: Needs API keys to run
+
 
 ## ⚙️ Tool Configuration Mode (YAML)
 
@@ -144,7 +194,8 @@ MalChela uses a central `tools.yaml` file to define which tools appear in the GU
 
 > ⚠️ All fields except `optional_args` are required.
 
-### Swapping Configs: REMnux Mode and Beyond
+
+## Swapping Configs: REMnux Mode and Beyond
 
 MalChela supports easy switching between tool configurations via the GUI.
 
@@ -158,15 +209,96 @@ This allows forensic VMs like REMnux to use a tailored toolset while keeping you
 
 > A bundled `tools_remnux.yaml` is included in the repo for convenience.
 
+## 🔌 Integrating Third-Party Tools
+
+MalChela supports the integration of external tools such as Python-based utilities (`oletools`, `oledump`) and high-performance YARA engines (`yara-x`). These tools expand MalChela’s capabilities beyond its native Rust-based toolset.
+> Tools now require `exec_type` (e.g., `cargo`, `binary`, `script`) to define how they are launched, and `file_position` to clarify argument order when needed.
+
+To integrate a new tool into the GUI, ensure the tool:
+- Accepts CLI arguments in the form `toolname [args] [input]`
+- Outputs results to stdout
+- Is installed and available in `$PATH`
+
+```yaml
+- name: toolname
+  description: "Short summary of tool purpose"
+  command: ["toolname"]
+  input_type: file  # or folder or hash
+  category: "File Analysis"  # or other GUI category
+  optional_args: []
+  exec_type: binary  # or cargo / script
+  file_position: last  # or first, if required
+```
+
+> You can switch to a prebuilt `tools.yaml` for REMnux mode via the GUI configuration panel — useful for quick setup in forensic VMs.
+
 ---
 
-## 🐍 Configuring Python-Based Tools (oletools & oledump)
+### ⚙️ Installing and Configuring YARA-X
+
+YARA-X is an extended version of YARA with enhanced performance and features. To integrate YARA-X with MalChela, follow these steps:
+
+#### Installation
+
+1. **Download the latest release:**
+
+Visit the official YARA-X GitHub releases page at [https://github.com/Yara-Rules/yara-x/releases](https://github.com/Yara-Rules/yara-x/releases) and download the appropriate binary for your platform.
+
+2. **Extract and install:**
+
+Extract the downloaded archive and place the `yara-x` binary in a directory included in your system's `$PATH`, or note its absolute path for configuration.
+
+3. **Verify installation:**
+
+Run the following command to confirm YARA-X is installed correctly:
+
+```bash
+yara-x --version
+```
+
+#### Configuration in MalChela
+
+To use YARA-X within MalChela tools, update your `tools.yaml` with the following example entry:
+
+```yaml
+- name: yara-x
+  description: "High-performance YARA-X engine"
+  command: ["yara-x"]
+  input_type: "file"
+  file_position: "last"
+  category: "File Analysis"
+  optional_args: []
+  exec_type: binary
+```
+
+#### Using YARA-X Rules
+
+- Place your YARA rules in the `yara_rules` folder within the workspace.
+- YARA-X supports recursive includes and extended features; ensure your rules are compatible.
+- The MalChela GUI and CLI will invoke YARA-X when configured as above, providing faster scans and improved detection.
+
+#### Tips
+
+- If you want to use YARA-X as a drop-in replacement for the standard YARA engine, ensure your tool configurations point to the `yara-x` binary.
+- For advanced usage, consult the [YARA-X documentation](https://github.com/Yara-Rules/yara-x) for command-line options and rule syntax.
+
+---
+
+### 🧩 FLOSS Notes
+
+- FLOSS extracts static, stack, tight, and decoded strings from binaries.
+- The GUI supports all CLI flags (e.g., `--only`, `--format`, `-n`, etc.).
+- Occasionally, FLOSS may print a multiprocessing-related error such as:
+  `from multiprocessing.resource_tracker import main;main(6)`
+  This is a known issue and does not affect output. It can be safely ignored.
+
+---
+
+### 🐍 Configuring Python-Based Tools (oletools & oledump)
 
 MalChela supports Python-based tools as long as they are properly declared in `tools.yaml`. Below are detailed examples and installation instructions for two commonly used utilities:
 
----
-
-### 🔧 `olevba` (from `oletools`)
+#### 🔧 `olevba` (from `oletools`)
 
 **Install via `pipx`:**
 
@@ -197,7 +329,7 @@ This installs `olevba` as a standalone CLI tool accessible in your user path.
 
 ---
 
-### 🔧 `oledump` (standalone script)
+#### 🔧 `oledump` (standalone script)
 
 **Manual installation:**
 
@@ -245,65 +377,11 @@ pip install olefile
 
 ---
 
-### ✅ Key Tips
+#### ✅ Key Tips
 
 - Always use `file_position: "last"` unless the tool expects input before the script
 - For scripts requiring Python, keep the script path in `optional_args[0]`
 - For tools installed via `pipx`, reference the binary path directly in `command`
-
-## ⚙️ Installing and Configuring YARA-X
-
-YARA-X is an extended version of YARA with enhanced performance and features. To integrate YARA-X with MalChela, follow these steps:
-
-### Installation
-
-1. **Download the latest release:**
-
-Visit the official YARA-X GitHub releases page at [https://github.com/Yara-Rules/yara-x/releases](https://github.com/Yara-Rules/yara-x/releases) and download the appropriate binary for your platform.
-
-2. **Extract and install:**
-
-Extract the downloaded archive and place the `yara-x` binary in a directory included in your system's `$PATH`, or note its absolute path for configuration.
-
-3. **Verify installation:**
-
-Run the following command to confirm YARA-X is installed correctly:
-
-```bash
-yara-x --version
-```
-
-### Configuration in MalChela
-
-To use YARA-X within MalChela tools (especially `fileanalyzer`), update your `tools.yaml` with the following example entry:
-
-```yaml
-- name: yara-x
-  description: "High-performance YARA-X engine"
-  command: ["yara-x"]
-  input_type: "file"
-  file_position: "last"
-  category: "File Analysis"
-  optional_args: []
-  exec_type: binary
-```
-
-### Using YARA-X Rules
-
-- Place your YARA rules in the `yara_rules` folder within the workspace.
-- YARA-X supports recursive includes and extended features; ensure your rules are compatible.
-- The MalChela GUI and CLI will invoke YARA-X when configured as above, providing faster scans and improved detection.
-
-### Tips
-
-- If you want to use YARA-X as a drop-in replacement for the standard YARA engine, ensure your tool configurations point to the `yara-x` binary.
-- For advanced usage, consult the [YARA-X documentation](https://github.com/Yara-Rules/yara-x) for command-line options and rule syntax.
-
----
-
-## 📂 YARA Rules
-
-YARA rules for tools like `fileanalyzer` are stored in the `yara_rules` folder in the workspace. You can modify or add rules here.
 
 ## ✨ GUI Features Summary
 
@@ -322,87 +400,6 @@ YARA rules for tools like `fileanalyzer` are stored in the `yara_rules` folder i
 - Provides examples, tooltips, and a copy-to-clipboard feature
 - Helps users construct and test display filters visually
 
-## 💻 GUI Walkthrough
-
-Layout
-
-	•	Top Bar: Title and status
-	•	Left Panel: Tool categories and selections
-	•	Center Panel: Dynamic tool input options
-	•	Bottom Panel: Console output
-
-Running Tools
-
-	1.	Select a tool
-	2.	Fill in input fields
-	3.	Configure options (save report, format, etc.)
-	4.	Click Run
-	> - The GUI uses `exec_type` to determine whether a tool is launched using `cargo`, a native binary, or a script like `python3`.
-	> - Input file position is handled based on the `file_position` value in `tools.yaml`.
-
-Save Report
-
-	•	Formats: .txt, .json, .md
-	•	Location: saved_output/<tool>/report_<timestamp>.<ext> (only one file is generated per run)
-
-Scratchpad
-
-	•	Save as .txt, .md, or .yaml
-	•	Tip: hash: lines are ignored when used for strings_to_yara
-
-Configuration Panel
-
-	•	Stores API keys in vt-api.txt and mb-api.txt
-	•	Keys are required for malhash, fileanalyzer (for VT)
-	•	Quick-access button to edit `tools.yaml` from the GUI
-
-### 📄 Output Formats
-
-	•	.txt	Analyst-readable summary
-	•	.json	Machine-parsable, structured output
-	•	.md 	Shareable in tickets, wikis, etc.
-
-All tools that support report saving now use the same format and location scheme:
-`saved_output/<tool>/report_<timestamp>.<ext>`
-
-### 🧮 Tool-Specific Notes
-
-	•	fileanalyzer: YARA rules come from yara_rules/ folder (generates a single clean report in GUI mode)
-	•	mstrings: Maps strings to MITRE ATT&CK from detections.yaml
-	•	mzcount: Table view toggle via GUI or CLI 
-	•	mzmd5/xmzmd5: Build “known-good” or “bad” hash sets
-	•	strings_to_yara: CLI/GUI dual support; hash: lines ignored
-	•	combine_yara: Recursive merge of .yar files
-	•	malhash: Needs API keys to run; avoids double-saving in GUI mode
-	•	nsrlquery: Matches against local NSRL DB
-	•	extract_samples: Recursive ZIP extractor
-	•	mismatchminer: Identifies mismatches (generates a single clean report in GUI mode)
-	•	hashit: Generates hashes (generates a single clean report in GUI mode)
-
-
-### 🧪 Tool Behavior Reference
-
-| Tool          | Input Type | Supports `-o` | Prompts if Missing | Notes |
-|---------------|-------------|----------------|---------------------|-------|
-| combine_yara | folder      | ❌             | ✅                  | Identifies mismatches || extract_samples | file      | ❌             | ✅                  | Extracts archive contents |
-| fileanalyzer  | file        | ✅             | ✅                  | Uses YARA + heuristics |
-| hashit | file      | ✅             | ✅                  | Generates hashes || malhash       | hash        | ✅             | ✅                  | Uses vt-cli + bazaar-cli |
-| mismatchminer | folder      | ✅             | ✅                  | Identifies mismatches |
-| mstrings      | file        | ✅             | ✅                  | Maps strings to MITRE |
-| nsrlquery | file      | ✅             | ✅                  | Queries CIRCL || strings_to_yara | file      | ❌             | ✅                  | Generates YARA rules |
-| mzmd5         | folder      | ❌             | ✅                  | MD5 only; no output flag |
-| mzcount         | folder      | ❌             | ✅                  | file counts |
-| strings_to_yara        | text file and metadata      | ❌             | ✅                  | Combined yara rule |
-| xmzmd5        | folder      | ❌             | ✅                  | Extended MD5 scan |
-
-### 🔁 Consistent CLI Output Behavior
-
-As of version 2.1.1, all tools that support saving reports now follow **a standardized output system**:
-
-- `-o` enables saving
-- `-t` (text), `-j` (json), `-m` (markdown) specify format
-- If `-o` is passed without a format, a helpful error is shown
-- All saved files are named `report_<timestamp>.<ext>` and stored under `saved_output/<tool>/`
 
 ## 📝 Scratchpad Tips (strings_to_yara)
 
@@ -417,6 +414,7 @@ As of version 2.1.1, all tools that support saving reports now follow **a standa
 	•	Paths must be POSIX-style
 	•	If `exec_type` is omitted or misconfigured in `tools.yaml`, the GUI may attempt to run the tool incorrectly.
 	•	GUI execution behavior no longer depends on the `category` field.
+	•	FLOSS may print a warning such as `from multiprocessing.resource_tracker import main;main(6)` due to a known bug in its multiprocessing logic. This does not affect output and can be safely ignored.
 
 
 ### 🦀 Support & Contribution

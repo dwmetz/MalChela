@@ -3,7 +3,6 @@ use eframe::egui::{Ui, RichText, ComboBox, Color32};
 use std::collections::{BTreeMap, HashMap};
 use rfd::FileDialog;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Vol3Arg {
     pub name: String,
@@ -11,12 +10,12 @@ pub struct Vol3Arg {
     pub arg_type: String,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Vol3Plugin {
     pub name: String,
     pub label: String,
     pub args: Vec<Vol3Arg>,
+    pub description: Option<String>,
 }
 
 #[derive(Default)]
@@ -49,7 +48,6 @@ impl Vol3Panel {
             }
         );
         ui.label(RichText::new(format!("🛠 Command line: {}", preview_cmd)).color(Color32::from_rgb(0, 255, 0)));
-        // ui.label(RichText::new("(Command will launch in a new terminal)").color(Color32::GRAY));
 
 
         let mut all_plugins = Vec::new();
@@ -58,12 +56,12 @@ impl Vol3Panel {
                 all_plugins.push((plugin.label.clone(), plugin.name.clone()));
             }
         }
+        all_plugins.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
 
         if all_plugins.is_empty() {
             ui.label(RichText::new("⚠️ No plugins found in vol3_plugins.yaml").color(Color32::YELLOW));
         }
 
-        // Plugin selector and help button in a horizontal layout
         ui.horizontal(|ui| {
             ui.label("Plugin:");
             ComboBox::from_id_source("vol3_plugin_dropdown")
@@ -85,12 +83,25 @@ impl Vol3Panel {
                         self.use_custom = true;
                     }
                 });
-            if ui.button("?").on_hover_text("View plugin reference").clicked() {
+            if ui.button("?").clicked() {
                 self.show_plugin_help = true;
             }
         });
 
-        // Plugin help modal using egui::Window for interactive modal behavior
+        if !self.use_custom {
+            if let Some(selected_name) = &self.selected_plugin {
+                for (_category, items) in plugins {
+                    for plugin in items {
+                        if &plugin.name == selected_name {
+                            if let Some(desc) = &plugin.description {
+                                ui.label(RichText::new(desc).color(Color32::GRAY));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if self.show_plugin_help {
             use eframe::egui::Window;
             Window::new(
@@ -117,12 +128,19 @@ impl Vol3Panel {
                         {
                             continue;
                         }
-                        ui.label(format!("• {} — {}", plugin.name, plugin.label));
+                        ui.label(RichText::new(plugin.name.clone()).strong());
+                        ui.label(RichText::new(format!("  {}", plugin.label)).color(Color32::from_rgb(180, 180, 180)));
+                        ui.add_space(4.0);
                         if !plugin.args.is_empty() {
                             for arg in &plugin.args {
-                                ui.label(format!("      {} ({})", arg.name, arg.arg_type));
+                                ui.horizontal(|ui| {
+                                    ui.label(&arg.name);
+                                    ui.label(RichText::new(format!("({})", arg.arg_type)).color(Color32::GRAY));
+                                });
                             }
                         }
+                        ui.add_space(8.0);
+                        ui.separator();
                     }
                 }
             });
@@ -136,7 +154,6 @@ impl Vol3Panel {
             });
         }
 
-        // Dynamically render input fields for plugin args if a plugin is selected and not using custom
         if !self.use_custom {
             if let Some(plugin_name) = &self.selected_plugin {
                 for (_category, items) in plugins {
@@ -168,7 +185,7 @@ impl Vol3Panel {
                                             }
                                         }
                                     } else if arg.arg_type == "flag" {
-                                        let checked = self.arg_values.entry(arg.name.clone()).or_insert("false".to_string());
+                                        let checked = self.arg_values.entry(arg.name.clone()).or_insert("true".to_string());
                                         let mut is_checked = checked == "true";
                                         if ui.checkbox(&mut is_checked, "").changed() {
                                             *checked = is_checked.to_string();
@@ -178,20 +195,20 @@ impl Vol3Panel {
                                     }
                                 });
                             }
-                            break; // stop after exact match
+                            break; 
                         }
                     }
                 }
             }
         }
 
-        // Move custom_args building here to ensure it always updates
         if !self.use_custom {
             if let Some(plugin_name) = &self.selected_plugin {
                 for (_category, items) in plugins {
                     for plugin in items {
                         if &plugin.name == plugin_name {
                             let mut args = Vec::new();
+                            // (no longer auto-enable save_report if plugin uses a path_out arg)
                             for arg in &plugin.args {
                                 if let Some(val) = self.arg_values.get(&arg.name) {
                                     if arg.arg_type == "flag" {
@@ -199,7 +216,7 @@ impl Vol3Panel {
                                             args.push(arg.name.clone());
                                         }
                                     } else if !val.trim().is_empty() {
-                                        args.push(format!("{} {}", arg.name, val.trim()));
+                                        args.push(format!("{} \"{}\"", arg.name, val.trim()));
                                     }
                                 }
                             }
@@ -224,6 +241,5 @@ impl Vol3Panel {
 
 
 
-        // Removed scroll area and output rendering; handled in main.rs.
     }
 }

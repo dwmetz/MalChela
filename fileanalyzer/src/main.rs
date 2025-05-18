@@ -105,6 +105,7 @@ async fn main() {
     println!("{}", line);
     writeln!(temp_file, "{}", line).ok();
     let hash = hashing::calculate_sha256(&file_content);
+    let md5 = hashing::calculate_md5(&file_content);
     let line = styled_line("stone", &format!("SHA-256 Hash: {:?}", hash));
     println!("{}", line);
     writeln!(temp_file, "{}", line).ok();
@@ -160,16 +161,29 @@ async fn main() {
         }
     };
 
-    // NSRL hash lookup using nsrlquery CLI
-    let nsrl_result = match std::process::Command::new("nsrlquery")
-        .arg(&hash)
+    // NSRL hash lookup using internal nsrlquery subtool via cargo run
+    let nsrl_result = match std::process::Command::new("cargo")
+        .args(["run", "-p", "nsrlquery", "--", &md5])
         .output()
     {
-        Ok(output) if output.status.success() && !output.stdout.is_empty() => {
-            let line = styled_line("stone", "NSRL: Present in NSRL");
-            println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
-            Some(true)
+        Ok(output) if output.status.success() => {
+            let output_str = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            if output_str.contains("hash not found") || output_str.contains("not found in the database") {
+                let line = styled_line("stone", "NSRL: Not found");
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                Some(false)
+            } else if output_str.contains("found in the database") {
+                let line = styled_line("stone", "NSRL: Present in NSRL");
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                Some(true)
+            } else {
+                let line = styled_line("stone", &format!("NSRL: Unknown response - {}", output_str.trim()));
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                None
+            }
         }
         Ok(_) => {
             let line = styled_line("stone", "NSRL: Not found");
@@ -177,8 +191,8 @@ async fn main() {
             writeln!(temp_file, "{}", line).ok();
             Some(false)
         }
-        Err(_) => {
-            let line = styled_line("stone", "NSRL: Offline");
+        Err(e) => {
+            let line = styled_line("stone", &format!("NSRL: Offline or Error - {}", e));
             println!("{}", line);
             writeln!(temp_file, "{}", line).ok();
             None

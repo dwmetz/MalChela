@@ -1,19 +1,23 @@
 os_information:
   - name: windows.info
     label: OS Info
+    description: Displays general Windows OS information.
     args: []
 
 process_information:
   - name: windows.psscan
     label: Process Scan
+    description: Scans for hidden or terminated processes.
     args: []
 
   - name: windows.pstree
     label: Process Tree
+    description: Shows hierarchical parent-child process relationships.
     args: []
 
   - name: windows.dumpfiles
     label: Dump File(s)
+    description: Extracts files from memory using virtual or physical addresses.
     args:
       - name: --pid
         type: int
@@ -21,43 +25,54 @@ process_information:
         type: string
       - name: --physaddr
         type: string
+      - name: --dump-dir
+        type: path_out
 
   - name: windows.memmap
     label: Dump Memory Map
+    description: Displays and optionally dumps memory regions used by a process.
     args:
       - name: --pid
         type: int
-      - name: --dump
-        type: flag
+      - name: --output-file
+        type: path_out
 
   - name: windows.handles
     label: Handles by PID
+    description: Lists object handles opened by a specified process.
     args:
       - name: --pid
         type: int
 
   - name: windows.dlllist
     label: DLL List
+    description: Lists DLLs loaded by a process.
     args:
       - name: --pid
         type: int
+      - name: --dump-dir
+        type: path_out
 
   - name: windows.cmdline
     label: Process Cmdline
+    description: Displays command-line arguments of all processes.
     args: []
 
 network_information:
   - name: windows.netstat
     label: Netstat
+    description: Displays active network connections and ports.
     args: []
 
 registry:
   - name: windows.registry.hivelist
     label: Hive List
+    description: Lists registry hives present in memory.
     args: []
 
   - name: windows.registry.printkey
     label: Print Registry Key
+    description: Outputs values from a specified registry key.
     args:
       - name: --key
         type: string
@@ -65,25 +80,37 @@ registry:
 files:
   - name: windows.filescan
     label: File Scan
-    args: []
+    description: Scans memory for FILE_OBJECT structures.
+    args:
+      - name: --dump-dir
+        type: path_out
 
 
 misc:
   - name: windows.malfind
     label: Malfind
-    args: []
+    description: Detects injected or suspicious code in process memory.
+    args:
+      - name: --dump-dir
+        type: path_out
 
   - name: windows.vadyarascan
     label: YARA Scan (VAD)
+    description: Scans VAD memory regions of processes using YARA rules.
     args:
       - name: --yara-file
         type: path
+      - name: --dump-dir
+        type: path_out
 
   - name: yarascan.YaraScan
     label: YARA Scan (Generic)
+    description: Scans physical memory using YARA rules.
     args:
       - name: --yara-file
         type: path
+      - name: --dump-dir
+        type: path_out
 
 # linux_plugins:
 #   - name: linux.bash

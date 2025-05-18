@@ -145,3 +145,12 @@ tools:
   category: "Memory Forensics"
   gui_mode_args: []
   exec_type: binary
+
+- name: FLOSS
+  description: "Extracts strings and function names from binaries"
+  command: ["/Users/dmetz/Tools/FLOSS/floss"]
+  input_type: file
+  file_position: last
+  category: "String Analysis"
+  optional_args: []
+  exec_type: binary  

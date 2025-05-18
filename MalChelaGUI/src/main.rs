@@ -122,6 +122,19 @@ impl AppState {
 
     fn run_tool(&mut self, ctx: &eframe::egui::Context) {
         if let Some(tool) = &self.selected_tool {
+            // FLOSS file path validation: ensure input_path exists and is a file before running FLOSS
+            let command = tool.command.clone();
+            let input_path = self.input_path.clone();
+            let output = Arc::clone(&self.command_output);
+            if command.get(0).map(|s| s.ends_with("floss")).unwrap_or(false) {
+                use std::path::Path;
+                if !Path::new(&input_path).exists() {
+                    let mut out = output.lock().unwrap();
+                    out.clear();
+                    out.push_str("[red]❌ Selected file does not exist or is invalid.\n");
+                    return;
+                }
+            }
             // Use the actual selected plugin name from the Vol3Panel for Vol3
             let plugin_name = self.vol3_panel.selected_plugin.clone().unwrap_or_default();
             ctx.request_repaint();
@@ -165,7 +178,6 @@ impl AppState {
             let command = tool.command.clone();
             let input_path = self.input_path.clone();
             let custom_args = self.custom_args.clone();
-            println!("Matched command path: {:?}", command.get(0));
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             if is_external && command.get(0).map(|s| s.contains("vol3")).unwrap_or(false) && !cfg!(windows) {
                 let mut args = vec!["-f".to_string(), input_path.clone()];
@@ -180,24 +192,14 @@ impl AppState {
 
                 {
                     let script_path = self.workspace_root.join("launch_vol3.command");
-                    println!("📁 Writing Vol3 launch script to: {}", script_path.display());
-
-                    match std::fs::write(
+                    let _ = std::fs::write(
                         &script_path,
                         format!(
                             "#!/bin/bash\n{}\necho\necho Press Enter to close; read",
                             full_cmd
                         ),
-                    ) {
-                        Ok(_) => println!("✅ Script written successfully."),
-                        Err(e) => println!("❌ Failed to write script: {}", e),
-                    }
-
-                    match std::process::Command::new("chmod").arg("+x").arg(&script_path).status() {
-                        Ok(status) => println!("🔐 chmod status: {}", status),
-                        Err(e) => println!("❌ chmod error: {}", e),
-                    }
-
+                    );
+                    let _ = std::process::Command::new("chmod").arg("+x").arg(&script_path).status();
                     // Platform-specific terminal launch logic
                     #[cfg(target_os = "macos")]
                     let terminal_launch = std::process::Command::new("open")
@@ -205,17 +207,12 @@ impl AppState {
                         .arg("Terminal")
                         .arg(&script_path)
                         .spawn();
-
                     #[cfg(target_os = "linux")]
                     let terminal_launch = std::process::Command::new("x-terminal-emulator")
                         .arg("-e")
                         .arg(&script_path)
                         .spawn();
-
-                    match terminal_launch {
-                        Ok(_) => println!("🚀 Terminal launch attempted."),
-                        Err(e) => println!("❌ Failed to open Terminal: {}", e),
-                    }
+                    let _ = terminal_launch;
                 }
 
                 self.is_running.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -376,7 +373,7 @@ impl AppState {
                             let mut out = output.lock().unwrap();
                             out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
                         }
-                        println!("Saved report to: {}", report_path.display());
+                // (removed println of report_path)
                     }
                     return;
                 }
@@ -413,11 +410,11 @@ impl AppState {
                 }
 
                 // Step 2: Construct path to binary
-                let binary_name = if cfg!(windows) {
-                    format!("{}.exe", command[0])
-                } else {
-                    command[0].clone()
-                };
+            let binary_name = if cfg!(windows) {
+                format!("{}.exe", command[0])
+            } else {
+                command[0].clone()
+            };
 
                 // Debug: Log binary check
                 if let Ok(mut f) = std::fs::OpenOptions::new()
@@ -545,24 +542,13 @@ impl AppState {
                     args.extend(parsed_custom_args);
                 }
 
-                // Write vol3_command_debug.txt after args are finalized
-                let _ = std::fs::write(
-                    "vol3_command_debug.txt",
-                    format!(
-                        "Binary path: {}\nArgs: {:?}\n",
-                        binary_path.display(),
-                        args
-                    ),
-                );
-
                 if save_report.0 {
                     std::env::set_var("MALCHELA_SAVE_OUTPUT", "1");
                 } else {
                     std::env::remove_var("MALCHELA_SAVE_OUTPUT");
                 }
 
-                println!("Attempting to run binary at path: {}", binary_path.display());
-                println!("With arguments: {:?}", args);
+                // (removed println! for binary_path and args)
 
                 let mut command_builder = {
                     let mut cmd = Command::new(&binary_path);
@@ -575,25 +561,6 @@ impl AppState {
 
                 match command_builder.spawn() {
                     Ok(mut child) => {
-                        // For terminal-driven Vol3, log after spawn as well
-                        if is_external && command.get(0).map(|s| s == "vol3").unwrap_or(false) && !cfg!(windows) {
-                            if let Ok(mut f) = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("vol3_command_debug.txt")
-                            {
-                                let _ = writeln!(f, "Terminal-launched Vol3 command initiated successfully.");
-                            }
-                        } else {
-                            if let Ok(mut f) = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("vol3_command_debug.txt")
-                            {
-                                let _ = writeln!(f, "Command spawned successfully: {:?}", child.id());
-                            }
-                        }
-
                         if let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) {
                             let stderr_reader = BufReader::new(stderr);
 
@@ -683,11 +650,10 @@ impl AppState {
                                 for line in stderr_reader.lines().flatten() {
                                     {
                                         let mut lines = output_lines_clone_stderr.lock().unwrap();
-                                        lines.push(format!("[red]{}", line));
+                                        lines.push(line.clone());
                                     }
                                     {
                                         let mut out = out_clone_stderr.lock().unwrap();
-                                        out.push_str("[red]");
                                         out.push_str(&line);
                                         out.push('\n');
                                     }
@@ -983,7 +949,7 @@ impl App for AppState {
                         let mut guide_path = std::env::current_exe().unwrap();
                         while let Some(parent) = guide_path.parent() {
                             if parent.join("Cargo.toml").exists() {
-                                guide_path = parent.join("docs/MalChela_User_Guide_v2.1.2.md");
+                                guide_path = parent.join("docs/MalChela_User_Guide.md");
                                 break;
                             }
                             guide_path = parent.to_path_buf();
@@ -1029,7 +995,7 @@ impl App for AppState {
                 if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
                     self.tshark_panel.ui(ui);
                     return;
-                } else if tool.command.get(0).map(|s| s.contains("vol3")).unwrap_or(false) {
+                } else if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
                     // Clear console output when selecting Vol3
                     self.command_output.lock().unwrap().clear();
                     self.output_lines.lock().unwrap().clear();
@@ -1039,15 +1005,7 @@ impl App for AppState {
 
                     ui.horizontal(|ui| {
                         if ui.button("Run").clicked() {
-                            // Debug log for Vol3 Run button click
-                            if let Ok(mut f) = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("vol3_run_debug.log")
-                            {
-                                let _ = writeln!(f, "Run button clicked at: {}", chrono::Utc::now());
-                            }
-                            self.run_tool(ctx);
+                           self.run_tool(ctx);
                         }
                         ui.label(RichText::new("(Vol3 command will launch in a separate terminal)").color(Color32::GRAY));
                     });
@@ -1074,38 +1032,55 @@ impl App for AppState {
                     .strong(),
                 );
                 if !self.input_path.trim().is_empty() {
-                    let mut status_line = String::from("🛠  Command line: ");
-                    if let Some(exec_type) = tool.exec_type.as_deref() {
+                    let mut command_line = if let Some(exec_type) = tool.exec_type.as_deref() {
                         match exec_type {
                             "cargo" => {
-                                status_line.push_str(&format!("cargo run -p {}", tool.command[0]));
+                                let mut cmd = format!("cargo run -p {}", tool.command[0]);
                                 if tool.input_type != "hash" {
-                                    status_line.push_str(" -- ");
-                                } else {
-                                    status_line.push_str(" ");
+                                    cmd.push_str(" --");
                                 }
-                                status_line.push_str(&self.input_path);
+                                cmd
                             }
                             "binary" | "script" => {
                                 let script_display = tool.optional_args.get(0)
                                     .and_then(|s| std::path::Path::new(s).file_name())
-                                    .and_then(|s| s.to_str());
-
-                                if let Some(script_name) = script_display {
-                                    status_line.push_str(&format!("{} {}", tool.command[0], script_name));
-                                } else {
-                                    status_line.push_str(&tool.command[0]);
-                                }
-                                status_line.push_str(" ");
-                                status_line.push_str(&self.input_path);
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or(&tool.command[0]);
+                                format!("{} {}", tool.command[0], script_display)
                             }
+                            _ => tool.command[0].clone(),
+                        }
+                    } else {
+                        tool.command[0].clone()
+                    };
+
+                    // Append input path if not a hash tool
+                    if tool.input_type != "hash" {
+                        command_line.push(' ');
+                        command_line.push_str(&self.input_path);
+                    } else {
+                        command_line.push(' ');
+                        command_line.push_str(&self.input_path);
+                    }
+
+                    // Add parsed flags
+                    if !self.custom_args.trim().is_empty() {
+                        command_line.push(' ');
+                        command_line.push_str(&self.custom_args);
+                    }
+
+                    // Add save report if selected
+                    if self.save_report.0 {
+                        command_line.push_str(" -o");
+                        match self.save_report.1.as_str() {
+                            ".txt" => command_line.push_str(" -t"),
+                            ".json" => command_line.push_str(" -j"),
+                            ".md" => command_line.push_str(" -m"),
                             _ => {}
                         }
                     }
-                    if self.save_report.0 {
-                        status_line.push_str(" -o");
-                    }
-                    ui.label(RichText::new(status_line).color(GREEN).strong());
+
+                    ui.label(RichText::new(command_line).color(GREEN).strong());
                 }
                 if tool.command.get(0).map(|s| s == "strings_to_yara").unwrap_or(false) {
                     ui.label(RichText::new("strings_to_yara Configuration").strong().color(LIGHT_CYAN));
@@ -1222,6 +1197,192 @@ impl App for AppState {
                     });
 
                     // Override save report checkbox for YARA-X
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.save_report.0, "Save Report");
+                        if self.save_report.0 {
+                            ui.label("Format:");
+                            egui::ComboBox::from_id_source("save_format")
+                                .selected_text(&self.save_report.1)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.save_report.1, ".txt".to_string(), "txt");
+                                    ui.selectable_value(&mut self.save_report.1, ".json".to_string(), "json");
+                                    ui.selectable_value(&mut self.save_report.1, ".md".to_string(), "md");
+                                });
+                        }
+                    });
+                } else if tool.command.get(0).map(|s| s.ends_with("floss")).unwrap_or(false) {
+                    // --- FLOSS tool configuration section ---
+                    ui.horizontal(|ui| {
+                        ui.label("Target File:");
+                        ui.text_edit_singleline(&mut self.input_path);
+                        if ui.button("Browse").clicked() {
+                            if let Some(path) = FileDialog::new().pick_file() {
+                                self.input_path = path.display().to_string();
+                            }
+                        }
+                        if !self.input_path.trim().is_empty() {
+                            ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Arguments:");
+                        ui.text_edit_singleline(&mut self.custom_args);
+                    });
+
+                    // --- Begin FLOSS-specific argument controls ---
+                    ui.horizontal(|ui| {
+                        ui.label("Minimum Length (-n):");
+                        let mut min_length = self.custom_args
+                            .split_whitespace()
+                            .enumerate()
+                            .find_map(|(i, arg)| {
+                                if arg == "-n" {
+                                    self.custom_args.split_whitespace().nth(i + 1)
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or("4")
+                            .to_string();
+                        if ui.text_edit_singleline(&mut min_length).changed() {
+                            let mut args: Vec<String> = self.custom_args.split_whitespace().map(String::from).collect();
+                            if let Some(i) = args.iter().position(|s| s == "-n") {
+                                args.remove(i);
+                                if i < args.len() {
+                                    args.remove(i); // Remove the old value
+                                }
+                            }
+                            args.push("-n".to_string());
+                            args.push(min_length.clone());
+                            self.custom_args = args.join(" ");
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Extract Only:");
+                        for s_type in ["static", "stack", "tight", "decoded"] {
+                            let flag = format!("--only {}", s_type);
+                            let is_selected = self.custom_args.contains(&flag);
+                            let mut selected = is_selected;
+                            if ui.checkbox(&mut selected, s_type).changed() {
+                                let mut args: Vec<String> = self.custom_args.split_whitespace().map(String::from).collect();
+                                args.retain(|arg| !arg.starts_with("--only"));
+                                if selected {
+                                    args.push("--only".to_string());
+                                    args.push(s_type.to_string());
+                                }
+                                self.custom_args = args.join(" ");
+                            }
+                        }
+                    });
+                    // --- Inserted: FLOSS sample format, progress, verbosity, debug, color ---
+                    ui.horizontal(|ui| {
+                        ui.label("Sample Format:");
+                        egui::ComboBox::from_id_source("floss_sample_format")
+                            .selected_text(self.selected_format.clone())
+                            .show_ui(ui, |ui| {
+                                for opt in ["auto", "pe", "sc32", "sc64"] {
+                                    if ui.selectable_value(&mut self.selected_format, opt.to_string(), opt).clicked() {
+                                        self.custom_args = self.custom_args
+                                            .split_whitespace()
+                                            .filter(|arg| arg != &"-f" && !["auto", "pe", "sc32", "sc64"].contains(arg))
+                                            .collect::<Vec<_>>()
+                                            .join(" ");
+                                        self.custom_args.push_str(&format!(" -f {}", opt));
+                                    }
+                                }
+                            });
+                    });
+
+                    ui.horizontal(|ui| {
+                        let mut disable_progress = self.custom_args.contains("--disable-progress");
+                        if ui.checkbox(&mut disable_progress, "Disable Progress").changed() {
+                            self.custom_args = self.custom_args
+                                .split_whitespace()
+                                .filter(|arg| *arg != "--disable-progress")
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            if disable_progress {
+                                self.custom_args.push_str(" --disable-progress");
+                            }
+                        }
+                    });
+
+                    // Inserted: Allow Large File (-L) toggle
+                    ui.horizontal(|ui| {
+                        let mut large_file = self.custom_args.contains("-L");
+                        if ui.checkbox(&mut large_file, "Allow Large File (-L)").changed() {
+                            self.custom_args = self.custom_args
+                                .split_whitespace()
+                                .filter(|arg| *arg != "-L")
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            if large_file {
+                                self.custom_args.push_str(" -L");
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        let mut verbose = self.custom_args.contains("-v");
+                        let debug = self.custom_args.matches("-d").count();
+                        let mut quiet = self.custom_args.contains("-q");
+
+                        if ui.checkbox(&mut verbose, "Verbose (-v)").changed() {
+                            self.custom_args = self.custom_args.replace("-v", "");
+                            if verbose {
+                                self.custom_args.push_str(" -v");
+                            }
+                        }
+                        if ui.checkbox(&mut quiet, "Quiet (-q)").changed() {
+                            self.custom_args = self.custom_args.replace("-q", "");
+                            if quiet {
+                                self.custom_args.push_str(" -q");
+                            }
+                        }
+                        let mut dbg_level = debug as u8;
+                        if ui.add(egui::DragValue::new(&mut dbg_level).clamp_range(0..=3).prefix("Debug level: ")).changed() {
+                            self.custom_args = self.custom_args
+                                .split_whitespace()
+                                .filter(|arg| arg != &"-d")
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            for _ in 0..dbg_level {
+                                self.custom_args.push_str(" -d");
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Color Output:");
+                        egui::ComboBox::from_id_source("floss_color_setting")
+                            .selected_text(
+                                if self.custom_args.contains("--color always") {
+                                    "always"
+                                } else if self.custom_args.contains("--color never") {
+                                    "never"
+                                } else {
+                                    "auto"
+                                }
+                            )
+                            .show_ui(ui, |ui| {
+                                for mode in ["auto", "always", "never"] {
+                                    if ui.selectable_label(
+                                        self.custom_args.contains(&format!("--color {}", mode)),
+                                        mode
+                                    ).clicked() {
+                                        self.custom_args = self.custom_args
+                                            .split_whitespace()
+                                            .filter(|arg| *arg != "--color" && *arg != "auto" && *arg != "always" && *arg != "never")
+                                            .collect::<Vec<_>>()
+                                            .join(" ");
+                                        self.custom_args.push_str(&format!(" --color {}", mode));
+                                    }
+                                }
+                            });
+                    });
+                    // --- End FLOSS argument controls ---
+
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut self.save_report.0, "Save Report");
                         if self.save_report.0 {

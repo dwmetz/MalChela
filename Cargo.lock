@@ -1888,7 +1888,7 @@ dependencies = [
  "common_ui",
  "goblin",
  "infer",
- "md5",
+ "md-5",
  "pelite",
  "regex",
  "reqwest 0.11.27",

@@ -1,156 +1,24 @@
+if !self.input_path.trim().is_empty() {
+    let mut command_line = tool.command.join(" ");
 
-edition: "Doug's Dev Edition"
+    if !self.custom_args.trim().is_empty() {
+        command_line.push(' ');
+        command_line.push_str(&self.custom_args);
+    }
 
-tools:
-- name: Mismatch Miner
-  description: "Identifies mismatched file extensions and types"
-  command: ["mismatchminer"]
-  input_type: folder
-  category: "File Analysis"
-  exec_type: cargo
+    if self.save_report.0 {
+        command_line.push_str(" -o");
+        match self.save_report.1.as_str() {
+            ".txt" => command_line.push_str(" -t"),
+            ".json" => command_line.push_str(" -j"),
+            ".md" => command_line.push_str(" -m"),
+            _ => {}
+        }
+    }
 
-- name: "mStrings"
-  description: "Extracts strings with IOC and MITRE mapping"
-  command: ["mstrings"]
-  input_type: file
-  category: "File Analysis"
-  exec_type: cargo
+    ui.label(RichText::new(command_line).color(GREEN).strong());
+}
 
-- name: Malware Hash Lookup
-  description: "Checks hash against VT and MalwareBazaar"
-  command: ["malhash"]
-  input_type: hash
-  category: "Threat Intel"
-  exec_type: cargo
 
-- name: Combine YARA
-  description: "Merges multiple YARA rules into one set"
-  command: ["combine_yara"]
-  input_type: folder
-  category: "YARA Tools"
-  exec_type: cargo
-
-- name: Extract Samples
-  description: "Extracts contents from password-protected archives"
-  command: ["extract_samples"]
-  input_type: folder
-  category: "Utilities"
-  exec_type: cargo
-
-- name: File Analyzer
-  description: "Parses file metadata and checks YARA rules"
-  command: ["fileanalyzer"]
-  input_type: file
-  category: "File Analysis"
-  exec_type: cargo
-
-- name: Hash It
-  description: "Generates multiple hashes for a single file"
-  command: ["hashit"]
-  input_type: file
-  category: "Hashing Tools"
-  exec_type: cargo
-
-- name: MZMD5
-  description: "Generates MD5 hashes for folder contents"
-  command: ["mzmd5"]
-  input_type: folder
-  category: "Hashing Tools"
-  exec_type: cargo
-
-- name: MZcount
-  description: "Counts file types within a directory"
-  command: ["mzcount"]
-  input_type: folder
-  category: "Hashing Tools"
-  exec_type: cargo
-
-- name: NSRL Hash Lookup
-  description: "Checks hash presence in NSRL database"
-  command: ["nsrlquery"]
-  input_type: hash
-  category: "Threat Intel"
-  exec_type: cargo
-
-- name: Strings to YARA
-  description: "Converts string sets into YARA rules"
-  command: ["strings_to_yara"]
-  input_type: hash
-  category: "YARA Tools"
-  exec_type: cargo
-
-- name: XMZMD5
-  description: "Generates MD5 hashes with extended output"
-  command: ["xmzmd5"]
-  input_type: folder
-  category: "Hashing Tools"
-  exec_type: cargo
-
-# -------------------------------------
-# Example 3rd party integrations:
-# Below is a disabled example for capa
-# Uncomment to enable if capa is in your PATH
-
-- name: YARA-X
-  description: "Run YARA-X with custom rule and target file"
-  command: ["yr"]
-  input_type: file
-  file_position: "last"
-  category: "YARA Tools"
-  optional_args: []
-  exec_type: binary
-
-- name: TShark
-  description: "Analyze network traffic"
-  command: ["tshark"]
-  input_type: file
-  accepted_extensions: ["pcap", "pcapng"]
-  file_position: "last"
-  category: "Network Analysis"
-  optional_args: []
-  exec_type: binary
-
-- name: capa
-  description: "Detects capabilities in binaries via rules"
-  command: ["capa"]
-  input_type: "file"
-  file_position: "last"
-  category: "File Analysis"
-  optional_args: []
-  exec_type: binary
-
-- name: exiftool
-  description: "Displays metadata for various file types"
-  command: ["exiftool"]
-  input_type: "file"
-  file_position: "last"
-  category: "Metadata Analysis"
-  optional_args: []
-  exec_type: binary
-
-- name: pdf-parser
-  description: "Parses and analyzes suspicious PDF structures"
-  command: ["python3"]
-  input_type: "file"
-  file_position: "last"
-  category: "PDF Analysis"
-  optional_args: ["/Users/dmetz/Tools/pdfparser/pdf-parser.py"]
-  exec_type: script
-
-- name: Volatility 3
-  description: "Memory analysis using Volatility 3"
-  command: ["/Users/dmetz/.local/bin/vol3"]
-  input_type: "file"
-  file_position: "first"
-  category: "Memory Forensics"
-  gui_mode_args: []
-  exec_type: binary
-
-- name: FLOSS
-  description: "Extracts strings and function names from binaries"
-  command: ["/Users/dmetz/Tools/FLOSS/floss"]
-  input_type: file
-  file_position: last
-  category: "String Analysis"
-  optional_args: []
-  exec_type: binary  
+println!("Running: {:?}", command);
+println!("With args: {:?}", args);

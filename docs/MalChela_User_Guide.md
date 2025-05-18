@@ -116,6 +116,16 @@ cargo run -p mstrings -- path/to/file -- -o -j
 
 
 ## 💻 GUI Walkthrough
+### ✨ GUI Features Summary
+
+- Categorized tool list with input type detection (file, folder, hash)
+- Arguments textbox and dynamic path browser
+- Console output with ANSI coloring
+- Save Report checkbox toggles `-o` flag
+- Status bar displays CLI-equivalent command
+- Alphabetical sorting of tools within categories
+- Tool descriptions are now shown alongside tool names
+- Saved reports are cleaned of internal formatting tags like [green], [reset], etc.
 
 Layout
 
@@ -150,6 +160,13 @@ Configuration Panel
 	•	Quick-access button to edit `tools.yaml` from the GUI
 
 
+
+
+## 📝 Scratchpad Tips (strings_to_yara)
+
+- Any line starting with `hash:` is ignored when generating YARA rules
+- Supports markdown and YAML save formats
+- Integrated "Open in VS Code" button for saved notes
 
 
 ### 🧪 Tool Behavior Reference
@@ -377,35 +394,19 @@ pip install olefile
 
 ---
 
-#### ✅ Key Tips
-
-- Always use `file_position: "last"` unless the tool expects input before the script
-- For scripts requiring Python, keep the script path in `optional_args[0]`
-- For tools installed via `pipx`, reference the binary path directly in `command`
-
-## ✨ GUI Features Summary
-
-- Categorized tool list with input type detection (file, folder, hash)
-- Arguments textbox and dynamic path browser
-- Console output with ANSI coloring
-- Save Report checkbox toggles `-o` flag
-- Status bar displays CLI-equivalent command
-- Alphabetical sorting of tools within categories
-- Tool descriptions are now shown alongside tool names
-- Saved reports are cleaned of internal formatting tags like [green], [reset], etc.
-
 ### 🦈 TShark Field Reference Panel
+
+If TShark is included in your `tools.yaml` (or if you're using the REMnux configuration), the GUI provides an integrated reference panel for display filter fields.
 
 - Launchable via the "?" icon next to filter fields
 - Provides examples, tooltips, and a copy-to-clipboard feature
 - Helps users construct and test display filters visually
 
+#### ✅ Key Tips
 
-## 📝 Scratchpad Tips (strings_to_yara)
-
-- Any line starting with `hash:` is ignored when generating YARA rules
-- Supports markdown and YAML save formats
-- Integrated "Open in VS Code" button for saved notes
+- Always use `file_position: "last"` unless the tool expects input before the script
+- For scripts requiring Python, keep the script path in `optional_args[0]`
+- For tools installed via `pipx`, reference the binary path directly in `command`
 
 ## ⚠️ Known Limitations & WSL Notes
 

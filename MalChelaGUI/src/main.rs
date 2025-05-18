@@ -190,6 +190,15 @@ impl AppState {
                 let vol3_path = which::which("vol3").unwrap_or_else(|_| std::path::PathBuf::from("vol3"));
                 let full_cmd = format!("{} {}", vol3_path.display(), joined_args);
 
+                // Log the full command line to vol3_command_debug.txt
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("vol3_command_debug.txt")
+                {
+                    let _ = writeln!(f, "TERMINAL CMD: {}", full_cmd);
+                }
+
                 {
                     let script_path = self.workspace_root.join("launch_vol3.command");
                     let _ = std::fs::write(

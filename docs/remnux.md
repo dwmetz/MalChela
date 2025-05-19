@@ -100,14 +100,7 @@ Although REMnux Mode provides sane defaults, you can still:
 
 - Override tool entries in `tools.yaml`
 - Add new third-party tools via the GUI or YAML
-- Use the Configuration Panel to manage API keys and backup your environment
-
----
-
-## Notes
-
-- If you copy MalChela from REMnux to another system, disable REMnux Mode by replacing `tools.yaml` with the standard version
-- The REMnux badge is only cosmetic and does not impact functionality
+- Use the Configuration Panel to backup/restore your configuration
 
 ---
 

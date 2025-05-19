@@ -4,7 +4,7 @@ theme:
   name: material
   palette:
     scheme: slate
-    primary: grey
+    primary: black
     accent: cyan
   features:
     - navigation.tabs

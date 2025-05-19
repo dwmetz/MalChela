@@ -89,7 +89,7 @@ Save Report
 		
 
 
-### 📝 Scratchpad  
+### Scratchpad  
 
 - An integrated notepad for recording strings, indicators or notes
 - Supports saving as text, markdown and YAML formats

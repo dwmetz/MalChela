@@ -15,6 +15,8 @@
 
 </div>
 
+<div style="text-align: center;">
+
 | Program             | Function                                                                 |
 |---------------------|--------------------------------------------------------------------------|
 | Combine YARA        | Point it at a directory of YARA files and it will output one combined rule |
@@ -30,4 +32,6 @@
 | Malware Hash Lookup | Query a hash value against VirusTotal & Malware Bazaar*                  |
 | XMZMD5              | Recurse a directory, for files without MZ, Zip or PDF header, create hash list |
 
-**The Malware Hash Lookup requires an api key for Virus Total and Malware Bazaar.  If unidentified , MalChela will prompt you to create them the first time you run the malware lookup function.*</file>
+**The Malware Hash Lookup requires an api key for Virus Total and Malware Bazaar.  If unidentified , MalChela will prompt you to create them the first time you run the malware lookup function.**
+
+</div>

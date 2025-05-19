@@ -15,5 +15,31 @@ extra_css:
   - stylesheets/colors.css
 nav:
   - Home: index.md
-  - User Guide: user-guide.md
-  - tools.yaml Example: ../tools.yaml
+  - About: about.md  # Suggest separating from Home
+  - Installation:
+      - Install Guide: install/index.md
+  - Core Tools:
+      - Overview: tools/index.md
+      - Usage: tools/cli-vs-gui.md
+      - MismatchMiner: tools/mismatchminer.md
+      - FileAnalyzer: tools/fileanalyzer.md
+      - MStrings: tools/mstrings.md
+      - MalHash: tools/malhash.md
+      - StringsToYARA: tools/strings_to_yara.md
+      - CombineYARA: tools/combine_yara.md
+      - ExtractSamples: tools/extract_samples.md
+      - HashIt: tools/hashit.md
+      - MZMD5: tools/mzmd5.md
+      - XMZMD5: tools/xmzmd5.md
+      - MZCount: tools/mzcount.md
+      - NSRLQuery: tools/nsrlquery.md
+  - Third-Party Tools:
+      - Configuration:
+          - tools.yaml Format: tools/tools-yaml.md
+      - Enhanced Integrations:
+          - TShark: tools/tshark.md
+          - FLOSS: tools/floss.md
+          - YARA-X: tools/yara-x.md
+          - Volatility 3: tools/vol3.md
+  - REMnux Mode: tools/remnux.md
+  - Support: support.md

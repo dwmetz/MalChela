@@ -18,11 +18,14 @@
   color: #00cfc1 !important;
 }
 
-/* Cyan top nav tab links */
-.md-header__topic, 
-.md-tabs__link, 
-.md-tabs__link:focus, 
-.md-tabs__link:hover, 
+
+/* Rust orange for unselected top nav tab links */
+.md-tabs__link {
+  color: #d65a31 !important;
+}
+
+/* Cyan for active top nav tab */
 .md-tabs__link--active {
   color: #00cfc1 !important;
+  font-weight: bold;
 }

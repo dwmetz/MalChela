@@ -33,8 +33,35 @@ This allows forensic VMs like REMnux to use a tailored toolset while keeping you
 
 > A bundled `tools_remnux.yaml` is included in the repo for convenience.
 
+
 #### Key Tips
 
 - Always use `file_position: “last”` unless the tool expects input before the script
 - For scripts requiring Python, keep the script path in `optional_args[0]`
 - For tools installed via `pipx`, reference the binary path directly in `command`
+
+
+
+## Backing Up and Restoring tool.yaml
+
+The MalChela GUI provides built-in functionality to back up and restore your `tools.yaml` configuration file.
+
+### Backup
+
+To create a backup of your current `tools.yaml`:
+
+1. Open the **Configuration Panel**
+2. Click the **“Back Up Config”** button
+3. A timestamped copy of `tools.yaml` will be saved to the default location
+
+You’ll see a confirmation message when the operation completes successfully.
+
+### Restore
+
+To restore from a previous backup:
+
+1. Click the **“Restore Config”** button in the Configuration Panel
+2. Select a previously saved backup file
+3. The selected file will overwrite the current configuration
+
+> This feature makes it easy to experiment with custom tool setups while retaining a safety net for recovery.

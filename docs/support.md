@@ -1,17 +1,16 @@
 
 ## 🦀 Support & Contribution
 
-	•	GitHub: https://github.com/dwmetz/MalChela
-	•	Issues/PRs welcome
-	•	Extend via tools.yaml for external tools
+The MalChela project is open source and actively maintained. Contributions, feedback, and bug reports are always welcome. You can find the project on [GitHub](https://github.com/dwmetz/MalChela), where issues and pull requests are encouraged.
 
+---
 
+## ⚠️ Known Limitations & Platform Notes
 
-### ⚠️ Known Limitations & WSL Notes
+MalChela is designed to be cross-platform but has some current limitations:
 
-	•	CLI works in WSL
-	•	GUI requires macOS or Linux (may work in WSLg on Win11)
-	•	Paths must be POSIX-style
-	•	If `exec_type` is omitted or misconfigured in `tools.yaml`, the GUI may attempt to run the tool incorrectly.
-	•	GUI execution behavior no longer depends on the `category` field.
-	•	FLOSS may print a warning such as `from multiprocessing.resource_tracker import main;main(6)` due to a known bug in its multiprocessing logic. This does not affect output and can be safely ignored.
+- The **CLI** runs well on macOS, Linux, and WSL environments.
+- The **GUI** is supported on macOS and Linux. It may also work under WSLg on Windows 11, but this is not officially tested.
+- File paths must use **POSIX-style formatting** (e.g., `/home/user/file.txt`). Windows-style paths are not supported.
+- If the `exec_type` field is missing or misconfigured in `tools.yaml`, GUI execution may fail or behave incorrectly.
+- The `category` field in `tools.yaml` no longer impacts GUI execution behavior—it is only used for grouping in the interface.

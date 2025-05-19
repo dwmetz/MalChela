@@ -36,8 +36,6 @@ nav:
       - MZCount: coretools/mzcount.md
       - NSRLQuery: coretools/nsrlquery.md
   - Third-Party Tools:
-      - Configuration:
-          - tools.yaml: tools/tools-yaml.md
       - Enhanced Integrations:
           - TShark: tools/tshark.md
           - FLOSS: tools/floss.md

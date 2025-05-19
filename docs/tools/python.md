@@ -1,5 +1,5 @@
 
-### 🐍 Configuring Python-Based Tools (oletools & oledump)
+### Configuring Python-Based Tools (oletools & oledump)
 
 MalChela supports Python-based tools as long as they are properly declared in `tools.yaml`. Below are detailed examples and installation instructions for two commonly used utilities:
 

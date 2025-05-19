@@ -918,11 +918,11 @@ impl App for AppState {
                         });
                     });
 
-                    if ui.button(RichText::new("📖 User Guide").color(STONE_BEIGE)).on_hover_text("Open MalChela_User_Guide_v2.1.2.md").clicked() {
+                    if ui.button(RichText::new("📖 User Guide").color(STONE_BEIGE)).on_hover_text("Open MalChela User Guide").clicked() {
                         let mut guide_path = std::env::current_exe().unwrap();
                         while let Some(parent) = guide_path.parent() {
                             if parent.join("Cargo.toml").exists() {
-                                guide_path = parent.join("docs/MalChela_User_Guide.md");
+                                guide_path = parent.join("docs/user-guide.md");
                                 break;
                             }
                             guide_path = parent.to_path_buf();

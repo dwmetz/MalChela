@@ -1,4 +1,4 @@
-### ⚙️ Installing and Configuring YARA-X
+### Installing and Configuring YARA-X
 
 YARA-X is an extended version of YARA with enhanced performance and features. To integrate YARA-X with MalChela, follow these steps:
 

@@ -1,5 +1,5 @@
 
-### 🧩 FLOSS Notes
+### FLOSS Notes
 
 - FLOSS extracts static, stack, tight, and decoded strings from binaries.
 - The GUI supports all CLI flags (e.g., `—only`, `—format`, `-n`, etc.).

@@ -1,0 +1,1 @@
+•	fileanalyzer: YARA rules for tools like `fileanalyzer` are stored in the `yara_rules` folder in the workspace. You can modify or add rules here.

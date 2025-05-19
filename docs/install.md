@@ -1,11 +1,11 @@
 
-### 🛠 Prerequisites
+### Prerequisites
 
 	•	Rust and Cargo
 	•	Git
 	•	Unix-like environment (Linux, macOS, or Windows with WSL)
 
-### 🔗 System Dependencies (Recommended)
+### System Dependencies (Recommended)
 
 To ensure all tools build and run correctly, install the following packages (especially for Linux/REMnux):
 

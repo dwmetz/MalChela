@@ -114,12 +114,7 @@ fn scan_and_count_files(
                         Err(e) => eprintln!("Error scanning {:?}: {}", file_path, e),
                     }
 
-                    if use_table_display {
-                        if atty::is(Stream::Stdout) {
-                            clearscreen::clear().expect("Failed to clear screen");
-                        }
-                        display_table(counts);
-                    } else {
+                    if !use_table_display {
                         println!("Scanned: {:?}", file_path.to_string_lossy());
                         println!(
                             "Current Counts: Counts {{ total_files: {}, mz_header: {}, pdf_header: {}, zip_header: {}, neither_header: {} }}",
@@ -174,15 +169,9 @@ fn main() {
         }
     };
 
-    let use_table_display = match std::env::var("MZCOUNT_TABLE_DISPLAY") {
-        Ok(val) => val == "1",
-        Err(_) => {
-            println!("Choose output mode:\n1) Table View\n2) Detailed View");
-            let mut choice = String::new();
-            std::io::stdin().read_line(&mut choice).expect("Failed to read choice");
-            choice.trim() == "1"
-        }
-    };
+    let use_table_display = std::env::var("MZCOUNT_TABLE_DISPLAY")
+        .map(|val| val == "1")
+        .unwrap_or(false);
 
     match compile_yara_rules() {
         Ok(rules) => {
@@ -198,15 +187,16 @@ fn main() {
                 neither_header: 0,
             };
 
+            // DEBUG line removed as requested.
             scan_and_count_files(&directory_path, &rules, use_table_display, &mut counts);
 
             if use_table_display {
                 clearscreen::clear().expect("Failed to clear screen");
+                display_table(&counts);
+            } else {
+                println!("\nFinal Results:");
+                display_table(&counts);
             }
-
-            println!("\nFinal Results:");
-            display_table(&counts);
-            std::env::remove_var("MZCOUNT_TABLE_DISPLAY");
 
             if counts.total_files == 0 {
                 println!("No files were scanned. Please check your directory.");

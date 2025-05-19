@@ -23,24 +23,25 @@ nav:
   - Core Tools:
       - Overview: coretools/index.md
       - Usage: coretools/usage.md
-      - MismatchMiner: coretools/mismatchminer.md
-      - FileAnalyzer: coretools/fileanalyzer.md
-      - MStrings: coretools/mstrings.md
-      - MalHash: coretools/malhash.md
-      - StringsToYARA: coretools/strings_to_yara.md
       - CombineYARA: coretools/combine_yara.md
       - ExtractSamples: coretools/extract_samples.md
+      - FileAnalyzer: coretools/fileanalyzer.md
       - HashIt: coretools/hashit.md
+      - MalHash: coretools/malhash.md
+      - MismatchMiner: coretools/mismatchminer.md
+      - MStrings: coretools/mstrings.md
+      - MZCount: coretools/mzcount.md      
       - MZMD5: coretools/mzmd5.md
-      - XMZMD5: coretools/xmzmd5.md
-      - MZCount: coretools/mzcount.md
       - NSRLQuery: coretools/nsrlquery.md
+      - StringsToYARA: coretools/strings_to_yara.md
+      - XMZMD5: coretools/xmzmd5.md
+
   - Third-Party Tools:
     - Configuration Reference: tools/tools-yaml.md
     - Enhanced Integrations: tools/enhanced.md
-    - TShark: tools/tshark.md
     - FLOSS: tools/floss.md
-    - YARA-X: tools/yara-x.md
+    - TShark: tools/tshark.md
     - Volatility 3: tools/vol3.md
+    - YARA-X: tools/yara-x.md
   - REMnux Mode: remnux.md
   - Support: support.md

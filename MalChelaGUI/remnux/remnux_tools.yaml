@@ -37,7 +37,7 @@ tools:
   description: "Extracts strings with IOC and MITRE mapping"
   command: ["mstrings"]
   input_type: file
-  category: "File Analysis"
+  category: "Strings Analysis"
   exec_type: cargo
 
 - name: Malware Hash Lookup
@@ -82,7 +82,7 @@ tools:
   category: "Hashing Tools"
   exec_type: cargo
 
-- name: MZcount
+- name: MZCount
   description: "Counts file types within a directory"
   command: ["mzcount"]
   input_type: folder
@@ -249,7 +249,7 @@ tools:
   command: ["floss"]
   input_type: "file"
   file_position: "last"
-  category: "File Analysis"
+  category: "Strings Analysis"
   gui_mode_args: []
   exec_type: script
 

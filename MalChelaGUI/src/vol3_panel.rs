@@ -39,7 +39,7 @@ impl Vol3Panel {
     ) {
         ui.label(RichText::new("Selected Tool: Volatility 3 (Input: file)").color(Color32::from_rgb(0, 255, 255)).strong());
         let preview_cmd = format!(
-            "vol3 -f {} {}",
+            "vol3 -f \"{}\" {}",
             input_path.trim(),
             if self.use_custom {
                 self.custom_plugin_name.as_str()

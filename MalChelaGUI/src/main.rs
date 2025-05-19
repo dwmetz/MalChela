@@ -149,8 +149,8 @@ impl AppState {
             // self.save_report = (false, ".txt".to_string()); // <-- Removed to preserve Save Report setting
             self.zip_password.clear();
             // self.scratchpad_path.clear(); // <-- Removed to allow rule file persistence across runs
-            self.string_source_path.clear();
-            self.selected_format = ".txt".to_string();
+            // self.string_source_path.clear(); // <-- Removed to preserve selected string source file
+            // self.selected_format = ".txt".to_string(); // <-- Removed to prevent overwriting Description for strings_to_yara
 
             // Special case for YARA-X (yr)
             if tool.command.get(0).map(|s| s == "yr").unwrap_or(false) {
@@ -185,27 +185,44 @@ impl AppState {
                 if !custom_args.trim().is_empty() {
                     args.push(custom_args.trim().to_string());
                 }
-                let joined_args = args.join(" ");
+                // Quote all arguments for correct shell parsing
+                let quoted_args = args.iter()
+                    .map(|arg| format!("\"{}\"", arg))
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 // Use which::which to find the full path to vol or vol3
                 let vol_path = which::which(&command[0]).unwrap_or_else(|_| std::path::PathBuf::from(&command[0]));
-                let full_cmd = format!("{} {}", vol_path.display(), joined_args);
-
+                // Escape all quotes for the echo "Running:" line
+                let escaped_command = format!("\\\"{}\\\" {}", vol_path.display(), quoted_args);
                 {
                     let script_path = self.workspace_root.join("launch_vol3.command");
                     let _ = std::fs::write(
                         &script_path,
                         format!(
-                            "#!/bin/bash\n{}\necho\necho Press Enter to close; read",
-                            full_cmd
+                            r#"#!/bin/bash
+echo "[INFO] Starting Volatility at $(date)"
+echo "Running: {escaped}"
+{vol} {args}
+echo
+read -p "Press Enter to close..."
+"#,
+                            vol = vol_path.display(),
+                            args = quoted_args,
+                            escaped = escaped_command,
                         ),
                     );
                     let _ = std::process::Command::new("chmod").arg("+x").arg(&script_path).status();
+                    // Output the script path to the console area for clarity and copy-paste use
+                    {
+                        let mut out = self.command_output.lock().unwrap();
+                        out.push_str(&format!("Launch script created at: {}\n", script_path.display()));
+                        self.output_lines.lock().unwrap().push(format!("Launch script created at: {}", script_path.display()));
+                    }
                     // Platform-specific terminal launch logic
                     #[cfg(target_os = "macos")]
-                    let terminal_launch = std::process::Command::new("open")
-                        .arg("-a")
-                        .arg("Terminal")
-                        .arg(&script_path)
+                    let terminal_launch = std::process::Command::new("osascript")
+                        .arg("-e")
+                        .arg(format!("tell app \"Terminal\" to do script \"{}\"", script_path.display()))
                         .spawn();
                     #[cfg(target_os = "linux")]
                     let terminal_launch = std::process::Command::new("x-terminal-emulator")
@@ -487,11 +504,11 @@ impl AppState {
                     base_args.insert(insert_idx, input_path.clone());
                 } else if command[0] == "strings_to_yara" {
                     base_args.extend(vec![
-                        input_path.clone(),
-                        author_name.clone(),
-                        selected_format.clone(),
-                        scratchpad_path.clone(),
-                        string_source_path.clone(),
+                        input_path.clone(),            // Rule name
+                        author_name.clone(),           // Author
+                        selected_format.clone(),       // Description
+                        scratchpad_path.clone(),       // Hash
+                        string_source_path.clone(),    // Strings file
                     ]);
                 } else if !command.get(0).map(|s| s == "yr").unwrap_or(false) {
                     base_args.insert(0, input_path.clone());
@@ -520,7 +537,7 @@ impl AppState {
                 if command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
                     for (key, value) in &env_vars {
                         if key == "MZCOUNT_TABLE_DISPLAY" {
-                            args.push(format!("{}={}", key, value));
+                            std::env::set_var(key, value);
                         }
                     }
                 }
@@ -828,7 +845,7 @@ impl App for AppState {
 
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                let mut title = "MalChela v2.1.2 — YARA & Malware Analysis Toolkit".to_string();
+                let mut title = "MalChela v2.2.0 — YARA & Malware Analysis Toolkit".to_string();
                 if !self.edition.trim().is_empty() {
                     title.push_str(&format!(" ({})", self.edition));
                 }

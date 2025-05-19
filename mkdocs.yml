@@ -18,7 +18,7 @@ nav:
   - About: about.md  # Suggest separating from Home
   - Installation: install.md
   - Configuration:
-      - tools.yaml: congfiguration/tools.yaml.md
+      - tools.yaml: congfiguration/tools-yaml.md
       - api configuration: configuration/api-configuration.md
   - Core Tools:
       - Overview: coretools/index.md

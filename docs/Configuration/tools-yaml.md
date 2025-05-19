@@ -18,6 +18,10 @@ MalChela uses a central `tools.yaml` file to define which tools appear in the GU
 
 > ⚠️ All fields except `optional_args` are required.
 
+<figure>
+  <img src="/images/yaml_configurator.png" alt="MalChela GUI">
+  <figcaption><strong>Figure 1:</strong> MalChela GUI</figcaption>
+</figure>
 
 ## Swapping Configs: REMnux Mode and Beyond
 

@@ -13,7 +13,7 @@
   These built-in programs provide fast, flexible functionality for forensics and malware triage.
 </p>
 
-<table style="margin: 0 auto;">
+<table style="margin: 0 auto; max-width: 80%;">
   <thead>
     <tr>
       <th>Program</th>

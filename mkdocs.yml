@@ -16,8 +16,7 @@ extra_css:
 nav:
   - Home: index.md
   - About: about.md  # Suggest separating from Home
-  - Installation:
-      - Install Guide: install/index.md
+  - Installation: install.md
   - Core Tools:
       - Overview: tools/index.md
       - Usage: tools/cli-vs-gui.md

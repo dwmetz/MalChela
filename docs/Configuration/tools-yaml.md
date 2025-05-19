@@ -21,7 +21,7 @@ MalChela uses a central `tools.yaml` file to define which tools appear in the GU
 ---
 
 <figure>
-  <img src="/images/yaml_configurator.png" alt="MalChela GUI">
+  <img src="/images/yaml_configurator.png" alt="YAML Config Tool">
   <figcaption><strong>Figure 1:</strong> YAML Config Tool</figcaption>
 </figure>
 

@@ -26,6 +26,10 @@ These files should be placed in the **root of your MalChela workspace**, alongsi
 These keys will be read at runtime by tools such as `malhash` to enable external lookups.
 
 ---
+<figure>
+  <img src="/images/api_configuration.png" alt="API Configuration Utility">
+  <figcaption><strong>Figure 1:</strong> API Configuration Utility</figcaption>
+</figure>
 
 ## Managing Your Keys with the Configuration Utility
 

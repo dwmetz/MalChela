@@ -18,20 +18,20 @@ nav:
   - About: about.md  # Suggest separating from Home
   - Installation: install.md
   - Core Tools:
-      - Overview: tools/index.md
-      - Usage: tools/cli-vs-gui.md
-      - MismatchMiner: tools/mismatchminer.md
-      - FileAnalyzer: tools/fileanalyzer.md
-      - MStrings: tools/mstrings.md
-      - MalHash: tools/malhash.md
-      - StringsToYARA: tools/strings_to_yara.md
-      - CombineYARA: tools/combine_yara.md
-      - ExtractSamples: tools/extract_samples.md
-      - HashIt: tools/hashit.md
-      - MZMD5: tools/mzmd5.md
-      - XMZMD5: tools/xmzmd5.md
-      - MZCount: tools/mzcount.md
-      - NSRLQuery: tools/nsrlquery.md
+      - Overview: coretools/index.md
+      - Usage: coretools/cli-vs-gui.md
+      - MismatchMiner: coretools/mismatchminer.md
+      - FileAnalyzer: coretools/fileanalyzer.md
+      - MStrings: coretools/mstrings.md
+      - MalHash: coretools/malhash.md
+      - StringsToYARA: coretools/strings_to_yara.md
+      - CombineYARA: coretools/combine_yara.md
+      - ExtractSamples: coretools/extract_samples.md
+      - HashIt: coretools/hashit.md
+      - MZMD5: coretools/mzmd5.md
+      - XMZMD5: coretools/xmzmd5.md
+      - MZCount: coretools/mzcount.md
+      - NSRLQuery: coretools/nsrlquery.md
   - Third-Party Tools:
       - Configuration:
           - tools.yaml Format: tools/tools-yaml.md

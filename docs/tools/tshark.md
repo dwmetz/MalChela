@@ -1,4 +1,4 @@
-### 🦈 TShark Field Reference Panel
+### TShark Field Reference Panel
 
 If TShark is included in your `tools.yaml` (or if you’re using the REMnux configuration), the GUI provides an integrated reference panel for display filter fields.
 

@@ -19,7 +19,7 @@ nav:
   - Installation: install.md
   - Core Tools:
       - Overview: coretools/index.md
-      - Usage: coretools/cli-vs-gui.md
+      - Usage: coretools/usage.md
       - MismatchMiner: coretools/mismatchminer.md
       - FileAnalyzer: coretools/fileanalyzer.md
       - MStrings: coretools/mstrings.md
@@ -34,7 +34,7 @@ nav:
       - NSRLQuery: coretools/nsrlquery.md
   - Third-Party Tools:
       - Configuration:
-          - tools.yaml Format: tools/tools-yaml.md
+          - tools.yaml: tools/tools-yaml.md
       - Enhanced Integrations:
           - TShark: tools/tshark.md
           - FLOSS: tools/floss.md

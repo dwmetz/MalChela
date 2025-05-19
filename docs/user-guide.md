@@ -402,11 +402,11 @@ If TShark is included in your `tools.yaml` (or if you're using the REMnux config
 - Provides examples, tooltips, and a copy-to-clipboard feature
 - Helps users construct and test display filters visually
 
-#### ✅ Key Tips
-
-- Always use `file_position: "last"` unless the tool expects input before the script
-- For scripts requiring Python, keep the script path in `optional_args[0]`
-- For tools installed via `pipx`, reference the binary path directly in `command`
+	#### ✅ Key Tips
+	
+	- Always use `file_position: "last"` unless the tool expects input before the script
+	- For scripts requiring Python, keep the script path in `optional_args[0]`
+	- For tools installed via `pipx`, reference the binary path directly in `command`
 
 ## ⚠️ Known Limitations & WSL Notes
 

@@ -1,4 +1,3 @@
-
 # tools.yaml - MalChela Tool Configuration File
 #
 # This file defines tools that will appear in the MalChela GUI.
@@ -18,13 +17,13 @@
 #   command: "fileanalyzer"
 #   input_type: "file"
 #
-# Tools can be written in any language and do not need to be Rust-based,
+# Tools can be written in any language and don’t need to be Rust-based,
 # as long as they are executable and accept input via stdin, env vars,
 # or CLI arguments as expected.
 #
 # This file is loaded once at startup. Any changes require restarting the GUI.
 
-edition: "(Development) Edition"
+edition: " "
 
 tools:
 - name: Mismatch Miner
@@ -115,26 +114,7 @@ tools:
 # Example 3rd party integrations:
 # Below is a disabled example for capa
 # Uncomment to enable if capa is in your PATH
-
-- name: YARA-X
-  description: "Run YARA-X with custom rule and target file"
-  command: ["yr"]
-  input_type: file
-  file_position: "last"
-  category: "YARA Tools"
-  optional_args: []
-  exec_type: binary
-
-- name: TShark
-  description: "Analyze network traffic"
-  command: ["tshark"]
-  input_type: file
-  accepted_extensions: ["pcap", "pcapng"]
-  file_position: "last"
-  category: "Network Analysis"
-  optional_args: []
-  exec_type: binary
-
+# 
 # - name: capa
 #   description: "Detects capabilities in binaries via rules"
 #   command: ["capa"]
@@ -163,3 +143,4 @@ tools:
 #   exec_type: script
 # 
 #  ** Note: See User Guide for Python requirements
+

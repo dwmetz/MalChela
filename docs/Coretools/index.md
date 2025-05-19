@@ -1,3 +1,7 @@
+<figure>
+  <img src="/images/coretools.png" alt="Core Tools">
+  <figcaption><strong>Figure 1:</strong> Core Tools</figcaption>
+</figure>
 
 | Program             | Function                                                                 |
 |---------------------|--------------------------------------------------------------------------|

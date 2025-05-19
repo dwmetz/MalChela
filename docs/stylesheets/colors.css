@@ -1,12 +1,28 @@
-
-
-
 /* Rust orange for headings */
 .md-typeset h1, .md-typeset h2, .md-typeset h3 {
   color: #d65a31;
 }
 
-/* Cyan links */
-a {
-  color: #00cfc1;
+/* Make normal (non-hovered) links cyan */
+.md-typeset a {
+  color: #00cfc1 !important;
+}
+
+/* Cyan nav links (top nav and sidebar) */
+.md-nav__link {
+  color: #00cfc1 !important;
+}
+
+/* Cyan active nav link */
+.md-nav__link--active {
+  color: #00cfc1 !important;
+}
+
+/* Cyan top nav tab links */
+.md-header__topic, 
+.md-tabs__link, 
+.md-tabs__link:focus, 
+.md-tabs__link:hover, 
+.md-tabs__link--active {
+  color: #00cfc1 !important;
 }

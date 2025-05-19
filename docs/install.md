@@ -1,6 +1,5 @@
-## 🛠 Installation
 
-### Prerequisites
+### 🛠 Prerequisites
 
 	•	Rust and Cargo
 	•	Git

@@ -1,5 +1,5 @@
 
-## 🚀 Getting Started
+## Getting Started
 
 MalChela supports three main workflows:
 
@@ -16,7 +16,7 @@ MalChela supports three main workflows:
    cargo run -p MalChelaGUI
    ```
 
-## 🔧 CLI Usage Notes
+## CLI Usage Notes
 
 - Tools that accept paths (files or folders) can be run with `—` after the `cargo run` command to specify inputs and save output:
   ```bash
@@ -48,10 +48,10 @@ cargo run -p mstrings — path/to/file — -o -j
 
 
 
-## 🧰 GUI Usage Notes
+## GUI Usage Notes
 
 
-### ✨ GUI Features Summary
+### GUI Features Summary
 
 - Categorized tool list with input type detection (file, folder, hash)
 - Arguments textbox and dynamic path browser
@@ -62,7 +62,7 @@ cargo run -p mstrings — path/to/file — -o -j
 - Tool descriptions are now shown alongside tool names
 - Saved reports are cleaned of internal formatting tags like [green], [reset], etc.
 
-### 💻 GUI Walkthrough
+### GUI Walkthrough
 
 Layout
 
@@ -95,21 +95,19 @@ Save Report
 - Supports saving as text, markdown and YAML formats
 - Integrated “Open in VS Code” button for saved notes
 - Any line starting with `hash:` is ignored when using the Scratchpad as a source for String_to_Yara to generate YARA rules
-	
-	
 
-## 🧪 Tool Behavior Reference
-
-| Tool          | Input Type | Supports `-o` | Prompts if Missing | Notes |
-|—————|-————|-—————|———————|-——|
-| combine_yara | folder      | ❌             | ✅                  | Identifies mismatches || extract_samples | file      | ❌             | ✅                  | Extracts archive contents |
-| fileanalyzer  | file        | ✅             | ✅                  | Uses YARA + heuristics |
-| hashit | file      | ✅             | ✅                  | Generates hashes || malhash       | hash        | ✅             | ✅                  | Uses vt-cli + bazaar-cli |
-| mismatchminer | folder      | ✅             | ✅                  | Identifies mismatches |
-| mstrings      | file        | ✅             | ✅                  | Maps strings to MITRE |
-| nsrlquery | file      | ✅             | ✅                  | Queries CIRCL || strings_to_yara | file      | ❌             | ✅                  | Generates YARA rules |
-| mzmd5         | folder      | ❌             | ✅                  | MD5 only; no output flag |
-| mzcount         | folder      | ❌             | ✅                  | file counts |
-| strings_to_yara        | text file and metadata      | ❌             | ✅                  | Combined yara rule |
-| xmzmd5        | folder      | ❌             | ✅                  | Extended MD5 scan |
-	
+## Tool Behavior Reference
+| Tool            | Input Type             | Supports `-o` | Prompts if Missing | Notes                             |
+|-----------------|------------------------|---------------|--------------------|-----------------------------------|
+| combine_yara    | folder                 | ❌            | ✅                 | Combines multiple YARA rules      |
+| extract_samples | file                   | ❌            | ✅                 | Extracts archive contents         |
+| fileanalyzer    | file                   | ✅            | ✅                 | Uses YARA + heuristics            |
+| hashit          | file                   | ✅            | ✅                 | Generates hashes                  |
+| malhash         | hash                   | ✅            | ✅                 | Uses vt-cli + bazaar-cli          |
+| mismatchminer   | folder                 | ✅            | ✅                 | Identifies mismatches             |
+| mstrings        | file                   | ✅            | ✅                 | Maps strings to MITRE             |
+| nsrlquery       | file                   | ✅            | ✅                 | Queries CIRCL                     |
+| strings_to_yara | text file and metadata | ❌            | ✅                 | Generates YARA rules              |
+| mzmd5           | folder                 | ❌            | ✅                 | MD5 only; no output flag          |
+| mzcount         | folder                 | ❌            | ✅                 | Tallies file types                |
+| xmzmd5          | folder                 | ❌            | ✅                 | Extended MD5 scan                 |

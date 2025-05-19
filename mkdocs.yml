@@ -18,7 +18,7 @@ nav:
   - About: about.md  # Suggest separating from Home
   - Installation: install.md
   - Configuration:
-      - tools.yaml: congfiguration/tools-yaml.md
+      - tools.yaml: conffiguration/tools-yaml.md
       - api configuration: configuration/api-configuration.md
   - Core Tools:
       - Overview: coretools/index.md
@@ -41,5 +41,5 @@ nav:
           - FLOSS: tools/floss.md
           - YARA-X: tools/yara-x.md
           - Volatility 3: tools/vol3.md
-  - REMnux Mode: tools/remnux.md
+  - REMnux Mode: remnux.md
   - Support: support.md

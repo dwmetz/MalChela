@@ -1,6 +1,11 @@
 <figure>
-  <img src="/images/coretools.png" alt="Core Tools">
-  <figcaption><strong>Figure 1:</strong> Core Tools</figcaption>
+  <img src="/images/malchela_screenshot.png" alt="MalChela GUI">
+  <figcaption><strong>Figure 1:</strong> MalChela GUI</figcaption>
+</figure>
+
+<figure>
+  <img src="/images/malchela_cli_screenshot.png" alt="MalChela CLI">
+  <figcaption><strong>Figure 2:</strong> MalChela CLI</figcaption>
 </figure>
 
 | Program             | Function                                                                 |

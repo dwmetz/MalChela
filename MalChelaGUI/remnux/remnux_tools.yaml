@@ -1,0 +1,263 @@
+
+# remnux_tools.yaml - MalChela Tool Configuration File
+#
+# This file defines tools that will appear in the MalChela GUI.
+# Each tool block consists of:
+#   - name: Unique name used for display and reference
+#   - category: Category under which the tool appears in the GUI
+#   - command: The command to run (must be in PATH or relative to workspace)
+#   - input_type: One of "file", "folder", or "hash"
+#
+# To disable a tool without deleting it, simply comment out its block using "#".
+#
+# Example usage:
+#
+# - name: fileanalyzer
+#   description: "Extracts metadata, entropy, hashes, and YARA matches"
+#   category: "File Analysis"
+#   command: "fileanalyzer"
+#   input_type: "file"
+#
+# Tools can be written in any language and do not need to be Rust-based,
+# as long as they are executable and accept input via stdin, env vars,
+# or CLI arguments as expected.
+#
+# This file is loaded once at startup. Any changes require restarting the GUI.
+edition: "REMnux Edition"
+
+tools:
+- name: Mismatch Miner
+  description: "Identifies mismatched file extensions and types"
+  command: ["mismatchminer"]
+  input_type: folder
+  category: "File Analysis"
+  exec_type: cargo
+
+- name: "mStrings"
+  description: "Extracts strings with IOC and MITRE mapping"
+  command: ["mstrings"]
+  input_type: file
+  category: "Strings Analysis"
+  exec_type: cargo
+
+- name: Malware Hash Lookup
+  description: "Checks hash against VT and MalwareBazaar"
+  command: ["malhash"]
+  input_type: hash
+  category: "Threat Intel"
+  exec_type: cargo
+
+- name: Combine YARA
+  description: "Merges multiple YARA rules into one set"
+  command: ["combine_yara"]
+  input_type: folder
+  category: "YARA Tools"
+  exec_type: cargo
+
+- name: Extract Samples
+  description: "Extracts contents from password-protected archives"
+  command: ["extract_samples"]
+  input_type: folder
+  category: "Utilities"
+  exec_type: cargo
+
+- name: File Analyzer
+  description: "Parses file metadata and checks YARA rules"
+  command: ["fileanalyzer"]
+  input_type: file
+  category: "File Analysis"
+  exec_type: cargo
+
+- name: Hash It
+  description: "Generates multiple hashes for a single file"
+  command: ["hashit"]
+  input_type: file
+  category: "Hashing Tools"
+  exec_type: cargo
+
+- name: MZMD5
+  description: "Generates MD5 hashes for folder contents"
+  command: ["mzmd5"]
+  input_type: folder
+  category: "Hashing Tools"
+  exec_type: cargo
+
+- name: MZCount
+  description: "Counts file types within a directory"
+  command: ["mzcount"]
+  input_type: folder
+  category: "Hashing Tools"
+  exec_type: cargo
+
+- name: NSRL Hash Lookup
+  description: "Checks hash presence in NSRL database"
+  command: ["nsrlquery"]
+  input_type: hash
+  category: "Threat Intel"
+  exec_type: cargo
+
+- name: Strings to YARA
+  description: "Converts string sets into YARA rules"
+  command: ["strings_to_yara"]
+  input_type: hash
+  category: "YARA Tools"
+  exec_type: cargo
+
+- name: XMZMD5
+  description: "Generates MD5 hashes with extended output"
+  command: ["xmzmd5"]
+  input_type: folder
+  category: "Hashing Tools"
+  exec_type: cargo
+
+# -------------------------------------
+# 3rd party integrations:
+#
+- name: YARA-X
+  description: "Run YARA-X with custom rule and target file"
+  command: ["yr"]
+  input_type: file
+  file_position: "last"
+  category: "YARA Tools"
+  optional_args: []
+  exec_type: binary
+#
+# Note: YARA-X is not installed by default on REMnux. See the MalChela User Guide for installation instructions.
+#
+# -------------------------------------
+# Prebuilt config for Remnux users
+- name: capa
+  description: "Detects capabilities in binaries via rules"
+  command: ["capa"]
+  input_type: "file"
+  file_position: "last"
+  category: "File Analysis"
+  optional_args: []
+  exec_type: binary
+ 
+- name: strings
+  description: "Extracts printable strings from binary files"
+  command: ["strings"]
+  input_type: "file"
+  file_position: "first"
+  category: "Utilities"
+  optional_args: []
+  exec_type: binary
+
+- name: olevba
+  description: "Extract VBA macros from OLE files"
+  command: ["olevba"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  exec_type: script
+
+- name: oledump
+  description: "Dump streams from OLE files"
+  command: ["oledump.py"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  optional_args: []
+  exec_type: script
+
+- name: oleid
+  description: "Analyze OLE files for suspicious indicators"
+  command: ["oleid"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  exec_type: script
+
+- name: pdf-parser
+  description: "Parse structure and objects of a PDF file"
+  command: ["python3"]
+  input_type: "file"
+  file_position: "last"
+  category: "PDF Analysis"
+  optional_args: ["/usr/local/bin/pdf-parser.py"]
+  exec_type: script
+
+- name: rtfobj
+  description: "Extract embedded objects from RTF files"
+  command: ["rtfobj"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  exec_type: script
+
+- name: mraptor
+  description: "Detect auto-executing macros in Office docs"
+  command: ["mraptor"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  exec_type: script
+
+- name: exiftool
+  description: "Extract metadata from files"
+  command: ["exiftool"]
+  input_type: "file"
+  file_position: "last"
+  category: "Metadata Analysis"
+  exec_type: script
+
+- name: clamscan
+  description: "Antivirus scan using ClamAV"
+  command: ["clamscan"]
+  input_type: "file"
+  file_position: "last"
+  category: "Utilities"
+  exec_type: script
+
+- name: binwalk
+  description: "Scan binary files for embedded files"
+  command: ["binwalk"]
+  input_type: "file"
+  file_position: "last"
+  category: "File Analysis"
+  exec_type: script
+
+- name: radare2
+  description: "Scan binary files"
+  command: ["/usr/bin/r2 -i"]
+  input_type: "file"
+  file_position: "last"
+  category: "File Analysis"
+  exec_type: script
+
+- name: Volatility 3
+  description: "Memory analysis using Volatility 3"
+  command: ["vol3"]
+  input_type: "file"
+  file_position: "first"
+  category: "Memory Forensics"
+  gui_mode_args: []
+  exec_type: script
+
+- name: TShark
+  description: "Analyze network traffic"
+  command: ["tshark"]
+  input_type: "file"
+  file_position: "first"
+  category: "Network Forensics"
+  gui_mode_args: []
+  exec_type: script
+
+- name: FLOSS
+  description: "Extract obfuscated strings from binaries"
+  command: ["floss"]
+  input_type: "file"
+  file_position: "last"
+  category: "Strings Analysis"
+  gui_mode_args: []
+  exec_type: script
+
+- name: zipdump
+  description: "Parses and analyzes suspicious PDF structures"
+  command: ["zipdump.py"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  optional_args: []
+  exec_type: script

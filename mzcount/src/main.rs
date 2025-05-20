@@ -1,5 +1,3 @@
-use atty;
-use atty::Stream;
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};

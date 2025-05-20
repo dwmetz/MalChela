@@ -34,7 +34,7 @@ This installs `olevba` as a standalone CLI tool accessible in your user path.
 
 —
 
-#### 🔧 `oledump` (standalone script)
+#### `oledump` (standalone script)
 
 **Manual installation:**
 

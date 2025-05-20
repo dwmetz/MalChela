@@ -6,7 +6,6 @@ If TShark is included in your `tools.yaml` (or if you’re using the REMnux conf
 - The “?” icon next to filter fields launches the Field Reference panel, which provides searchable field definitions, examples, tooltips, and a copy-to-clipboard feature.
 - Together, these tools help analysts visually explore and test filter syntax without needing to memorize protocol-specific field names.
 
-<figure>
-  <img src="/images/tshark.png" alt="TShark">
-  <figcaption><strong>Figure 1:</strong> TShark</figcaption>
-</figure>
+![TShark](../images/tshark.png)
+
+<p align="center"><strong>Figure 22:</strong> TShark</p>

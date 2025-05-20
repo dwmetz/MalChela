@@ -18,16 +18,19 @@ MalChela uses a central `tools.yaml` file to define which tools appear in the GU
 
 > ⚠️ All fields except `optional_args` are required.
 
-
 ## Swapping Configs: REMnux Mode and Beyond
 
 MalChela supports easy switching between tool configurations via the GUI.
 
+![YAML Config Tool](../images/yaml_configurator.png)
+
+<p align="center"><strong>Figure 20:</strong> YAML Config Tool</p>
+
 To switch:
 
-1. Open the **Configuration Panel**
-2. Use **“Select tools.yaml”** to point to a different config
-3. Restart the GUI or reload tools
+- Open the **Configuration Panel**
+- Use **“Select tools.yaml”** to point to a different config
+- Restart the GUI or reload tools
 
 This allows forensic VMs like REMnux to use a tailored toolset while keeping your default config untouched.
 
@@ -50,9 +53,9 @@ The MalChela GUI provides built-in functionality to back up and restore your `to
 
 To create a backup of your current `tools.yaml`:
 
-1. Open the **Configuration Panel**
-2. Click the **“Back Up Config”** button
-3. A timestamped copy of `tools.yaml` will be saved to the default location
+- Open the **Configuration Panel**
+- Click the **“Back Up Config”** button
+- A timestamped copy of `tools.yaml` will be saved to the default location
 
 You’ll see a confirmation message when the operation completes successfully.
 
@@ -60,8 +63,8 @@ You’ll see a confirmation message when the operation completes successfully.
 
 To restore from a previous backup:
 
-1. Click the **“Restore Config”** button in the Configuration Panel
-2. Select a previously saved backup file
-3. The selected file will overwrite the current configuration
+- Click the **“Restore Config”** button in the Configuration Panel
+- Select a previously saved backup file
+- The selected file will overwrite the current configuration
 
 > This feature makes it easy to experiment with custom tool setups while retaining a safety net for recovery.

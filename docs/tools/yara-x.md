@@ -1,26 +1,29 @@
-### Installing and Configuring YARA-X
+# Installing and Configuring YARA-X
+
+![YARA-X](../images/yara-x.png)
+
+<p align="center"><strong>Figure 25:</strong> YARA-X </p>
+
+---
 
 YARA-X is an extended version of YARA with enhanced performance and features. To integrate YARA-X with MalChela, follow these steps:
 
-#### Installation
+## Installation
 
-1. **Download the latest release:**
+- **Download the latest release:**  
+   Visit the official YARA-X GitHub releases page at [https://github.com/Yara-Rules/yara-x/releases](https://github.com/Yara-Rules/yara-x/releases) and download the appropriate binary for your platform.
 
-Visit the official YARA-X GitHub releases page at [https://github.com/Yara-Rules/yara-x/releases](https://github.com/Yara-Rules/yara-x/releases) and download the appropriate binary for your platform.
+- **Extract and install:**  
+   Extract the downloaded archive and place the `yara-x` binary in a directory included in your system’s `$PATH`, or note its absolute path for configuration.
 
-2. **Extract and install:**
-
-Extract the downloaded archive and place the `yara-x` binary in a directory included in your system’s `$PATH`, or note its absolute path for configuration.
-
-3. **Verify installation:**
-
-Run the following command to confirm YARA-X is installed correctly:
+- **Verify installation:**  
+   Run the following command to confirm YARA-X is installed correctly:
 
 ```bash
 yara-x —version
 ```
 
-#### Configuration in MalChela
+## Configuration in MalChela
 
 To use YARA-X within MalChela tools, update your `tools.yaml` with the following example entry:
 
@@ -35,12 +38,12 @@ To use YARA-X within MalChela tools, update your `tools.yaml` with the following
   exec_type: binary
 ```
 
-#### Using YARA-X Rules
+## Using YARA-X Rules
 
 - Place your YARA rules in the `yara_rules` folder within the workspace.
 - YARA-X supports recursive includes and extended features; ensure your rules are compatible.
 - The MalChela GUI and CLI will invoke YARA-X when configured as above, providing faster scans and improved detection.
 
-#### Tips
+## Tips
 
 - For advanced usage, consult the [YARA-X documentation](https://github.com/Yara-Rules/yara-x) for command-line options and rule syntax.

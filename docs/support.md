@@ -5,7 +5,7 @@ The MalChela project is open source and actively maintained. Contributions, feed
 
 ---
 
-## ⚠️ Known Limitations & Platform Notes
+## Known Limitations & Platform Notes
 
 MalChela is designed to be cross-platform but has some current limitations:
 

@@ -1,6 +1,3 @@
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 
 use std::fs::File;
 use std::io::Write;
@@ -8,6 +5,7 @@ use std::io::Write;
 use clap::Parser;
 use common_config::get_output_dir;
 use common_ui::styled_line;
+use serde::Serialize;
 
 #[derive(Parser)]
 #[command(name = "fileanalyzer", about = "Analyzes binary files for static indicators.")]
@@ -42,6 +40,8 @@ struct FileAnalysisReport {
     uncommon_sections: Vec<String>,
     suspicious_imports: Vec<String>,
     suspicious_compile_time: bool,
+    fuzzy_hash: Option<String>,
+    imphash: Option<String>,
 }
 #[allow(dead_code)]
 
@@ -54,10 +54,12 @@ mod packed;
 mod vt_scan;
 mod filetype;
 mod signing;
+mod fuzzy;
+mod imphash;
 
 use std::fs;
 use std::path::Path;
-
+use pelite::pe64::Pe;
 use chrono::{Utc, Datelike};
 
 
@@ -68,7 +70,7 @@ async fn main() {
     let file_path = match args.input {
         Some(path) => path,
         None => {
-            let line = styled_line("yellow", "Enter the path to the file you want to analyze:");
+            let line = styled_line("yellow", "\nEnter the path to the file you want to analyze:");
             println!("{}", line);
             let temp_path = std::env::temp_dir().join("malchela_temp_output.txt");
             let mut temp_file = File::create(&temp_path).expect("Failed to create temp output file");
@@ -79,6 +81,12 @@ async fn main() {
         }
     };
 
+    // Add blank line after file path is printed and before File Type section
+    println!();
+    let temp_path = std::env::temp_dir().join("malchela_temp_output.txt");
+    let mut temp_file = File::create(&temp_path).expect("Failed to create temp output file");
+    writeln!(temp_file).ok();
+
     if !Path::new(&file_path).exists() {
         let line = styled_line("yellow", "File not found!");
         println!("{}", line);
@@ -88,22 +96,49 @@ async fn main() {
         return;
     }
 
-    let temp_path = std::env::temp_dir().join("malchela_temp_output.txt");
-    let mut temp_file = File::create(&temp_path).expect("Failed to create temp output file");
-    writeln!(temp_file).ok();
-
     let file_content = fs::read(file_path.clone()).expect("Failed to read file");
     let save_output = args.output;
-    let mut compile_time_str = String::new();
+    // Removed compile_time_str declaration; will be scoped later.
     let mut suspicious_compile_time = false;
     let file_type = filetype::detect_file_type(&file_content);
     let line = styled_line("stone", &format!("File Type: {}", file_type));
     println!("{}", line);
     writeln!(temp_file, "{}", line).ok();
     let hash = hashing::calculate_sha256(&file_content);
+    let md5 = hashing::calculate_md5(&file_content);
     let line = styled_line("stone", &format!("SHA-256 Hash: {:?}", hash));
     println!("{}", line);
     writeln!(temp_file, "{}", line).ok();
+
+    let fuzzy_hash = match std::fs::metadata(&file_path) {
+        Ok(meta) if meta.len() < 512 => {
+            let msg = "Fuzzy Hash: (unable to compute – File too small for fuzzy hashing.)";
+            let line = styled_line("yellow", msg);
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+            None
+        }
+        Ok(_) => match fuzzy::calculate_fuzzy_hash(&file_path) {
+            Ok(fh) => {
+                let line = styled_line("stone", &format!("Fuzzy Hash (ssdeep): {}", fh));
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                Some(fh)
+            }
+            Err(e) => {
+                let line = styled_line("yellow", &format!("Fuzzy Hash: (unable to compute – {})", e));
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                None
+            }
+        },
+        Err(e) => {
+            let line = styled_line("yellow", &format!("Fuzzy Hash: (unable to compute – {})", e));
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+            None
+        }
+    };
 
     let vt_result = match vt_scan::check_virustotal(&hash).await {
         Ok(true) => {
@@ -120,6 +155,44 @@ async fn main() {
         }
         Err(e) => {
             let line = styled_line("yellow", &format!("VirusTotal: Error - {}", e));
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+            None
+        }
+    };
+
+    // NSRL hash lookup using internal nsrlquery subtool via cargo run
+    let nsrl_result = match std::process::Command::new("cargo")
+        .args(["run", "-p", "nsrlquery", "--", &md5])
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            let output_str = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            if output_str.contains("hash not found") || output_str.contains("not found in the database") {
+                let line = styled_line("stone", "NSRL: Not found");
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                Some(false)
+            } else if output_str.contains("found in the database") {
+                let line = styled_line("stone", "NSRL: Present in NSRL");
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                Some(true)
+            } else {
+                let line = styled_line("stone", &format!("NSRL: Unknown response - {}", output_str.trim()));
+                println!("{}", line);
+                writeln!(temp_file, "{}", line).ok();
+                None
+            }
+        }
+        Ok(_) => {
+            let line = styled_line("stone", "NSRL: Not found");
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+            Some(false)
+        }
+        Err(e) => {
+            let line = styled_line("stone", &format!("NSRL: Offline or Error - {}", e));
             println!("{}", line);
             writeln!(temp_file, "{}", line).ok();
             None
@@ -156,7 +229,8 @@ async fn main() {
         }
     }
 
-    match pe_parser::parse_pe_header(&file_content) {
+    let mut imphash = None;
+    let pe_info = match pe_parser::parse_pe_header(&file_content) {
         Ok(pe_info) => {
             let mut pe_output = String::new();
             writeln!(temp_file).ok();
@@ -167,20 +241,23 @@ async fn main() {
             pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("  PE Header parsed: {} sections, {} imports, {} exports", pe_info.sections.len(), pe_info.imports.len(), pe_info.exports.len()))));
             pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("  Summary: {}", pe_info.summary))));
 
-            compile_time_str = pe_info.compile_time.clone();
-            if let Ok(dt) = chrono::DateTime::parse_from_str(&pe_info.compile_time, "%Y-%m-%d %H:%M:%S UTC") {
-                let compile_time_utc = dt.with_timezone(&Utc);
-                let current_time = Utc::now();
-                if compile_time_utc.year() < 2000 || compile_time_utc > current_time {
-                    suspicious_compile_time = true;
-                    compile_time_str.push_str(" [SUSPICIOUS]");
+            let compile_time_str = {
+                let mut s = pe_info.compile_time.clone();
+                if let Ok(dt) = chrono::DateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S UTC") {
+                    let compile_time_utc = dt.with_timezone(&Utc);
+                    let current_time = Utc::now();
+                    if compile_time_utc.year() < 2000 || compile_time_utc > current_time {
+                        suspicious_compile_time = true;
+                        s.push_str(" [SUSPICIOUS]");
+                    }
                 }
-            }
+                s
+            };
             pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("  Compile Time: {}", compile_time_str))));
 
             if !pe_info.sections.is_empty() {
                 pe_output.push_str(&format!("{}\n", styled_line("stone", "  Sections:")));
-                for section in pe_info.sections {
+                for section in pe_info.sections.iter() {
                     pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("    - {}", section))));
                 }
             }
@@ -193,6 +270,20 @@ async fn main() {
                 if pe_info.imports.len() > 10 {
                     pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("    ... and {} more", pe_info.imports.len() - 10))));
                 }
+                imphash = match imphash::calculate_imphash(&pe_info.imports) {
+                    Ok(hash) => {
+                        let line = styled_line("stone", &format!("Import Hash (imphash): {}", hash));
+                        println!("{}", line);
+                        writeln!(temp_file, "{}", line).ok();
+                        Some(hash)
+                    }
+                    Err(e) => {
+                        let line = styled_line("yellow", &format!("Imphash Error: {}", e));
+                        println!("{}", line);
+                        writeln!(temp_file, "{}", line).ok();
+                        None
+                    }
+                };
             }
 
             if !pe_info.exports.is_empty() {
@@ -202,94 +293,112 @@ async fn main() {
                 }
             }
 
+            if let Ok(pe_file) = pelite::pe64::PeFile::from_bytes(&file_content[..]) {
+                if let Ok(resources) = pe_file.resources() {
+                    if let Ok(version_info) = resources.version_info() {
+                        let mut version_lines = vec![];
+                        let file_info = version_info.file_info();
+                        let strings_map = &file_info.strings;
+                        for (_lang, table) in strings_map {
+                            for (key, value) in table {
+                                match key.as_ref() {
+                                    "ProductVersion" => version_lines.push(styled_line("stone", &format!("  Product Version: {}", value))),
+                                    "FileVersion" => version_lines.push(styled_line("stone", &format!("  File Version: {}", value))),
+                                    "ProductName" => version_lines.push(styled_line("stone", &format!("  Product Name: {}", value))),
+                                    "CompanyName" => version_lines.push(styled_line("stone", &format!("  Company Name: {}", value))),
+                                    "OriginalFilename" => version_lines.push(styled_line("stone", &format!("  Original Filename: {}", value))),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        for line in version_lines {
+                            println!("{}", line);
+                            writeln!(temp_file, "{}", line).ok();
+                        }
+                    }
+                }
+            }
             let is_signed = signing::check_digital_signature(&file_content);
-            pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("  Signed: {}", if is_signed { "Yes" } else { "No" }))));
+            pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("  Signature: {}", if is_signed { "Present" } else { "Absent" }))));
 
             use std::io::{self, Write};
             print!("{}", pe_output);
             io::stdout().flush().unwrap();
             write!(temp_file, "{}", pe_output).ok();
+            pe_info
         }
         Err(e) => {
             let line = styled_line("highlight", &format!("PE parse error: {}", e));
             println!("{}", line);
             writeln!(temp_file, "{}", line).ok();
+            return;
         }
-    }
+    };
 
     let mut bad_sections = vec![];
     let mut suspicious_imports = vec![];
     let known_sections = [".text", ".rdata", ".data", ".reloc", ".rsrc", ".idata"];
 
     let mut printed_warning_header = false;
-    if let Ok(pe_info) = pe_parser::parse_pe_header(&file_content) {
-        // Uncommon section names
-        for s in &pe_info.sections {
-            let name = s.split_whitespace().next().unwrap_or("");
-            if !known_sections.contains(&name) {
-                bad_sections.push(name.to_string());
-            }
+    // already unwrapped above
+    // Uncommon section names
+    for s in &pe_info.sections {
+        let name = s.split_whitespace().next().unwrap_or("");
+        if !known_sections.contains(&name) {
+            bad_sections.push(name.to_string());
         }
+    }
 
-        // Suspicious imports
-        let suspect_terms = [
-            "VirtualAlloc", "WriteProcessMemory", "CreateRemoteThread", "NtCreateThreadEx",
-            "InternetOpen", "InternetConnect", "URLDownloadToFile", "HttpSendRequest",
-            "WinHttpSendRequest", "LoadLibrary", "GetProcAddress", "ShellExecute", "WinExec"
-        ];
-        for imp in &pe_info.imports {
-            if suspect_terms.iter().any(|s| imp.contains(s)) {
-                suspicious_imports.push(imp.clone());
-            }
+    // Suspicious imports
+    let suspect_terms = [
+        "VirtualAlloc", "WriteProcessMemory", "CreateRemoteThread", "NtCreateThreadEx",
+        "InternetOpen", "InternetConnect", "URLDownloadToFile", "HttpSendRequest",
+        "WinHttpSendRequest", "LoadLibrary", "GetProcAddress", "ShellExecute", "WinExec"
+    ];
+    for imp in &pe_info.imports {
+        if suspect_terms.iter().any(|s| imp.contains(s)) {
+            suspicious_imports.push(imp.clone());
         }
+    }
 
-        if !bad_sections.is_empty() {
+    if !bad_sections.is_empty() {
+        let line = styled_line("NOTE", "--- Heuristic Warnings ---");
+        println!("\n{}", line);
+        writeln!(temp_file, "\n{}", line).ok();
+        printed_warning_header = true;
+        let line = styled_line("stone", "- Uncommon Section Names:");
+        println!("{}", line);
+        writeln!(temp_file, "{}", line).ok();
+        for name in &bad_sections {
+            let line = styled_line("stone", &format!("  - {}", name.clone()));
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+        }
+    }
+
+    if !suspicious_imports.is_empty() {
+        if !printed_warning_header {
             let line = styled_line("NOTE", "--- Heuristic Warnings ---");
             println!("\n{}", line);
             writeln!(temp_file, "\n{}", line).ok();
             printed_warning_header = true;
-            let line = styled_line("stone", "- Uncommon Section Names:");
-            println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
-            for name in &bad_sections {
-                let line = styled_line("stone", &format!("  - {}", name.clone()));
-                println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
-            }
         }
-
-        if !suspicious_imports.is_empty() {
-            if !printed_warning_header {
-                let line = styled_line("NOTE", "--- Heuristic Warnings ---");
-                println!("\n{}", line);
-                writeln!(temp_file, "\n{}", line).ok();
-                printed_warning_header = true;
-            }
-            let line = styled_line("stone", "- Suspicious Imports:");
-            println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
-            for imp in &suspicious_imports {
-                let line = styled_line("stone", &format!("  - {}", imp));
-                println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
-            }
-        }
-        // Add suspicious compile time warning if needed
-        if suspicious_compile_time {
-            if !printed_warning_header {
-                let line = styled_line("NOTE", "--- Heuristic Warnings ---");
-                println!("\n{}", line);
-                writeln!(temp_file, "\n{}", line).ok();
-            }
-            let line = styled_line("stone", "- Suspicious Compile Timestamp");
+        let line = styled_line("stone", "- Suspicious Imports:");
+        println!("{}", line);
+        writeln!(temp_file, "{}", line).ok();
+        for imp in &suspicious_imports {
+            let line = styled_line("stone", &format!("  - {}", imp));
             println!("{}", line);
             writeln!(temp_file, "{}", line).ok();
         }
-    } else if suspicious_compile_time {
-        // If parse_pe_header failed above, but suspicious_compile_time is set, print warning header
-        let line = styled_line("NOTE", "--- Heuristic Warnings ---");
-        println!("\n{}", line);
-        writeln!(temp_file, "\n{}", line).ok();
+    }
+    // Add suspicious compile time warning if needed
+    if suspicious_compile_time {
+        if !printed_warning_header {
+            let line = styled_line("NOTE", "--- Heuristic Warnings ---");
+            println!("\n{}", line);
+            writeln!(temp_file, "\n{}", line).ok();
+        }
         let line = styled_line("stone", "- Suspicious Compile Timestamp");
         println!("{}", line);
         writeln!(temp_file, "{}", line).ok();
@@ -317,24 +426,6 @@ async fn main() {
         },
     }
 
-    match yara_scan::scan_file_with_yara_rules(&file_path) {
-        Ok(matches) => {
-            if matches.is_empty() {
-                let line = styled_line("stone", "No YARA matches found.");
-                println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
-            } else {
-                let line = styled_line("yellow", &format!("- YARA Matches: {:?}", matches));
-                println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
-            }
-        }
-        Err(e) => {
-            let line = styled_line("yellow", &format!("Error scanning file with YARA: {}", e));
-            println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
-        },
-    }
 
     let line = styled_line("NOTE", "--- Heuristic Indicators ---");
     println!("\n{}", line);
@@ -356,6 +447,24 @@ async fn main() {
             writeln!(temp_file, "{}", line).ok();
         }
     }
+    // NSRL result in heuristic indicators
+    match nsrl_result {
+        Some(true) => {
+            let line = styled_line("stone", "- NSRL: Found");
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+        }
+        Some(false) => {
+            let line = styled_line("stone", "- NSRL: Not Found");
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+        }
+        None => {
+            let line = styled_line("stone", "- NSRL: Offline");
+            println!("{}", line);
+            writeln!(temp_file, "{}", line).ok();
+        }
+    };
     if entropy_value > 7.5 {
         let line = styled_line("yellow", "- Entropy: High");
         println!("{}", line);
@@ -394,23 +503,12 @@ async fn main() {
         writeln!(temp_file, "{}", line).ok();
     }
 
-    match yara_scan::scan_file_with_yara_rules(&file_path) {
-        Ok(matches) => {
-            if matches.is_empty() {
-                let line = styled_line("stone", "- YARA: No matches");
-                println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
-            } else {
-                let line = styled_line("yellow", &format!("- YARA: {} match(es)", matches.len()));
-                println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
-            }
-        }
-        Err(_) => {
-            let line = styled_line("stone", "- YARA: Error scanning");
+    if let Ok(matches) = yara_scan::scan_file_with_yara_rules(&file_path) {
+        if !matches.is_empty() {
+            let line = styled_line("yellow", &format!("- YARA Matches: [{}]", matches.join(", ")));
             println!("{}", line);
             writeln!(temp_file, "{}", line).ok();
-        },
+        }
     }
     if save_output {
         let output_dir = get_output_dir("fileanalyzer");
@@ -438,7 +536,7 @@ async fn main() {
                 Ok(false) => "Unlikely".to_string(),
                 Err(_) => "Unknown".to_string(),
             },
-            compile_time: Some(compile_time_str),
+            compile_time: Some(pe_info.compile_time.clone()),
             signed: signing::check_digital_signature(&file_content),
             vt_result: match vt_result {
                 Some(true) => "Malicious".to_string(),
@@ -453,6 +551,8 @@ async fn main() {
             uncommon_sections: bad_sections.clone(),
             suspicious_imports: suspicious_imports.clone(),
             suspicious_compile_time,
+            fuzzy_hash: fuzzy_hash.clone(),
+            imphash: imphash.clone(),
         };
 
         match format {
@@ -478,7 +578,7 @@ async fn main() {
         if std::env::var("MALCHELA_GUI_MODE").is_err() {
             println!();
             writeln!(temp_file).ok();
-            let line = styled_line("stone", "Output was not saved.");
+            let line = styled_line("stone", "Output was not saved. Use -o with -t, -j, or -m to export results.");
             println!("{}", line);
             writeln!(temp_file, "{}", line).ok();
             writeln!(temp_file).ok();

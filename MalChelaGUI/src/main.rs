@@ -1,3 +1,7 @@
+mod tshark_panel;
+use tshark_panel::TsharkPanel;
+mod vol3_panel;
+use vol3_panel::{Vol3Panel, Vol3Plugin};
 use eframe::{
     egui::{self, CentralPanel, Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Visuals},
     App,
@@ -48,6 +52,8 @@ struct ToolConfig {
     optional_args: Vec<String>,
     #[serde(default)]
     exec_type: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
 }
 
 struct AppState {
@@ -74,12 +80,28 @@ struct AppState {
     custom_args: String,
     workspace_root: std::path::PathBuf,
     is_running: Arc<std::sync::atomic::AtomicBool>,
+    tshark_panel: TsharkPanel,
+    collapsed_categories: BTreeMap<String, bool>,
+    edition: String,
+    show_tools_modal: bool,
+    tools_restore_success: bool,
+    restore_status_message: String,
+    vol3_panel: Vol3Panel,
+    vol3_plugins: BTreeMap<String, Vec<Vol3Plugin>>,
 }
 
 impl AppState {
-    fn load_tools_from_yaml() -> Vec<ToolConfig> {
+    fn load_tools_from_yaml() -> (Vec<ToolConfig>, String) {
         let yaml = include_str!("../../tools.yaml");
-        serde_yaml::from_str(yaml).expect("Failed to parse tools.yaml")
+        let value: serde_yaml::Value = serde_yaml::from_str(yaml).expect("Failed to parse tools.yaml");
+        let edition = value.get("edition").and_then(|e| e.as_str()).unwrap_or("").to_string();
+        let tools = if let Some(tools_val) = value.get("tools") {
+            serde_yaml::from_value::<Vec<ToolConfig>>(tools_val.clone()).unwrap_or_else(|_| vec![])
+        } else {
+            // fallback: try whole YAML as Vec<ToolConfig>
+            serde_yaml::from_str(yaml).unwrap_or_else(|_| vec![])
+        };
+        (tools, edition)
     }
 
     fn categorize_tools(tools: &[ToolConfig]) -> BTreeMap<String, Vec<ToolConfig>> {
@@ -100,6 +122,21 @@ impl AppState {
 
     fn run_tool(&mut self, ctx: &eframe::egui::Context) {
         if let Some(tool) = &self.selected_tool {
+            // FLOSS file path validation: ensure input_path exists and is a file before running FLOSS
+            let command = tool.command.clone();
+            let input_path = self.input_path.clone();
+            let output = Arc::clone(&self.command_output);
+            if command.get(0).map(|s| s.ends_with("floss")).unwrap_or(false) {
+                use std::path::Path;
+                if !Path::new(&input_path).exists() {
+                    let mut out = output.lock().unwrap();
+                    out.clear();
+                    out.push_str("[red]❌ Selected file does not exist or is invalid.\n");
+                    return;
+                }
+            }
+            // Use the actual selected plugin name from the Vol3Panel for Vol3
+            let plugin_name = self.vol3_panel.selected_plugin.clone().unwrap_or_default();
             ctx.request_repaint();
 
             // Reset output state when running a new tool
@@ -111,9 +148,19 @@ impl AppState {
             // self.custom_args.clear();  // <-- Removed per instructions
             // self.save_report = (false, ".txt".to_string()); // <-- Removed to preserve Save Report setting
             self.zip_password.clear();
-            self.scratchpad_path.clear();
-            self.string_source_path.clear();
-            self.selected_format = ".txt".to_string();
+            // self.scratchpad_path.clear(); // <-- Removed to allow rule file persistence across runs
+            // self.string_source_path.clear(); // <-- Removed to preserve selected string source file
+            // self.selected_format = ".txt".to_string(); // <-- Removed to prevent overwriting Description for strings_to_yara
+
+            // Special case for YARA-X (yr)
+            if tool.command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                if self.scratchpad_path.is_empty() || self.input_path.is_empty() {
+                    let mut out = self.command_output.lock().unwrap();
+                    out.clear();
+                    out.push_str("❌ Missing rule or target file.\n");
+                    return;
+                }
+            }
 
             // Set environment variables for the tool (if needed)
             if tool.input_type == "folder" {
@@ -125,6 +172,64 @@ impl AppState {
                 std::env::set_var("MZHASH_ALLOW_OVERWRITE", "1");
             }
             std::env::set_var("MALCHELA_GUI_MODE", "1");
+
+            // Special case: Launch Vol/Vol3 in external terminal (outside of thread)
+            let is_external = tool.exec_type.as_deref() != Some("cargo");
+            let command = tool.command.clone();
+            let input_path = self.input_path.clone();
+            let custom_args = self.custom_args.clone();
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
+            if is_external && command.get(0).map(|s| s.contains("vol")).unwrap_or(false) && !cfg!(windows) {
+                let mut args = vec!["-f".to_string(), input_path.clone()];
+                args.push(plugin_name.clone()); // Insert the plugin name (e.g., windows.vadyarascan)
+                if !custom_args.trim().is_empty() {
+                    args.push(custom_args.trim().to_string());
+                }
+                // Quote all arguments for correct shell parsing
+                let quoted_args = args.iter()
+                    .map(|arg| format!("\"{}\"", arg))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                // Use which::which to find the full path to vol or vol3
+                let vol_path = which::which(&command[0]).unwrap_or_else(|_| std::path::PathBuf::from(&command[0]));
+                {
+                    let script_path = self.workspace_root.join("launch_vol3.command");
+                    let _ = std::fs::write(
+                        &script_path,
+                        format!(
+                            r#"#!/bin/bash
+{vol} {args}
+echo
+read -p "Press Enter to close..."
+"#,
+                            vol = vol_path.display(),
+                            args = quoted_args,
+                        ),
+                    );
+                    let _ = std::process::Command::new("chmod").arg("+x").arg(&script_path).status();
+                    // Output the script path to the console area for clarity and copy-paste use
+                    {
+                        let mut out = self.command_output.lock().unwrap();
+                        out.push_str(&format!("Launch script created at: {}\n", script_path.display()));
+                        self.output_lines.lock().unwrap().push(format!("Launch script created at: {}", script_path.display()));
+                    }
+                    // Platform-specific terminal launch logic
+                    #[cfg(target_os = "macos")]
+                    let terminal_launch = std::process::Command::new("osascript")
+                        .arg("-e")
+                        .arg(format!("tell app \"Terminal\" to do script \"{}\"", script_path.display()))
+                        .spawn();
+                    #[cfg(target_os = "linux")]
+                    let terminal_launch = std::process::Command::new("x-terminal-emulator")
+                        .arg("-e")
+                        .arg(&script_path)
+                        .spawn();
+                    let _ = terminal_launch;
+                }
+
+                self.is_running.store(false, std::sync::atomic::Ordering::Relaxed);
+                return;
+            }
 
             self.show_running_command(ctx);
 
@@ -280,7 +385,7 @@ impl AppState {
                             let mut out = output.lock().unwrap();
                             out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
                         }
-                        println!("Saved report to: {}", report_path.display());
+                // (removed println of report_path)
                     }
                     return;
                 }
@@ -317,11 +422,13 @@ impl AppState {
                 }
 
                 // Step 2: Construct path to binary
-                let binary_name = if cfg!(windows) {
-                    format!("{}.exe", command[0])
-                } else {
-                    command[0].clone()
-                };
+            let binary_name = if cfg!(windows) {
+                format!("{}.exe", command[0])
+            } else {
+                command[0].clone()
+            };
+
+                // Debug: Log binary check (removed)
 
                 let binary_path = if is_external {
                     match which::which(&command[0]) {
@@ -368,11 +475,21 @@ impl AppState {
                 } else if let Some(pos) = command.iter().position(|s| s == "last") {
                     arg_insert_index = Some(pos);
                 }
-                let mut base_args: Vec<String> = command.iter()
-                    .filter(|&s| s != "first" && s != "last")
-                    .skip(1)
-                    .cloned()
-                    .collect();
+                let mut base_args: Vec<String> = if command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                    let mut args = vec!["scan".to_string()];
+                    if !custom_args.trim().is_empty() {
+                        args.extend(shell_words::split(&custom_args).unwrap_or_default());
+                    }
+                    args.push(scratchpad_path.clone());
+                    args.push(input_path.clone());
+                    args
+                } else {
+                    command.iter()
+                        .filter(|&s| s != "first" && s != "last")
+                        .skip(1)
+                        .cloned()
+                        .collect()
+                };
                 if let Some(idx) = arg_insert_index {
                     let insert_idx = if command.get(idx) == Some(&"first".to_string()) {
                         idx - 1
@@ -382,13 +499,13 @@ impl AppState {
                     base_args.insert(insert_idx, input_path.clone());
                 } else if command[0] == "strings_to_yara" {
                     base_args.extend(vec![
-                        input_path.clone(),
-                        author_name.clone(),
-                        selected_format.clone(),
-                        scratchpad_path.clone(),
-                        string_source_path.clone(),
+                        input_path.clone(),            // Rule name
+                        author_name.clone(),           // Author
+                        selected_format.clone(),       // Description
+                        scratchpad_path.clone(),       // Hash
+                        string_source_path.clone(),    // Strings file
                     ]);
-                } else {
+                } else if !command.get(0).map(|s| s == "yr").unwrap_or(false) {
                     base_args.insert(0, input_path.clone());
                     if command.get(0).map(|s| s == "combine_yara").unwrap_or(false) {
                         // Only path
@@ -415,11 +532,13 @@ impl AppState {
                 if command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
                     for (key, value) in &env_vars {
                         if key == "MZCOUNT_TABLE_DISPLAY" {
-                            args.push(format!("{}={}", key, value));
+                            std::env::set_var(key, value);
                         }
                     }
                 }
-                args.extend(parsed_custom_args);
+                if command.get(0).map(|s| s != "yr").unwrap_or(true) {
+                    args.extend(parsed_custom_args);
+                }
 
                 if save_report.0 {
                     std::env::set_var("MALCHELA_SAVE_OUTPUT", "1");
@@ -427,119 +546,122 @@ impl AppState {
                     std::env::remove_var("MALCHELA_SAVE_OUTPUT");
                 }
 
-                println!("Attempting to run binary at path: {}", binary_path.display());
-                println!("With arguments: {:?}", args);
+                // (removed println! for binary_path and args)
 
+                // Log the full command line to vol3_command_debug.txt before launching external tool (removed)
 
-                let mut command_builder = Command::new(binary_path);
-                command_builder.args(&args);
+                let mut command_builder = {
+                    let mut cmd = Command::new(&binary_path);
+                    cmd.args(&args);
+                    cmd
+                };
                 command_builder.current_dir(&workspace_root);
                 command_builder.stdout(Stdio::piped());
                 command_builder.stderr(Stdio::piped());
-                for env_var in custom_args.split_whitespace() {
-                    if let Some((key, value)) = env_var.split_once('=') {
-                        if key.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
-                            command_builder.env(key, value);
+
+                match command_builder.spawn() {
+                    Ok(mut child) => {
+                        if let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) {
+                            let stderr_reader = BufReader::new(stderr);
+
+                            let out_clone_stdout = Arc::clone(&output);
+                            let output_lines_clone_stdout = Arc::clone(&output_lines);
+                            let save_report = save_report.clone();
+                            let workspace_root = workspace_root.clone();
+                            let command = command.clone();
+                            let is_running_clone = Arc::clone(&is_running);
+                            // 🖼️ No ctx_clone here
+                            thread::spawn(move || {
+                                use std::io::{BufRead, BufReader};
+                                let stdout = stdout; // take ownership here for the thread
+                                let mut reader = BufReader::new(stdout);
+                                let mut buffer = String::new();
+                                loop {
+                                    match reader.read_line(&mut buffer) {
+                                        Ok(0) => break, // EOF
+                                        Ok(_) => {
+                                            {
+                                                let mut lines = output_lines_clone_stdout.lock().unwrap();
+                                                lines.push(buffer.trim_end().to_string());
+                                            }
+                                            {
+                                                let mut out = out_clone_stdout.lock().unwrap();
+                                                out.push_str(&buffer);
+                                            }
+                                            buffer.clear();
+                                        }
+                                        Err(_) => break,
+                                    }
+                                }
+                                // After stdout loop, save report if needed
+                                if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {
+                                    let output_dir = workspace_root
+                                        .join("saved_output")
+                                        .join(
+                                            std::path::Path::new(&command[0])
+                                                .file_stem()
+                                                .and_then(|s| s.to_str())
+                                                .unwrap_or_else(|| std::path::Path::new(&command[0]).file_stem().and_then(|s| s.to_str()).unwrap_or(&command[0]))
+                                        );
+                                    let _ = std::fs::create_dir_all(&output_dir);
+                                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+                                    let report_path = output_dir.join(format!("report_{}{}", timestamp, save_report.1));
+                                    if let Ok(mut file) = File::create(&report_path) {
+                                        let final_output = out_clone_stdout.lock().unwrap();
+                                        let cleaned_output = final_output
+                                            .lines()
+                                            .filter_map(|line| {
+                                                let mut trimmed = line.trim_start();
+                                                let tags = ["[reset]", "[bold]", "[green]", "[yellow]", "[cyan]", "[gray]", "[stone]", "[highlight]", "[red]", "[NOTE]"];
+                                                for tag in &tags {
+                                                    if trimmed.starts_with(tag) {
+                                                        trimmed = trimmed.strip_prefix(tag).unwrap_or(trimmed);
+                                                    }
+                                                }
+                                                let trimmed = trimmed.trim_start();
+                                                if trimmed == "Output was not saved." || trimmed.is_empty() {
+                                                    None
+                                                } else {
+                                                    Some(trimmed)
+                                                }
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n");
+                                        let _ = write!(file, "{}", cleaned_output);
+                                    }
+                                    {
+                                        let mut out = out_clone_stdout.lock().unwrap();
+                                        out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
+                                    }
+                                }
+                                is_running_clone.store(false, std::sync::atomic::Ordering::Relaxed);
+                            });
+
+                            let out_clone_stderr = Arc::clone(&output);
+                            let output_lines_clone_stderr = Arc::clone(&output_lines);
+                            thread::spawn(move || {
+                                for line in stderr_reader.lines().flatten() {
+                                    {
+                                        let mut lines = output_lines_clone_stderr.lock().unwrap();
+                                        lines.push(line.clone());
+                                    }
+                                    {
+                                        let mut out = out_clone_stderr.lock().unwrap();
+                                        out.push_str(&line);
+                                        out.push('\n');
+                                    }
+                                }
+                            });
                         }
+
+                        let _ = child.wait();
+                    }
+                    Err(e) => {
+                        let mut out = output.lock().unwrap();
+                        out.push_str(&format!("[red]Command spawn failed: {}\n", e));
+                        return;
                     }
                 }
-
-                let mut child = command_builder
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .expect("Failed to run built binary");
-
-
-
-                if let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) {
-                    let stdout_reader = BufReader::new(stdout);
-                    let stderr_reader = BufReader::new(stderr);
-
-                    let out_clone_stdout = Arc::clone(&output);
-                    let output_lines_clone_stdout = Arc::clone(&output_lines);
-                    let save_report = save_report.clone();
-                    let workspace_root = workspace_root.clone();
-                    let command = command.clone();
-                    let is_running_clone = Arc::clone(&is_running);
-                    thread::spawn(move || {
-                        for line in stdout_reader.lines().flatten() {
-                            {
-                                let mut lines = output_lines_clone_stdout.lock().unwrap();
-                                lines.push(line.clone());
-                            }
-                            {
-                                let mut out = out_clone_stdout.lock().unwrap();
-                                out.push_str(&line);
-                                out.push('\n');
-                            }
-                        }
-                        // After the stdout loop, save the report if requested
-                        // Only save the report if MALCHELA_GUI_MODE is NOT set to "1"
-                        if save_report.0 && std::env::var("MALCHELA_GUI_MODE").unwrap_or_default() != "1" {
-                            let output_dir = workspace_root
-                                .join("saved_output")
-                                .join(
-                                    std::path::Path::new(&command[0])
-                                        .file_stem()
-                                        .and_then(|s| s.to_str())
-                                        .unwrap_or_else(|| std::path::Path::new(&command[0]).file_stem().and_then(|s| s.to_str()).unwrap_or(&command[0]))
-                                );
-                            let _ = std::fs::create_dir_all(&output_dir);
-                            let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
-                            let report_path = output_dir.join(format!("report_{}{}", timestamp, save_report.1));
-                            if let Ok(mut file) = File::create(&report_path) {
-                                let final_output = out_clone_stdout.lock().unwrap();
-                                let cleaned_output = final_output
-                                    .lines()
-                                    .filter_map(|line| {
-                                        let mut trimmed = line.trim_start();
-                                        // Strip known tags
-                                        let tags = ["[reset]", "[bold]", "[green]", "[yellow]", "[cyan]", "[gray]", "[stone]", "[highlight]", "[red]", "[NOTE]"];
-                                        for tag in &tags {
-                                            if trimmed.starts_with(tag) {
-                                                trimmed = trimmed.strip_prefix(tag).unwrap_or(trimmed);
-                                            }
-                                        }
-                                        let trimmed = trimmed.trim_start();
-                                        if trimmed == "Output was not saved." || trimmed.is_empty() {
-                                            None
-                                        } else {
-                                            Some(trimmed)
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
-                                let _ = write!(file, "{}", cleaned_output);
-                            }
-                            {
-                                let mut out = out_clone_stdout.lock().unwrap();
-                                out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
-                            }
-                        }
-                        // Set is_running to false after report is saved (for non-Python tools)
-                        is_running_clone.store(false, std::sync::atomic::Ordering::Relaxed);
-                    });
-
-                    let out_clone_stderr = Arc::clone(&output);
-                    let output_lines_clone_stderr = Arc::clone(&output_lines);
-                    thread::spawn(move || {
-                        for line in stderr_reader.lines().flatten() {
-                            {
-                                let mut lines = output_lines_clone_stderr.lock().unwrap();
-                                lines.push(format!("[red]{}", line));
-                            }
-                            {
-                                let mut out = out_clone_stderr.lock().unwrap();
-                                out.push_str("[red]");
-                                out.push_str(&line);
-                                out.push('\n');
-                            }
-                        }
-                    });
-                }
-
-                let _ = child.wait();
 
                 if command.get(0).map(|s| s == "fileanalyzer").unwrap_or(false) {
                     let temp_path = std::env::temp_dir().join("malchela_temp_output.txt");
@@ -718,8 +840,12 @@ impl App for AppState {
 
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                let mut title = "MalChela v2.2.0 — YARA & Malware Analysis Toolkit".to_string();
+                if !self.edition.trim().is_empty() {
+                    title.push_str(&format!(" ({})", self.edition));
+                }
                 ui.label(
-                    RichText::new("MalChela v2.1.2 — YARA & Malware Analysis Toolkit")
+                    RichText::new(title)
                         .font(FontId::proportional(22.0))
                         .color(RUST_ORANGE),
                 );
@@ -731,81 +857,119 @@ impl App for AppState {
             .show(ctx, |ui| {
                 ui.heading(RichText::new("Tools").color(RUST_ORANGE));
                 ScrollArea::vertical().show(ui, |ui| {
+                    // Expand/Collapse All buttons
+                    ui.horizontal(|ui| {
+                        if ui.button(RichText::new("🔽")).on_hover_text("Expand All").clicked() {
+                            for val in self.collapsed_categories.values_mut() {
+                                *val = false;
+                            }
+                        }
+                        if ui.button(RichText::new("🔼")).on_hover_text("Collapse All").clicked() {
+                            for val in self.collapsed_categories.values_mut() {
+                                *val = true;
+                            }
+                        }
+                    });
                     for (category, tools) in &self.categorized_tools {
+                        let clean_category = category.trim_start_matches('~');
+                        let collapsed = self.collapsed_categories.get(category).copied().unwrap_or(false);
                         ui.vertical(|ui| {
-                            let clean_category = category.trim_start_matches('~');
-                            ui.label(RichText::new(clean_category).color(RUST_ORANGE));
-                            for tool in tools {
-                                let tool_color = STONE_BEIGE;
-                                if ui.button(RichText::new(&tool.name).color(tool_color)).clicked() {
-                                    self.selected_tool = Some(tool.clone());
-                                    self.input_path.clear();
-                                    self.custom_args.clear();
+                            ui.horizontal(|ui| {
+                                // Use clickable label for category header (no button box)
+                                use egui::{Label, Sense};
+                                let cat_label = clean_category.to_string();
+                                let resp = ui.add(Label::new(RichText::new(cat_label).color(RUST_ORANGE).strong().font(FontId::proportional(15.0))).sense(Sense::click()));
+                                if resp.clicked() {
+                                    let entry = self.collapsed_categories.entry(category.clone()).or_insert(false);
+                                    *entry = !*entry;
+                                }
+                            });
+                            if !collapsed {
+                                for tool in tools {
+                                    let tool_color = STONE_BEIGE;
+                                    let mut btn = ui.button(RichText::new(&tool.name).color(tool_color).strong());
+                                    if let Some(desc) = &tool.description {
+                                        btn = btn.on_hover_text(desc);
+                                    }
+                                    if btn.clicked() {
+                                        self.selected_tool = Some(tool.clone());
+                                        self.input_path.clear();
+                                        self.custom_args.clear();
+                                        self.show_home = false;
+                                    }
                                 }
                             }
                         });
                     }
-                });
-                ui.separator();
-                // Section header for the application utility buttons
-                ui.label(RichText::new("Toolkit").color(RUST_ORANGE));
-                // Reordered and relabeled utility buttons
-                if ui.button(RichText::new("🏠 Home").color(STONE_BEIGE)).clicked() {
-                    self.show_home = true;
-                    self.banner_displayed = false;
-                    self.selected_tool = None;
-                    self.input_path.clear();
-                }
 
-                ui.horizontal(|ui| {
-                    ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
-                        if ui.button("API Keys & Settings").clicked() {
-                            self.show_config = true;
-                            ui.close_menu();
-                        }
-                        if ui.button("Edit tools.yaml").clicked() {
-                            let mut config_path = std::env::current_exe().unwrap();
-                            while let Some(parent) = config_path.parent() {
-                                if parent.join("Cargo.toml").exists() {
-                                    config_path = parent.join("tools.yaml");
-                                    break;
-                                }
-                                config_path = parent.to_path_buf();
+                    ui.separator();
+                    ui.label(
+                        RichText::new("Toolkit")
+                            .color(RUST_ORANGE)
+                            .strong()
+                            .font(FontId::proportional(15.0))
+                    );
+
+                    if ui.button(RichText::new("🏠 Home").color(STONE_BEIGE)).clicked() {
+                        self.show_home = true;
+                        self.banner_displayed = false;
+                        self.selected_tool = None;
+                        self.input_path.clear();
+                    }
+                    ui.horizontal(|ui| {
+                        ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
+                            if ui.button("API Keys & Settings").clicked() {
+                                self.show_config = true;
+                                ui.close_menu();
                             }
-                            #[cfg(target_os = "macos")]
-                            let _ = Command::new("open").arg(&config_path).spawn();
-                            #[cfg(target_os = "linux")]
-                            let _ = Command::new("xdg-open").arg(&config_path).spawn();
-                            #[cfg(target_os = "windows")]
-                            let _ = Command::new("explorer").arg(&config_path).spawn();
-
-                            ui.close_menu();
-                        }
+                            if ui.button("Tools.yaml").clicked() {
+                                self.show_tools_modal = true;
+                                self.tools_restore_success = false;
+                                ui.close_menu();
+                            }
+                        });
                     });
-                });
 
-                if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
-                    self.show_scratchpad = !self.show_scratchpad;
-                }
-
-                if ui.button(RichText::new("📁 View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
-                    if let Ok(mut exe_path) = std::env::current_exe() {
-                        while let Some(parent) = exe_path.parent() {
-                            if parent.ends_with("MalChela") {
-                                exe_path = parent.to_path_buf();
+                    if ui.button(RichText::new("📖 User Guide").color(STONE_BEIGE)).on_hover_text("Open MalChela User Guide").clicked() {
+                        let mut guide_path = std::env::current_exe().unwrap();
+                        while let Some(parent) = guide_path.parent() {
+                            if parent.join("Cargo.toml").exists() {
+                                guide_path = parent.join("docs/user-guide.md");
                                 break;
                             }
-                            exe_path = parent.to_path_buf();
+                            guide_path = parent.to_path_buf();
                         }
-                        let reports_path = exe_path.join("saved_output");
                         #[cfg(target_os = "macos")]
-                        let _ = Command::new("open").arg(&reports_path).spawn();
-                        #[cfg(target_os = "windows")]
-                        let _ = Command::new("explorer").arg(reports_path).spawn();
+                        let _ = std::process::Command::new("open").arg(&guide_path).spawn();
                         #[cfg(target_os = "linux")]
-                        let _ = Command::new("xdg-open").arg(reports_path).spawn();
+                        let _ = std::process::Command::new("xdg-open").arg(&guide_path).spawn();
+                        #[cfg(target_os = "windows")]
+                        let _ = std::process::Command::new("explorer").arg(&guide_path).spawn();
                     }
-                }
+
+                    if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
+                        self.show_scratchpad = !self.show_scratchpad;
+                    }
+
+                    if ui.button(RichText::new("📁 View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
+                        if let Ok(mut exe_path) = std::env::current_exe() {
+                            while let Some(parent) = exe_path.parent() {
+                                if parent.ends_with("MalChela") {
+                                    exe_path = parent.to_path_buf();
+                                    break;
+                                }
+                                exe_path = parent.to_path_buf();
+                            }
+                            let reports_path = exe_path.join("saved_output");
+                            #[cfg(target_os = "macos")]
+                            let _ = Command::new("open").arg(&reports_path).spawn();
+                            #[cfg(target_os = "windows")]
+                            let _ = Command::new("explorer").arg(reports_path).spawn();
+                            #[cfg(target_os = "linux")]
+                            let _ = Command::new("xdg-open").arg(reports_path).spawn();
+                        }
+                    }
+                });
             });
 
         CentralPanel::default().show(ctx, |ui| {
@@ -813,6 +977,50 @@ impl App for AppState {
                 ui.label(egui::RichText::new("🏃  Running...").color(YELLOW).strong());
             }
             if let Some(tool) = &self.selected_tool {
+                if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
+                    self.tshark_panel.ui(ui);
+                    return;
+                } else if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
+                    // Clear console output when selecting Vol3
+                    self.command_output.lock().unwrap().clear();
+                    self.output_lines.lock().unwrap().clear();
+
+                    // --- PATCH: Ensure selected plugin is first in custom_args for Vol/Vol3 ---
+                    // This logic ensures the selected plugin appears at the beginning of custom_args.
+                    if let Some(plugin_name) = &self.vol3_panel.selected_plugin {
+                        if !plugin_name.is_empty() {
+                            let mut tokens: Vec<String> = self.custom_args.split_whitespace().map(str::to_string).collect();
+                            if tokens.first().map(|s| s != plugin_name).unwrap_or(true) {
+                                tokens.insert(0, plugin_name.clone());
+                                self.custom_args = tokens.join(" ");
+                            }
+                        }
+
+                    }
+
+                    self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
+                    // Removed: Save Report checkbox and format selection for Vol3.
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Run").clicked() {
+                           self.run_tool(ctx);
+                        }
+                        ui.label(RichText::new("(Vol3 command will launch in a separate terminal)").color(Color32::GRAY));
+                    });
+
+                    ui.separator();
+                    ui.heading(RichText::new("Console Output").color(LIGHT_CYAN));
+                    egui::ScrollArea::vertical()
+                        .stick_to_bottom(true)
+                        .show(ui, |ui| {
+                            let output_lines = self.output_lines.lock().unwrap();
+                            for line in output_lines.iter() {
+                                ui.label(line);
+                            }
+                        });
+
+                    return;
+                }
                 ui.label(
                     RichText::new(format!(
                         "Selected Tool: {} (Input: {})",
@@ -822,38 +1030,24 @@ impl App for AppState {
                     .strong(),
                 );
                 if !self.input_path.trim().is_empty() {
-                    let mut status_line = String::from("🛠  Command line: ");
-                    if let Some(exec_type) = tool.exec_type.as_deref() {
-                        match exec_type {
-                            "cargo" => {
-                                status_line.push_str(&format!("cargo run -p {}", tool.command[0]));
-                                if tool.input_type != "hash" {
-                                    status_line.push_str(" -- ");
-                                } else {
-                                    status_line.push_str(" ");
-                                }
-                                status_line.push_str(&self.input_path);
-                            }
-                            "binary" | "script" => {
-                                let script_display = tool.optional_args.get(0)
-                                    .and_then(|s| std::path::Path::new(s).file_name())
-                                    .and_then(|s| s.to_str());
+                    let mut command_line = tool.command.join(" ");
 
-                                if let Some(script_name) = script_display {
-                                    status_line.push_str(&format!("{} {}", tool.command[0], script_name));
-                                } else {
-                                    status_line.push_str(&tool.command[0]);
-                                }
-                                status_line.push_str(" ");
-                                status_line.push_str(&self.input_path);
-                            }
+                    if !self.custom_args.trim().is_empty() {
+                        command_line.push(' ');
+                        command_line.push_str(&self.custom_args);
+                    }
+
+                    if self.save_report.0 {
+                        command_line.push_str(" -o");
+                        match self.save_report.1.as_str() {
+                            ".txt" => command_line.push_str(" -t"),
+                            ".json" => command_line.push_str(" -j"),
+                            ".md" => command_line.push_str(" -m"),
                             _ => {}
                         }
                     }
-                    if self.save_report.0 {
-                        status_line.push_str(" -o");
-                    }
-                    ui.label(RichText::new(status_line).color(GREEN).strong());
+
+                    ui.label(RichText::new(command_line).color(GREEN).strong());
                 }
                 if tool.command.get(0).map(|s| s == "strings_to_yara").unwrap_or(false) {
                     ui.label(RichText::new("strings_to_yara Configuration").strong().color(LIGHT_CYAN));
@@ -936,6 +1130,237 @@ impl App for AppState {
                         }
                         if !self.input_path.trim().is_empty() {
                             ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
+                        }
+                    });
+                } else if tool.command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                    ui.label(RichText::new("YARA-X Configuration").strong().color(LIGHT_CYAN));
+
+                    ui.horizontal(|ui| {
+                        ui.label("Rule File:");
+                        ui.text_edit_singleline(&mut self.scratchpad_path);
+                        if ui.button("Browse").clicked() {
+                            if let Some(path) = FileDialog::new().add_filter("YARA Rules", &["yar", "yara"]).pick_file() {
+                                self.scratchpad_path = path.display().to_string();
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Target File:");
+                        ui.text_edit_singleline(&mut self.input_path);
+                        if ui.button("Browse").clicked() {
+                            if let Some(path) = FileDialog::new().pick_file() {
+                                self.input_path = path.display().to_string();
+                            }
+                        }
+                        if !self.input_path.trim().is_empty() {
+                            ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Arguments:");
+                        ui.text_edit_singleline(&mut self.custom_args);
+                    });
+
+                    // Override save report checkbox for YARA-X
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.save_report.0, "Save Report");
+                        if self.save_report.0 {
+                            ui.label("Format:");
+                            egui::ComboBox::from_id_source("save_format")
+                                .selected_text(&self.save_report.1)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.save_report.1, ".txt".to_string(), "txt");
+                                    ui.selectable_value(&mut self.save_report.1, ".json".to_string(), "json");
+                                    ui.selectable_value(&mut self.save_report.1, ".md".to_string(), "md");
+                                });
+                        }
+                    });
+                } else if tool.command.get(0).map(|s| s.ends_with("floss")).unwrap_or(false) {
+                    // --- FLOSS tool configuration section ---
+                    ui.horizontal(|ui| {
+                        ui.label("Target File:");
+                        ui.text_edit_singleline(&mut self.input_path);
+                        if ui.button("Browse").clicked() {
+                            if let Some(path) = FileDialog::new().pick_file() {
+                                self.input_path = path.display().to_string();
+                            }
+                        }
+                        if !self.input_path.trim().is_empty() {
+                            ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Arguments:");
+                        ui.text_edit_singleline(&mut self.custom_args);
+                    });
+
+                    // --- Begin FLOSS-specific argument controls ---
+                    ui.horizontal(|ui| {
+                        ui.label("Minimum Length (-n):");
+                        let mut min_length = self.custom_args
+                            .split_whitespace()
+                            .enumerate()
+                            .find_map(|(i, arg)| {
+                                if arg == "-n" {
+                                    self.custom_args.split_whitespace().nth(i + 1)
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or("4")
+                            .to_string();
+                        if ui.text_edit_singleline(&mut min_length).changed() {
+                            let mut args: Vec<String> = self.custom_args.split_whitespace().map(String::from).collect();
+                            if let Some(i) = args.iter().position(|s| s == "-n") {
+                                args.remove(i);
+                                if i < args.len() {
+                                    args.remove(i); // Remove the old value
+                                }
+                            }
+                            args.push("-n".to_string());
+                            args.push(min_length.clone());
+                            self.custom_args = args.join(" ");
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Extract Only:");
+                        for s_type in ["static", "stack", "tight", "decoded"] {
+                            let flag = format!("--only {}", s_type);
+                            let is_selected = self.custom_args.contains(&flag);
+                            let mut selected = is_selected;
+                            if ui.checkbox(&mut selected, s_type).changed() {
+                                let mut args: Vec<String> = self.custom_args.split_whitespace().map(String::from).collect();
+                                args.retain(|arg| !arg.starts_with("--only"));
+                                if selected {
+                                    args.push("--only".to_string());
+                                    args.push(s_type.to_string());
+                                }
+                                self.custom_args = args.join(" ");
+                            }
+                        }
+                    });
+                    // --- Inserted: FLOSS sample format, progress, verbosity, debug, color ---
+                    ui.horizontal(|ui| {
+                        ui.label("Sample Format:");
+                        egui::ComboBox::from_id_source("floss_sample_format")
+                            .selected_text(self.selected_format.clone())
+                            .show_ui(ui, |ui| {
+                                for opt in ["auto", "pe", "sc32", "sc64"] {
+                                    if ui.selectable_value(&mut self.selected_format, opt.to_string(), opt).clicked() {
+                                        self.custom_args = self.custom_args
+                                            .split_whitespace()
+                                            .filter(|arg| arg != &"-f" && !["auto", "pe", "sc32", "sc64"].contains(arg))
+                                            .collect::<Vec<_>>()
+                                            .join(" ");
+                                        self.custom_args.push_str(&format!(" -f {}", opt));
+                                    }
+                                }
+                            });
+                    });
+
+                    ui.horizontal(|ui| {
+                        let mut disable_progress = self.custom_args.contains("--disable-progress");
+                        if ui.checkbox(&mut disable_progress, "Disable Progress").changed() {
+                            self.custom_args = self.custom_args
+                                .split_whitespace()
+                                .filter(|arg| *arg != "--disable-progress")
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            if disable_progress {
+                                self.custom_args.push_str(" --disable-progress");
+                            }
+                        }
+                    });
+
+                    // Inserted: Allow Large File (-L) toggle
+                    ui.horizontal(|ui| {
+                        let mut large_file = self.custom_args.contains("-L");
+                        if ui.checkbox(&mut large_file, "Allow Large File (-L)").changed() {
+                            self.custom_args = self.custom_args
+                                .split_whitespace()
+                                .filter(|arg| *arg != "-L")
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            if large_file {
+                                self.custom_args.push_str(" -L");
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        let mut verbose = self.custom_args.contains("-v");
+                        let debug = self.custom_args.matches("-d").count();
+                        let mut quiet = self.custom_args.contains("-q");
+
+                        if ui.checkbox(&mut verbose, "Verbose (-v)").changed() {
+                            self.custom_args = self.custom_args.replace("-v", "");
+                            if verbose {
+                                self.custom_args.push_str(" -v");
+                            }
+                        }
+                        if ui.checkbox(&mut quiet, "Quiet (-q)").changed() {
+                            self.custom_args = self.custom_args.replace("-q", "");
+                            if quiet {
+                                self.custom_args.push_str(" -q");
+                            }
+                        }
+                        let mut dbg_level = debug as u8;
+                        if ui.add(egui::DragValue::new(&mut dbg_level).clamp_range(0..=3).prefix("Debug level: ")).changed() {
+                            self.custom_args = self.custom_args
+                                .split_whitespace()
+                                .filter(|arg| arg != &"-d")
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            for _ in 0..dbg_level {
+                                self.custom_args.push_str(" -d");
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Color Output:");
+                        egui::ComboBox::from_id_source("floss_color_setting")
+                            .selected_text(
+                                if self.custom_args.contains("--color always") {
+                                    "always"
+                                } else if self.custom_args.contains("--color never") {
+                                    "never"
+                                } else {
+                                    "auto"
+                                }
+                            )
+                            .show_ui(ui, |ui| {
+                                for mode in ["auto", "always", "never"] {
+                                    if ui.selectable_label(
+                                        self.custom_args.contains(&format!("--color {}", mode)),
+                                        mode
+                                    ).clicked() {
+                                        self.custom_args = self.custom_args
+                                            .split_whitespace()
+                                            .filter(|arg| *arg != "--color" && *arg != "auto" && *arg != "always" && *arg != "never")
+                                            .collect::<Vec<_>>()
+                                            .join(" ");
+                                        self.custom_args.push_str(&format!(" --color {}", mode));
+                                    }
+                                }
+                            });
+                    });
+                    // --- End FLOSS argument controls ---
+
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.save_report.0, "Save Report");
+                        if self.save_report.0 {
+                            ui.label("Format:");
+                            egui::ComboBox::from_id_source("save_format")
+                                .selected_text(&self.save_report.1)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.save_report.1, ".txt".to_string(), "txt");
+                                    ui.selectable_value(&mut self.save_report.1, ".json".to_string(), "json");
+                                    ui.selectable_value(&mut self.save_report.1, ".md".to_string(), "md");
+                                });
                         }
                     });
                 } else {
@@ -1211,6 +1636,149 @@ impl App for AppState {
             }
         });
 
+        // Modal for Backup / Restore tools.yaml
+        if self.show_tools_modal {
+            use egui::Align2;
+            use std::fs;
+            use std::io::Read;
+            use chrono::Utc;
+            let mut modal_open = self.show_tools_modal;
+            let mut should_close = false;
+            egui::Window::new("Backup / Restore tools.yaml")
+                .default_width(410.0)
+                .collapsible(false)
+                .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+                .open(&mut modal_open)
+                .show(ctx, |ui| {
+                    ui.label(RichText::new("Backup or restore your tools.yaml configuration.").color(LIGHT_CYAN));
+                    ui.separator();
+                    // Ensure saved_output/configuration exists
+                    let config_dir = self.workspace_root.join("saved_output").join("configuration");
+                    let _ = fs::create_dir_all(&config_dir);
+
+                    // --- Vertically centered justified layout for tools.yaml modal ---
+                    ui.vertical_centered_justified(|ui| {
+                        let button_width = 200.0;
+                        // Row 1: Back Up & Restore
+                        ui.horizontal(|ui| {
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Back Up"))
+                                .on_hover_text("Save a backup copy of tools.yaml")
+                                .clicked() {
+                                let mut config_path = self.workspace_root.clone();
+                                config_path = config_path.join("tools.yaml");
+                                let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
+                                let backup_path = config_dir.join(format!("tools_backup_{}.yaml", timestamp));
+                                if let Ok(contents) = fs::read(&config_path) {
+                                    let _ = fs::write(&backup_path, contents);
+                                    self.restore_status_message = format!("✅ Backup saved as: {}", backup_path.display());
+                                    self.tools_restore_success = true;
+                                }
+                            }
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Restore"))
+                                .on_hover_text("Restore tools.yaml from a backup file")
+                                .clicked() {
+                                if let Some(path) = FileDialog::new()
+                                    .set_directory(&config_dir)
+                                    .add_filter("YAML", &["yaml", "yml"])
+                                    .pick_file() {
+                                    if let Ok(mut file) = fs::File::open(&path) {
+                                        let mut contents = String::new();
+                                        if file.read_to_string(&mut contents).is_ok() {
+                                            if serde_yaml::from_str::<serde_yaml::Value>(&contents).is_ok() {
+                                                let mut config_path = self.workspace_root.clone();
+                                                config_path = config_path.join("tools.yaml");
+                                                if fs::write(&config_path, contents).is_ok() {
+                                                    self.tools_restore_success = true;
+                                                    self.restore_status_message = format!("✅ Loaded configuration from: {}", path.display());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        ui.add_space(6.0);
+
+                        // Row 2: REMnux & Default
+                        ui.horizontal(|ui| {
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Load REMnux Tools"))
+                                .on_hover_text("Load remnux_tools.yaml as your tools.yaml")
+                                .clicked() {
+                                let remnux_path = self.workspace_root.join("MalChelaGUI").join("remnux").join("remnux_tools.yaml");
+                                if remnux_path.exists() {
+                                    if let Ok(mut file) = fs::File::open(&remnux_path) {
+                                        let mut contents = String::new();
+                                        if file.read_to_string(&mut contents).is_ok() {
+                                            if serde_yaml::from_str::<serde_yaml::Value>(&contents).is_ok() {
+                                                let mut config_path = self.workspace_root.clone();
+                                                config_path = config_path.join("tools.yaml");
+                                                if fs::write(&config_path, contents).is_ok() {
+                                                    self.tools_restore_success = true;
+                                                    self.restore_status_message = format!("✅ Loaded configuration from: {}", remnux_path.display());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if ui.add_sized([button_width, 30.0], egui::Button::new("Load Default Tools"))
+                                .on_hover_text("Load the default tools.yaml shipped with MalChela")
+                                .clicked() {
+                                let default_path = self.workspace_root.join("MalChelaGUI").join("remnux").join("default_tools.yaml");
+                                if default_path.exists() {
+                                    if let Ok(mut file) = fs::File::open(&default_path) {
+                                        let mut contents = String::new();
+                                        if file.read_to_string(&mut contents).is_ok() {
+                                            if serde_yaml::from_str::<serde_yaml::Value>(&contents).is_ok() {
+                                                let mut config_path = self.workspace_root.clone();
+                                                config_path = config_path.join("tools.yaml");
+                                                if fs::write(&config_path, contents).is_ok() {
+                                                    self.tools_restore_success = true;
+                                                    self.restore_status_message = format!("✅ Loaded configuration from: {}", default_path.display());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        ui.add_space(6.0);
+
+                        // Row 3: Edit in VS Code
+                        if ui.add_sized([200.0, 30.0], egui::Button::new("Edit in VS Code")).clicked() {
+                            let mut config_path = std::env::current_exe().unwrap();
+                            while let Some(parent) = config_path.parent() {
+                                if parent.join("Cargo.toml").exists() {
+                                    config_path = parent.join("tools.yaml");
+                                    break;
+                                }
+                                config_path = parent.to_path_buf();
+                            }
+                            #[cfg(target_os = "macos")]
+                            let _ = std::process::Command::new("open").arg(&config_path).spawn();
+                            #[cfg(target_os = "linux")]
+                            let _ = std::process::Command::new("xdg-open").arg(&config_path).spawn();
+                            #[cfg(target_os = "windows")]
+                            let _ = std::process::Command::new("explorer").arg(&config_path).spawn();
+                        }
+                    });
+
+                    // Simplified status message
+                    if self.tools_restore_success && !self.restore_status_message.is_empty() {
+                        ui.separator();
+                        ui.colored_label(GREEN, format!("{} Please restart MalChela GUI for changes to take effect.", self.restore_status_message));
+                    }
+                    ui.separator();
+                    // --- Close button (own row) ---
+                    if ui.button("Close").clicked() {
+                        should_close = true;
+                    }
+                });
+            self.show_tools_modal = modal_open && !should_close;
+        }
+
         use egui::widgets::Hyperlink;
         TopBottomPanel::bottom("footer").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -1245,8 +1813,19 @@ fn main() {
     let icon_path = std::path::Path::new("images/icon.png");
     let icon = load_icon(&icon_path).map(std::sync::Arc::new);
 
-    let tools = AppState::load_tools_from_yaml();
+    let (tools, edition) = AppState::load_tools_from_yaml();
     let categorized_tools = AppState::categorize_tools(&tools);
+    // Initialize all categories as expanded (collapsed = false)
+    let mut collapsed_categories = BTreeMap::new();
+    for k in categorized_tools.keys() {
+        collapsed_categories.insert(k.clone(), false);
+    }
+    let vol3_plugins_path = workspace_root.join("config/vol3_plugins.yaml");
+    let vol3_plugins: BTreeMap<String, Vec<Vol3Plugin>> = std::fs::read_to_string(&vol3_plugins_path)
+    .ok()
+    .and_then(|contents| serde_yaml::from_str(&contents).ok())
+    .unwrap_or_default();
+
     let app = AppState {
         categorized_tools,
         selected_tool: None,
@@ -1271,6 +1850,14 @@ fn main() {
         custom_args: String::new(),
         workspace_root,
         is_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        tshark_panel: TsharkPanel::default(),
+        collapsed_categories,
+        edition,
+        show_tools_modal: false,
+        tools_restore_success: false,
+        restore_status_message: String::new(),
+        vol3_panel: Vol3Panel::default(),
+        vol3_plugins,
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));

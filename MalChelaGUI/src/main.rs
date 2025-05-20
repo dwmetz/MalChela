@@ -192,23 +192,18 @@ impl AppState {
                     .join(" ");
                 // Use which::which to find the full path to vol or vol3
                 let vol_path = which::which(&command[0]).unwrap_or_else(|_| std::path::PathBuf::from(&command[0]));
-                // Escape all quotes for the echo "Running:" line
-                let escaped_command = format!("\\\"{}\\\" {}", vol_path.display(), quoted_args);
                 {
                     let script_path = self.workspace_root.join("launch_vol3.command");
                     let _ = std::fs::write(
                         &script_path,
                         format!(
                             r#"#!/bin/bash
-echo "[INFO] Starting Volatility at $(date)"
-echo "Running: {escaped}"
 {vol} {args}
 echo
 read -p "Press Enter to close..."
 "#,
                             vol = vol_path.display(),
                             args = quoted_args,
-                            escaped = escaped_command,
                         ),
                     );
                     let _ = std::process::Command::new("chmod").arg("+x").arg(&script_path).status();

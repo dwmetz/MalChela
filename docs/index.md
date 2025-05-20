@@ -3,7 +3,7 @@
 This site hosts the MalChela user guide, tool documentation, and integration instructions.
 
 - Use the tabs above to navigate.
-- The full PDF version of the user guide is available [here](user-guide.pdf).
+- The full PDF version of the user guide is available [here](/docs/user-guide.pdf).
 
 ![MalChela GUI](images/malchela.png)
 

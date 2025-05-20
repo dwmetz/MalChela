@@ -10,7 +10,7 @@ A chela on a crab is the scientific term for a claw or pincer. It’s a speciali
 <div style="display: flex; gap: 20px; justify-content: center; align-items: flex-start; flex-wrap: wrap;">
 
   <figure style="text-align: center; max-width: 45%;">
-    <img src="/images/malchela_screenshot.png" alt="MalChela GUI" style="width: 100%;">
+    <img src="/images/coretools.png" alt="MalChela GUI" style="width: 100%;">
     <figcaption><strong>Figure 1:</strong> MalChela GUI</figcaption>
   </figure>
 

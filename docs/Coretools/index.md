@@ -1,5 +1,5 @@
 <figure>
-  <img src="/images/malchela_screenshot.png" alt="MalChela GUI">
+  <img src="/images/coretools.png" alt="MalChela GUI">
   <figcaption><strong>Figure 1:</strong> MalChela GUI</figcaption>
 </figure>
 

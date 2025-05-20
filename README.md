@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela.png"/>
  <p>
  <h1>
-  Malchela v2.1.2
+  Malchela v2.2.0
  </h1>
   <h4>
       A YARA & Malware Analysis Toolkit written in Rust.

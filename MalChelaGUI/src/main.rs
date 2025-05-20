@@ -916,6 +916,66 @@ impl App for AppState {
                         self.selected_tool = None;
                         self.input_path.clear();
                     }
+                    if ui.button(RichText::new("📄 About").color(STONE_BEIGE)).on_hover_text("About MalChela and included tools").clicked() {
+                        {
+                            let mut out = self.command_output.lock().unwrap();
+                            out.clear(); 
+                        }
+                        let output = Arc::clone(&self.command_output);
+                        let output_lines = Arc::clone(&self.output_lines);
+                        thread::spawn(move || {
+                            let mut child = Command::new("cargo")
+                                .args(&["run", "-q", "-p", "about"])
+                                .env("MALCHELA_GUI_MODE", "1")
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .expect("Failed to run about");
+
+                            if let Some(stdout) = child.stdout.take() {
+                                let out_clone = Arc::clone(&output);
+                                let output_lines_clone = Arc::clone(&output_lines);
+                                thread::spawn(move || {
+                                    use std::io::{BufRead, BufReader};
+                                    let stdout_reader = BufReader::new(stdout);
+                                    for line in stdout_reader.lines().flatten() {
+                                        {
+                                            let mut lines = output_lines_clone.lock().unwrap();
+                                            lines.push(line.clone());
+                                        }
+                                        {
+                                            let mut out = out_clone.lock().unwrap();
+                                            out.push_str(&line);
+                                            out.push('\n');
+                                        }
+                                    }
+                                });
+                            }
+
+                            if let Some(stderr) = child.stderr.take() {
+                                let out_clone = Arc::clone(&output);
+                                let output_lines_clone = Arc::clone(&output_lines);
+                                thread::spawn(move || {
+                                    use std::io::{BufRead, BufReader};
+                                    let stderr_reader = BufReader::new(stderr);
+                                    for line in stderr_reader.lines().flatten() {
+                                        {
+                                            let mut lines = output_lines_clone.lock().unwrap();
+                                            lines.push(format!("[red]{}", line));
+                                        }
+                                        {
+                                            let mut out = out_clone.lock().unwrap();
+                                            out.push_str("[red]");
+                                            out.push_str(&line);
+                                            out.push('\n');
+                                        }
+                                    }
+                                });
+                            }
+
+                            let _ = child.wait();
+                        });
+                    }
                     ui.horizontal(|ui| {
                         ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
                             if ui.button("API Keys & Settings").clicked() {
@@ -934,7 +994,7 @@ impl App for AppState {
                         let mut guide_path = std::env::current_exe().unwrap();
                         while let Some(parent) = guide_path.parent() {
                             if parent.join("Cargo.toml").exists() {
-                                guide_path = parent.join("docs/user-guide.md");
+                                guide_path = parent.join("docs/MalChela_User_Guide.pdf");
                                 break;
                             }
                             guide_path = parent.to_path_buf();

@@ -15,10 +15,11 @@ vt-api.txt
 mb-api.txt
 
 # Output folders
-# Ignore everything in saved_output except .gitkeep
 /saved_output/*
-!/saved_output/.gitkeep
-tools.yaml
-/yara_rules
-tools.yaml
-tools.yaml
+
+# YARA rules
+/yara_rules/*.yar
+/yara_rules/*.yara
+
+# MKDocs
+/site

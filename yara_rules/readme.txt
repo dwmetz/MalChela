@@ -1,0 +1,1 @@
+Use this directory to store YARA rules for file_analyzer.

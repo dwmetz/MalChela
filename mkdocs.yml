@@ -11,11 +11,18 @@ theme:
     - navigation.top
     - search.suggest
     - content.code.copy
+plugins:
+  - search
+  - with-pdf:
+      output_path: "pdf/user-guide.pdf"
+      exclude_pages:
+        - home.md
+      
 extra_css:
   - stylesheets/colors.css
 nav:
   - Home: index.md
-  - About: about.md  # Suggest separating from Home
+  - About: about.md
   - Installation: install.md
   - Configuration:
       - tools.yaml: configuration/tools-yaml.md
@@ -36,12 +43,15 @@ nav:
       - StringsToYARA: coretools/strings_to_yara.md
       - XMZMD5: coretools/xmzmd5.md
 
+
   - Third-Party Tools:
+    - Integrating Third Party Tools: tools/index.md
     - Configuration Reference: tools/tools-yaml.md
     - Enhanced Integrations: tools/enhanced.md
     - FLOSS: tools/floss.md
     - TShark: tools/tshark.md
     - Volatility 3: tools/vol3.md
     - YARA-X: tools/yara-x.md
+    - Python Integrations: tools/python.md
   - REMnux Mode: remnux.md
   - Support: support.md

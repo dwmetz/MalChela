@@ -6,7 +6,6 @@
   `from multiprocessing.resource_tracker import main;main(6)`
   This is a known issue and does not affect output. It can be safely ignored.
 
-<figure>
-  <img src="/images/floss.png" alt="FLOSS">
-  <figcaption><strong>Figure 1:</strong> FLOSS</figcaption>
-</figure>
+![FLOSS](../images/floss.png)
+
+<p align="center"><strong>Figure 21:</strong> FLOSS</p>

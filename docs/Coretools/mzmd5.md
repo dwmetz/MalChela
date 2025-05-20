@@ -2,8 +2,6 @@ MZMD5 recursively scans a folder and generates MD5 hashes for all files that sta
 
 By default, hashes are saved to the saved_output/mzmd5/mzmd5.txt. If the file exists already you will be prompted to overwrite it.
 
-<figure>
-  <img src="/images/mzmd5.png" alt="MZMD5">
-  <figcaption><strong>Figure 1:</strong> MZMD5</figcaption>
-</figure>
+![MZMD5](../images/mzmd5.png)
 
+<p align="center"><strong>Figure 16:</strong> MZMD5</p>

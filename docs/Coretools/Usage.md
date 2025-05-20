@@ -3,15 +3,20 @@
 
 MalChela supports three main workflows:
 
-1. **Direct Tool Execution (CLI):**
+- **Direct Tool Execution (CLI):**
+
    ```bash
    cargo run -p toolname — [input] [flags]
    ```
-2. **MalChela CLI Launcher Menu:**
+
+- **MalChela CLI Launcher Menu:**
+
    ```bash
    cargo run -p malchela
    ```
-3. **MalChela GUI Launcher:**
+
+- **MalChela GUI Launcher:**
+
    ```bash
    cargo run -p MalChelaGUI
    ```

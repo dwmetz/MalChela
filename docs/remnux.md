@@ -1,6 +1,6 @@
 # REMnux Mode
 
-![REMnux-Mode](images/remnux-mode.jpeg)
+![REMnux-Mode](images/remnux_mode.png)
 
 MalChela includes built-in support for running in **REMnux Mode**, a configuration designed specifically for seamless operation within the REMnux malware analysis distribution.
 
@@ -12,10 +12,9 @@ REMnux Mode is a configuration profile that aligns MalChela’s behavior with th
 
 This mode is manually enabled by selecting **“Load REMnux”** from the tools.yaml Configuration Panel in the GUI. Once selected, a REMnux-specific `tools.yaml` file is loaded and remains active until you replace it with another configuration.
 
-<figure>
-  <img src="/images/load_remnux.png" alt="Enabling REMnux mode" style="width: 70%;">
-  <figcaption><strong>Figure 1:</strong> Enabling REMnux mode</figcaption>
-</figure>
+![Enabling REMnux mode](images/load_remnux.png)
+
+<p align="left"><strong>Figure 26:</strong> Enabling REMnux mode</p>
 
 > Note: Whenever you change the tools.yaml, you need to restart the GUI for it to take effect.
 

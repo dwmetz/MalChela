@@ -118,7 +118,7 @@ You can extend MalChela by editing the `tools.yaml` file to integrate new tools 
   file_position: "last"
   optional_args: ["tools/pdf-parser/pdf-parser.py"]
 ```
-For advanced tool examples (including `oledump.py` and `olevba` integration with Python), see the [MalChela v2.1.2 User Guide](https://github.com/dwmetz/MalChela/blob/main/docs/MalChela_User_Guide_v2.1.2.md).
+For advanced tool examples (including `oledump.py` and `olevba` integration with Python), see the [MalChela User Guide](https://dwmetz.github.io/MalChela/)).
 
 📝 **Notes:**
 - Tools must be in your system `PATH` or specified with full or relative paths.

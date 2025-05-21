@@ -120,7 +120,6 @@ Each entry defines the tool’s name, category, execution type, how input is pas
   file_position: "last"
   optional_args: ["tools/pdf-parser/pdf-parser.py"]
 ```
-For advanced tool examples (including `oledump.py` and `olevba` integration with Python), see the [MalChela User Guide](https://dwmetz.github.io/MalChela/).
 
 🦀 **REMnux Mode:**  
 When run on a REMnux system, MalChela can load a REMnux-specific `tools.yaml` file tailored for the built-in tools available in that distro. This ensures smoother setup with minimal configuration required.

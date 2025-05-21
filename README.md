@@ -1,5 +1,5 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
   Malchela v2.2.0
@@ -88,7 +88,9 @@ cargo run -p MalChelaGUI
 ```
 <h3>🔧 Adding Custom Tools:</h3>
 
-You can extend MalChela by editing the `tools.yaml` file to integrate new tools into the GUI. Each entry specifies how the tool is launched, what kind of input it takes, and any required arguments. Below are several examples demonstrating how to configure binaries, Python scripts, and Rust-based tools.
+You can extend MalChela by editing the `tools.yaml` file to add third-party or custom tools to the GUI. This flexible configuration supports binaries, Python scripts, and Rust-based programs.
+
+Each entry defines the tool’s name, category, execution type, how input is passed (file, folder, or hash), and any optional arguments. Here are a few sample entries:
 
 ```yaml
 - name: capa
@@ -118,15 +120,29 @@ You can extend MalChela by editing the `tools.yaml` file to integrate new tools 
   file_position: "last"
   optional_args: ["tools/pdf-parser/pdf-parser.py"]
 ```
-For advanced tool examples (including `oledump.py` and `olevba` integration with Python), see the [MalChela User Guide](https://dwmetz.github.io/MalChela/)).
+For advanced tool examples (including `oledump.py` and `olevba` integration with Python), see the [MalChela User Guide](https://dwmetz.github.io/MalChela/).
+
+🦀 **REMnux Mode:**  
+When run on a REMnux system, MalChela can load a REMnux-specific `tools.yaml` file tailored for the built-in tools available in that distro. This ensures smoother setup with minimal configuration required.
+
 
 📝 **Notes:**
-- Tools must be in your system `PATH` or specified with full or relative paths.
+- Tools must be in your system `PATH` or include a full/relative path.
 - `exec_type` must be one of: `cargo`, `binary`, or `script`.
-- `file_position` controls where the input path is inserted in the command line (`first` or `last`).
+- `file_position` indicates where the input is placed in the command (`first` or `last`).
+- See the [MalChela User Guide](https://dwmetz.github.io/MalChela/) for detailed configuration examples and workflows.
 
+<h3>
+Enhanced Tool Support:
+</h3>
 
+MalChela v2.2.0 includes improved integration with the following third-party tools:
 
+- **Volatility 3**: Dynamic plugin builder, argument templating, and output directory selection.
+- **TShark**: Visual reference panel and support for capturing filtered traffic with custom syntax.
+- **YARA-X**: Smart rule matching with improved argument handling and REMnux-compatible default configuration.
+
+These enhancements make working with memory images, PCAPs, and YARA rules more streamlined for forensic workflows.
 
 #### Caveat Emptor:
 Successfully tested on MacOS on Silicon and Ubuntu. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. Works on Windows in WSL! Testers (and contributors) appreciated.

@@ -8,4 +8,4 @@
 
 ![FLOSS](../images/floss.png)
 
-<p align="center"><strong>Figure 21:</strong> FLOSS</p>
+<p align="center"><strong>Figure 22:</strong> FLOSS</p>

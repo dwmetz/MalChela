@@ -88,6 +88,9 @@ struct AppState {
     restore_status_message: String,
     vol3_panel: Vol3Panel,
     vol3_plugins: BTreeMap<String, Vec<Vol3Plugin>>,
+    current_progress: Arc<Mutex<usize>>,
+    total_progress: Arc<Mutex<usize>>,
+    selected_algorithms: Vec<String>,
 }
 
 impl AppState {
@@ -122,10 +125,26 @@ impl AppState {
 
     fn run_tool(&mut self, ctx: &eframe::egui::Context) {
         if let Some(tool) = &self.selected_tool {
-            // FLOSS file path validation: ensure input_path exists and is a file before running FLOSS
-            let command = tool.command.clone();
+            // Clone/move all used self fields into local variables to move into thread
+            let selected_tool = tool.clone();
             let input_path = self.input_path.clone();
-            let output = Arc::clone(&self.command_output);
+            let custom_args = self.custom_args.clone();
+            let save_report = self.save_report.clone();
+            let zip_password = self.zip_password.clone();
+            let workspace_root = self.workspace_root.clone();
+            let command_output = Arc::clone(&self.command_output);
+            let output_lines = Arc::clone(&self.output_lines);
+            let is_running = Arc::clone(&self.is_running);
+            let selected_algorithms = self.selected_algorithms.clone();
+            let scratchpad_path = self.scratchpad_path.clone();
+            let string_source_path = self.string_source_path.clone();
+            let selected_format = self.selected_format.clone();
+            let author_name = self.author_name.clone();
+            // PATCH: compute allow_overwrite before spawning the thread
+            let allow_overwrite = custom_args.contains("MZHASH_ALLOW_OVERWRITE=1");
+            // FLOSS file path validation: ensure input_path exists and is a file before running FLOSS
+            let command = selected_tool.command.clone();
+            let output = Arc::clone(&command_output);
             if command.get(0).map(|s| s.ends_with("floss")).unwrap_or(false) {
                 use std::path::Path;
                 if !Path::new(&input_path).exists() {
@@ -140,44 +159,30 @@ impl AppState {
             ctx.request_repaint();
 
             // Reset output state when running a new tool
-            self.command_output.lock().unwrap().clear();
-            self.output_lines.lock().unwrap().clear();
-            self.is_running.store(false, std::sync::atomic::Ordering::Relaxed);
+            command_output.lock().unwrap().clear();
+            output_lines.lock().unwrap().clear();
+            is_running.store(false, std::sync::atomic::Ordering::Relaxed);
 
             // Reset arguments when running a new tool
             // self.custom_args.clear();  // <-- Removed per instructions
             // self.save_report = (false, ".txt".to_string()); // <-- Removed to preserve Save Report setting
-            self.zip_password.clear();
+            // zip_password.clear(); // Now using zip_password local variable
             // self.scratchpad_path.clear(); // <-- Removed to allow rule file persistence across runs
             // self.string_source_path.clear(); // <-- Removed to preserve selected string source file
             // self.selected_format = ".txt".to_string(); // <-- Removed to prevent overwriting Description for strings_to_yara
 
             // Special case for YARA-X (yr)
-            if tool.command.get(0).map(|s| s == "yr").unwrap_or(false) {
-                if self.scratchpad_path.is_empty() || self.input_path.is_empty() {
-                    let mut out = self.command_output.lock().unwrap();
+            if command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                if scratchpad_path.is_empty() || input_path.is_empty() {
+                    let mut out = command_output.lock().unwrap();
                     out.clear();
-                    out.push_str("❌ Missing rule or target file.\n");
+                    out.push_str("Missing rule or target file.\n");
                     return;
                 }
             }
 
-            // Set environment variables for the tool (if needed)
-            if tool.input_type == "folder" {
-                std::env::set_var("MALCHELA_INPUT", &self.input_path);
-            }
-
-            std::env::remove_var("MZHASH_ALLOW_OVERWRITE");
-            if self.custom_args.contains("MZHASH_ALLOW_OVERWRITE=1") {
-                std::env::set_var("MZHASH_ALLOW_OVERWRITE", "1");
-            }
-            std::env::set_var("MALCHELA_GUI_MODE", "1");
-
             // Special case: Launch Vol/Vol3 in external terminal (outside of thread)
-            let is_external = tool.exec_type.as_deref() != Some("cargo");
-            let command = tool.command.clone();
-            let input_path = self.input_path.clone();
-            let custom_args = self.custom_args.clone();
+            let is_external = selected_tool.exec_type.as_deref() != Some("cargo");
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             if is_external && command.get(0).map(|s| s.contains("vol")).unwrap_or(false) && !cfg!(windows) {
                 let mut args = vec!["-f".to_string(), input_path.clone()];
@@ -193,7 +198,7 @@ impl AppState {
                 // Use which::which to find the full path to vol or vol3
                 let vol_path = which::which(&command[0]).unwrap_or_else(|_| std::path::PathBuf::from(&command[0]));
                 {
-                    let script_path = self.workspace_root.join("launch_vol3.command");
+                    let script_path = workspace_root.join("launch_vol3.command");
                     let _ = std::fs::write(
                         &script_path,
                         format!(
@@ -209,9 +214,9 @@ read -p "Press Enter to close..."
                     let _ = std::process::Command::new("chmod").arg("+x").arg(&script_path).status();
                     // Output the script path to the console area for clarity and copy-paste use
                     {
-                        let mut out = self.command_output.lock().unwrap();
+                        let mut out = command_output.lock().unwrap();
                         out.push_str(&format!("Launch script created at: {}\n", script_path.display()));
-                        self.output_lines.lock().unwrap().push(format!("Launch script created at: {}", script_path.display()));
+                        output_lines.lock().unwrap().push(format!("Launch script created at: {}", script_path.display()));
                     }
                     // Platform-specific terminal launch logic
                     #[cfg(target_os = "macos")]
@@ -227,31 +232,19 @@ read -p "Press Enter to close..."
                     let _ = terminal_launch;
                 }
 
-                self.is_running.store(false, std::sync::atomic::Ordering::Relaxed);
+                is_running.store(false, std::sync::atomic::Ordering::Relaxed);
                 return;
             }
 
             self.show_running_command(ctx);
-
-            let command = tool.command.clone();
-            let input_path = self.input_path.clone();
-            let selected_format = self.selected_format.clone();
-            let scratchpad_path = self.scratchpad_path.clone();
-            let string_source_path = self.string_source_path.clone();
-            let output = Arc::clone(&self.command_output);
-            let gui_mode_args = tool.gui_mode_args.clone();
-            let author_name = self.author_name.clone();
-            let zip_password = self.zip_password.clone();
-            let save_report = self.save_report.clone();
-            let custom_args = self.custom_args.clone();
-            let tool_optional_args = tool.optional_args.clone();
-            let output_lines = Arc::clone(&self.output_lines);
-            let is_external = tool.exec_type.as_deref() != Some("cargo");
-
-            let workspace_root = self.workspace_root.clone();
-            let is_running = Arc::clone(&self.is_running);
-            let output = Arc::clone(&output);
-            let output_lines = Arc::clone(&output_lines);
+            std::env::set_var("MALCHELA_GUI_MODE", "1");
+            let gui_mode_args = selected_tool.gui_mode_args.clone();
+            let tool_optional_args = selected_tool.optional_args.clone();
+            let current_progress = Arc::new(Mutex::new(0));
+            let total_progress = Arc::new(Mutex::new(0));
+            // ... pass current_progress and total_progress as needed ...
+            let current_progress_clone = Arc::clone(&current_progress);
+            let total_progress_clone = Arc::clone(&total_progress);
             thread::spawn(move || {
                 is_running.store(true, std::sync::atomic::Ordering::Relaxed);
                 // Clear the output and output_lines at the start of tool run
@@ -284,7 +277,7 @@ read -p "Press Enter to close..."
                     }
                     args.push(input_path.clone());
                     // Add any additional gui_mode_args and custom_args after
-                    args.extend(gui_mode_args);
+                    args.extend(gui_mode_args.clone());
                     if !custom_args.trim().is_empty() {
                         let parsed_custom_args = shell_words::split(&custom_args).unwrap_or_default();
                         args.extend(parsed_custom_args);
@@ -383,9 +376,9 @@ read -p "Press Enter to close..."
                         }
                         {
                             let mut out = output.lock().unwrap();
-                            out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
+                            let saved_line = format!("\n[green]The results have been saved to: {}\n", report_path.display());
+                            out.push_str(&saved_line);
                         }
-                // (removed println of report_path)
                     }
                     return;
                 }
@@ -422,13 +415,11 @@ read -p "Press Enter to close..."
                 }
 
                 // Step 2: Construct path to binary
-            let binary_name = if cfg!(windows) {
-                format!("{}.exe", command[0])
-            } else {
-                command[0].clone()
-            };
-
-                // Debug: Log binary check (removed)
+                let binary_name = if cfg!(windows) {
+                    format!("{}.exe", command[0])
+                } else {
+                    command[0].clone()
+                };
 
                 let binary_path = if is_external {
                     match which::which(&command[0]) {
@@ -505,6 +496,10 @@ read -p "Press Enter to close..."
                         scratchpad_path.clone(),       // Hash
                         string_source_path.clone(),    // Strings file
                     ]);
+                } else if command[0] == "hashcheck" {
+                    args.clear();
+                    args.push(input_path.clone());
+                    args.extend(parsed_custom_args.clone());
                 } else if !command.get(0).map(|s| s == "yr").unwrap_or(false) {
                     base_args.insert(0, input_path.clone());
                     if command.get(0).map(|s| s == "combine_yara").unwrap_or(false) {
@@ -515,12 +510,34 @@ read -p "Press Enter to close..."
                     }
                 }
                 args.extend(base_args);
-                // End "first"/"last" logic
+            // End "first"/"last" logic
+            if command.get(0).map(|s| s == "mzhash").unwrap_or(false) {
+                for algo in &selected_algorithms {
+                    args.push("-a".to_string());
+                    args.push(algo.to_string());
+                }
+                // Only pass overwrite flag if checkbox enabled in GUI
+                if allow_overwrite {
+                    args.push("-o".to_string());
+                }
+            } else if command.get(0).map(|s| s == "xmzhash").unwrap_or(false) {
+                for algo in &selected_algorithms {
+                    args.push("-a".to_string());
+                    args.push(algo.to_string());
+                }
+                if allow_overwrite {
+                    args.push("-o".to_string());
+                }
+            }
+                // PATCH: For mzhash/xmzhash, do NOT manually inject input_path here before gui_mode_args.
 
-                args.extend(gui_mode_args);
+                args.extend(gui_mode_args.clone());
                 // Consistent Save Report CLI argument logic for all tools:
                 if save_report.0 {
-                    args.push("-o".to_string());
+                    // Only add -o for save_report if NOT mzhash/xmzhash
+                    if !command.get(0).map(|s| s == "mzhash" || s == "xmzhash").unwrap_or(false) {
+                        args.push("-o".to_string());
+                    }
                     match save_report.1.as_str() {
                         ".txt" => args.push("-t".to_string()),
                         ".json" => args.push("-j".to_string()),
@@ -528,7 +545,7 @@ read -p "Press Enter to close..."
                         _ => {}
                     }
                 }
-                args.extend(tool_optional_args);
+                args.extend(tool_optional_args.clone());
                 if command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
                     for (key, value) in &env_vars {
                         if key == "MZCOUNT_TABLE_DISPLAY" {
@@ -536,7 +553,7 @@ read -p "Press Enter to close..."
                         }
                     }
                 }
-                if command.get(0).map(|s| s != "yr").unwrap_or(true) {
+                if command.get(0).map(|s| s != "yr" && s != "hashcheck").unwrap_or(true) {
                     args.extend(parsed_custom_args);
                 }
 
@@ -546,13 +563,11 @@ read -p "Press Enter to close..."
                     std::env::remove_var("MALCHELA_SAVE_OUTPUT");
                 }
 
-                // (removed println! for binary_path and args)
-
-                // Log the full command line to vol3_command_debug.txt before launching external tool (removed)
 
                 let mut command_builder = {
                     let mut cmd = Command::new(&binary_path);
                     cmd.args(&args);
+                    cmd.env("MALCHELA_INPUT", input_path.clone());
                     cmd
                 };
                 command_builder.current_dir(&workspace_root);
@@ -570,23 +585,73 @@ read -p "Press Enter to close..."
                             let workspace_root = workspace_root.clone();
                             let command = command.clone();
                             let is_running_clone = Arc::clone(&is_running);
-                            // 🖼️ No ctx_clone here
+                            let current_progress = Arc::clone(&current_progress_clone);
+                            let total_progress = Arc::clone(&total_progress_clone);
                             thread::spawn(move || {
                                 use std::io::{BufRead, BufReader};
                                 let stdout = stdout; // take ownership here for the thread
                                 let mut reader = BufReader::new(stdout);
                                 let mut buffer = String::new();
+                                let mut is_first_line = true;
                                 loop {
                                     match reader.read_line(&mut buffer) {
                                         Ok(0) => break, // EOF
                                         Ok(_) => {
-                                            {
-                                                let mut lines = output_lines_clone_stdout.lock().unwrap();
-                                                lines.push(buffer.trim_end().to_string());
+                                            if is_first_line && command[0] == "hashcheck" {
+                                                {
+                                                    let mut out = out_clone_stdout.lock().unwrap();
+                                                    out.push('\n');
+                                                }
+                                                {
+                                                    let mut lines = output_lines_clone_stdout.lock().unwrap();
+                                                    lines.push("".to_string());
+                                                }
+                                                is_first_line = false;
                                             }
-                                            {
-                                                let mut out = out_clone_stdout.lock().unwrap();
-                                                out.push_str(&buffer);
+                                            let trimmed_line = buffer.trim_end().to_string();
+                                            // --- PATCH: For xmz256, only show per-file line with hash, not "Starting scan of ..." ---
+                                            let is_xmzhash = command.get(0).map(|s| s == "xmzhash").unwrap_or(false);
+                                            let is_starting_scan = trimmed_line.starts_with("Starting scan of ");
+                                            let trimmed_line = if trimmed_line.contains("Hash value FOUND") {
+                                                "[green]Hash value FOUND in the file.".to_string()
+                                            } else if trimmed_line.starts_with("Hash: ") {
+                                                format!("[cyan]{}", trimmed_line)
+                                            } else if trimmed_line.contains("Associated file path:") {
+                                                format!("[rust]{}", trimmed_line)
+                                            } else if trimmed_line.contains("The results have been saved to:") {
+                                                format!("[green]{}", trimmed_line)
+                                            // PATCH: xmzhash "Writing hash to file: ..." lines, show hash
+                                            } else if is_xmzhash && trimmed_line.starts_with("Writing hash to file: ") {
+                                                // Extract the hash from the line, e.g., "Writing hash to file: <hash>"
+                                                let hash = trimmed_line.trim_start_matches("Writing hash to file: ").to_string();
+                                                format!("[cyan]Hash: {}", hash)
+                                            } else if is_xmzhash && is_starting_scan {
+                                                // Suppress from GUI output
+                                                String::new()
+                                            } else {
+                                                trimmed_line
+                                            };
+                                            if trimmed_line.starts_with("[PROGRESS]") {
+                                                if let Some((scanned, total)) = trimmed_line
+                                                    .trim_start_matches("[PROGRESS]")
+                                                    .trim()
+                                                    .split_once('/')
+                                                    .and_then(|(a, b)| Some((a.trim().parse::<usize>().ok()?, b.trim().parse::<usize>().ok()?)))
+                                                {
+                                                    *current_progress.lock().unwrap() = scanned;
+                                                    *total_progress.lock().unwrap() = total;
+                                                }
+                                                // suppress from GUI console output
+                                            } else {
+                                                {
+                                                    let mut lines = output_lines_clone_stdout.lock().unwrap();
+                                                    lines.push(trimmed_line.clone());
+                                                }
+                                                {
+                                                    let mut out = out_clone_stdout.lock().unwrap();
+                                                    out.push_str(&trimmed_line);
+                                                    out.push('\n');
+                                                }
                                             }
                                             buffer.clear();
                                         }
@@ -631,7 +696,8 @@ read -p "Press Enter to close..."
                                     }
                                     {
                                         let mut out = out_clone_stdout.lock().unwrap();
-                                        out.push_str(&format!("\nThe results have been saved to: {}\n", report_path.display()));
+                                        let saved_line = format!("\n[green]The results have been saved to: {}\n", report_path.display());
+                                        out.push_str(&saved_line);
                                     }
                                 }
                                 is_running_clone.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -836,11 +902,13 @@ impl App for AppState {
             self.banner_displayed = true;
         }
 
+        
+
         ctx.set_visuals(Visuals::dark());
 
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                let mut title = "MalChela v2.2.0 — YARA & Malware Analysis Toolkit".to_string();
+                let mut title = "MalChela v2.2.1 — YARA & Malware Analysis Toolkit".to_string();
                 if !self.edition.trim().is_empty() {
                     title.push_str(&format!(" ({})", self.edition));
                 }
@@ -851,6 +919,8 @@ impl App for AppState {
                 );
             });
         });
+
+        let _selected_command = self.selected_tool.as_ref().and_then(|tool| tool.command.get(0).cloned());
 
         SidePanel::left("tool_panel")
             .resizable(false)
@@ -1032,11 +1102,22 @@ impl App for AppState {
                 });
             });
 
+        // Avoid simultaneous immutable and mutable borrows of self:
+        let tool_clone = self.selected_tool.clone();
+        let _tool_command = tool_clone.as_ref().and_then(|t| t.command.get(0)).cloned();
         CentralPanel::default().show(ctx, |ui| {
+            {
+                let scanned = *self.current_progress.lock().unwrap();
+                let total = *self.total_progress.lock().unwrap();
+                if total > 0 {
+                    ui.label(RichText::new(format!("Scanned: {} / {}", scanned, total)).color(LIGHT_GREEN).strong());
+                }
+            }
             if self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
                 ui.label(egui::RichText::new("🏃  Running...").color(YELLOW).strong());
             }
-            if let Some(tool) = &self.selected_tool {
+            if let Some(tool) = &tool_clone {
+                // mzhash/xmzhash config panel is now rendered only once in the CentralPanel.
                 if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
                     self.tshark_panel.ui(ui);
                     return;
@@ -1075,7 +1156,19 @@ impl App for AppState {
                         .show(ui, |ui| {
                             let output_lines = self.output_lines.lock().unwrap();
                             for line in output_lines.iter() {
-                                ui.label(line);
+                                if line.starts_with("[green]") {
+                                    ui.label(RichText::new(line.trim_start_matches("[green]")).color(GREEN));
+                                } else if line.starts_with("[yellow]") {
+                                    ui.label(RichText::new(line.trim_start_matches("[yellow]")).color(YELLOW));
+                                } else if line.starts_with("[cyan]") {
+                                    ui.label(RichText::new(line.trim_start_matches("[cyan]")).color(LIGHT_CYAN));
+                                } else if line.starts_with("[rust]") {
+                                    ui.label(RichText::new(line.trim_start_matches("[rust]")).color(RUST_ORANGE));
+                                } else if line.starts_with("[red]") {
+                                    ui.label(RichText::new(line.trim_start_matches("[red]")).color(RED));
+                                } else {
+                                    ui.label(line);
+                                }
                             }
                         });
 
@@ -1089,25 +1182,76 @@ impl App for AppState {
                     .color(LIGHT_CYAN)
                     .strong(),
                 );
-                if !self.input_path.trim().is_empty() {
-                    let mut command_line = tool.command.join(" ");
-
-                    if !self.custom_args.trim().is_empty() {
-                        command_line.push(' ');
-                        command_line.push_str(&self.custom_args);
+                // Only show the standard input config and command line preview if NOT mzhash or xmzhash
+                if tool.command.get(0).map(|s| s != "mzhash" && s != "xmzhash").unwrap_or(true) {
+                    if !self.input_path.trim().is_empty() {
+                        let command_line = if tool.command.get(0).map(|s| s == "hashcheck").unwrap_or(false) {
+                            format!("cargo run -p hashcheck -- {} {}", self.input_path.trim(), self.custom_args.trim())
+                        } else {
+                            let mut base = format!("cargo run -p {} --", tool.command[0]);
+                            if tool.command.len() > 1 {
+                                base.push(' ');
+                                base.push_str(&tool.command[1..].join(" "));
+                            }
+                            if !self.input_path.trim().is_empty() && tool.input_type != "hash" {
+                                base.push(' ');
+                                base.push_str(self.input_path.trim());
+                            }
+                            if !self.custom_args.trim().is_empty() {
+                                base.push(' ');
+                                base.push_str(&self.custom_args.trim());
+                            }
+                            base
+                        };
+                        ui.label(RichText::new(command_line).color(GREEN).strong());
                     }
-
-                    if self.save_report.0 {
-                        command_line.push_str(" -o");
-                        match self.save_report.1.as_str() {
-                            ".txt" => command_line.push_str(" -t"),
-                            ".json" => command_line.push_str(" -j"),
-                            ".md" => command_line.push_str(" -m"),
-                            _ => {}
+                }
+                // --- Begin mzhash/xmzhash configuration block ---
+                if tool.command.get(0).map(|s| s == "mzhash" || s == "xmzhash").unwrap_or(false) {
+                    // --- Begin mzhash/xmzhash configuration block ---
+                    ui.horizontal(|ui| {
+                        ui.label("Folder Path:");
+                        ui.text_edit_singleline(&mut self.input_path);
+                        if ui.button("Browse").clicked() {
+                            if let Some(path) = FileDialog::new().pick_folder() {
+                                self.input_path = path.display().to_string();
+                            }
                         }
+                        if !self.input_path.trim().is_empty() {
+                            ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Algorithms:").strong());
+                        for algo in ["MD5", "SHA1", "SHA256"] {
+                            let mut selected = self.selected_algorithms.contains(&algo.to_string());
+                            if ui.checkbox(&mut selected, algo).changed() {
+                                if selected {
+                                    if !self.selected_algorithms.contains(&algo.to_string()) {
+                                        self.selected_algorithms.push(algo.to_string());
+                                    }
+                                } else {
+                                    self.selected_algorithms.retain(|a| a != algo);
+                                }
+                            }
+                        }
+                    });
+
+                    let mut allow_overwrite = self.custom_args.contains("MZHASH_ALLOW_OVERWRITE=1");
+                    if ui.checkbox(&mut allow_overwrite, "Allow Overwrite").changed() {
+                        let mut args: Vec<String> = self.custom_args
+                            .split_whitespace()
+                            .map(str::to_string)
+                            .filter(|arg| !arg.starts_with("MZHASH_ALLOW_OVERWRITE"))
+                            .collect();
+                        if allow_overwrite {
+                            args.push("MZHASH_ALLOW_OVERWRITE=1".to_string());
+                        }
+                        self.custom_args = args.join(" ");
                     }
 
-                    ui.label(RichText::new(command_line).color(GREEN).strong());
+                    // --- End mzhash/xmzhash block ---
                 }
                 if tool.command.get(0).map(|s| s == "strings_to_yara").unwrap_or(false) {
                     ui.label(RichText::new("strings_to_yara Configuration").strong().color(LIGHT_CYAN));
@@ -1350,35 +1494,6 @@ impl App for AppState {
                         }
                     });
 
-                    ui.horizontal(|ui| {
-                        let mut verbose = self.custom_args.contains("-v");
-                        let debug = self.custom_args.matches("-d").count();
-                        let mut quiet = self.custom_args.contains("-q");
-
-                        if ui.checkbox(&mut verbose, "Verbose (-v)").changed() {
-                            self.custom_args = self.custom_args.replace("-v", "");
-                            if verbose {
-                                self.custom_args.push_str(" -v");
-                            }
-                        }
-                        if ui.checkbox(&mut quiet, "Quiet (-q)").changed() {
-                            self.custom_args = self.custom_args.replace("-q", "");
-                            if quiet {
-                                self.custom_args.push_str(" -q");
-                            }
-                        }
-                        let mut dbg_level = debug as u8;
-                        if ui.add(egui::DragValue::new(&mut dbg_level).clamp_range(0..=3).prefix("Debug level: ")).changed() {
-                            self.custom_args = self.custom_args
-                                .split_whitespace()
-                                .filter(|arg| arg != &"-d")
-                                .collect::<Vec<_>>()
-                                .join(" ");
-                            for _ in 0..dbg_level {
-                                self.custom_args.push_str(" -d");
-                            }
-                        }
-                    });
 
                     ui.horizontal(|ui| {
                         ui.label("Color Output:");
@@ -1408,6 +1523,21 @@ impl App for AppState {
                                 }
                             });
                     });
+                    // --- Inserted: FLOSS Verbose (-v) toggle ---
+                    ui.horizontal(|ui| {
+                        let mut verbose = self.custom_args.contains("-v");
+                        if ui.checkbox(&mut verbose, "Verbose (-v)").changed() {
+                            self.custom_args = self
+                                .custom_args
+                                .split_whitespace()
+                                .filter(|arg| *arg != "-v")
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            if verbose {
+                                self.custom_args.push_str(" -v");
+                            }
+                        }
+                    });
                     // --- End FLOSS argument controls ---
 
                     ui.horizontal(|ui| {
@@ -1434,70 +1564,68 @@ impl App for AppState {
                         ui.label(RichText::new("Enter a hash to check against NSRL").strong().color(LIGHT_CYAN));
                     }
 
-                    ui.horizontal(|ui| {
-                        let label = match tool.input_type.as_str() {
-                            "hash" => "Hash:",
-                            "folder" => "Folder Path:",
-                            _ => "File Path:",
-                        };
-                        ui.label(label);
-                        ui.text_edit_singleline(&mut self.input_path);
-                        if tool.input_type != "hash" {
+                    // --- Inserted: hashcheck tool-specific configuration ---
+                    if tool.command.get(0).map(|s| s == "hashcheck").unwrap_or(false) {
+                        ui.label(RichText::new("Check if a hash exists in a list").strong().color(LIGHT_CYAN));
+
+                        ui.horizontal(|ui| {
+                            ui.label("Hash File:");
+                            ui.text_edit_singleline(&mut self.input_path);
                             if ui.button("Browse").clicked() {
-                                let picked = if tool.input_type == "folder" {
-                                    FileDialog::new().pick_folder()
-                                } else {
-                                    FileDialog::new().pick_file()
-                                };
-                                if let Some(path) = picked {
+                                if let Some(path) = FileDialog::new().add_filter("TSV or TXT", &["tsv", "txt"]).pick_file() {
                                     self.input_path = path.display().to_string();
                                 }
                             }
                             if !self.input_path.trim().is_empty() {
                                 ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
                             }
-                        }
-                    });
-                    if tool.exec_type.as_deref() == Some("script") || tool.exec_type.as_deref() == Some("binary") {
+                        });
+
                         ui.horizontal(|ui| {
-                            ui.label("Arguments:");
+                            ui.label("Hash to Search:");
                             ui.text_edit_singleline(&mut self.custom_args);
                         });
-                    }
 
-                    if let Some(tool_name) = tool.command.get(0) {
-                        if tool_name == "mzmd5" || tool_name == "xmzmd5" {
-                            let overwrite_var = "MZHASH_ALLOW_OVERWRITE=1";
-
+                        ui.label(RichText::new("📌 Tip: TSV format is preferred for path lookup support.").color(LIGHT_GREEN));
+                    } else {
+                        // For mzhash/xmzhash, do not show duplicate input UI here.
+                        if !(tool.command.get(0).map(|s| s == "mzhash" || s == "xmzhash").unwrap_or(false)) {
                             ui.horizontal(|ui| {
-                                ui.label("Note:");
-                                ui.label("Output file already exists? Check 'Allow Overwrite' to replace it.");
-                            });
-
-                            let mut allow_overwrite = self.custom_args.contains(overwrite_var);
-                            if ui.checkbox(&mut allow_overwrite, "Allow Overwrite")
-                                .on_hover_text("Set environment variable to permit overwriting existing report.")
-                                .changed()
-                            {
-                                self.custom_args = self
-                                    .custom_args
-                                    .split_whitespace()
-                                    .filter(|arg| !arg.starts_with("MZHASH_ALLOW_OVERWRITE"))
-                                    .collect::<Vec<_>>()
-                                    .join(" ");
-                                if allow_overwrite {
-                                    if self.custom_args.trim().is_empty() {
-                                        self.custom_args = overwrite_var.to_string();
-                                    } else {
-                                        self.custom_args.push_str(&format!(" {}", overwrite_var));
+                                let label = match tool.input_type.as_str() {
+                                    "hash" => "Hash:",
+                                    "folder" => "Folder Path:",
+                                    _ => "File Path:",
+                                };
+                                ui.label(label);
+                                ui.text_edit_singleline(&mut self.input_path);
+                                if tool.input_type != "hash" {
+                                    if ui.button("Browse").clicked() {
+                                        let picked = if tool.input_type == "folder" {
+                                            FileDialog::new().pick_folder()
+                                        } else {
+                                            FileDialog::new().pick_file()
+                                        };
+                                        if let Some(path) = picked {
+                                            self.input_path = path.display().to_string();
+                                        }
+                                    }
+                                    if !self.input_path.trim().is_empty() {
+                                        ui.label(RichText::new(format!("Selected: {}", self.input_path)).color(STONE_BEIGE));
                                     }
                                 }
-                            }
+                            });
+                        }
+                        if tool.exec_type.as_deref() == Some("script") || tool.exec_type.as_deref() == Some("binary") {
+                            ui.horizontal(|ui| {
+                                ui.label("Arguments:");
+                                ui.text_edit_singleline(&mut self.custom_args);
+                            });
                         }
                     }
 
+
                     if let Some(tool_name) = tool.command.get(0) {
-                        let skip_report_tools = ["strings_to_yara", "combine_yara", "extract_samples", "mzcount", "mzmd5", "xmzmd5"];
+                        let skip_report_tools = ["strings_to_yara", "combine_yara", "extract_samples", "mzcount", "mzhash", "xmzhash"];
                         if !skip_report_tools.contains(&tool_name.as_str()) {
                             ui.horizontal(|ui| {
                                 ui.checkbox(&mut self.save_report.0, "Save Report");
@@ -1918,6 +2046,10 @@ fn main() {
         restore_status_message: String::new(),
         vol3_panel: Vol3Panel::default(),
         vol3_plugins,
+        current_progress: Arc::new(Mutex::new(0)),
+        total_progress: Arc::new(Mutex::new(0)),
+        selected_algorithms: Vec::new(),
+
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));
@@ -1929,3 +2061,4 @@ fn main() {
     };
     eframe::run_native("MalChela", native_options, Box::new(|_cc| Box::new(app))).unwrap();
 }
+

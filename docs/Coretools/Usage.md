@@ -1,4 +1,3 @@
-
 ## Getting Started
 
 MalChela supports three main workflows:
@@ -108,11 +107,12 @@ Save Report
 | extract_samples | file                   | ❌            | ✅                 | Extracts archive contents         |
 | fileanalyzer    | file                   | ✅            | ✅                 | Uses YARA + heuristics            |
 | hashit          | file                   | ✅            | ✅                 | Generates hashes                  |
+| hashcheck       | hash and lookup file    | ❌            | ✅                 | Checks files against known hashes |
 | malhash         | hash                   | ✅            | ✅                 | Uses vt-cli + bazaar-cli          |
 | mismatchminer   | folder                 | ✅            | ✅                 | Identifies mismatches             |
 | mstrings        | file                   | ✅            | ✅                 | Maps strings to MITRE             |
+| mzhash          | folder                 | ✅            | ✅                 | Hashes files with MZ header       |
 | nsrlquery       | file                   | ✅            | ✅                 | Queries CIRCL                     |
 | strings_to_yara | text file and metadata | ❌            | ✅                 | Generates YARA rules              |
-| mzmd5           | folder                 | ❌            | ✅                 | MD5 only; no output flag          |
 | mzcount         | folder                 | ❌            | ✅                 | Tallies file types                |
-| xmzmd5          | folder                 | ❌            | ✅                 | Extended MD5 scan                 |
+| xmzhash         | folder                 | ✅            | ✅                 | Hashes files without known headers|

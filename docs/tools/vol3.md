@@ -17,11 +17,11 @@ Volatility 3 is available in MalChela as an enhanced third-party tool. The GUI p
 
 ![Volatility](../images/volatility.png)
 
-<p align="center"><strong>Figure 23:</strong> Volatility (launches in separate terminal)</p>
+<p align="center"><strong>Figure 24:</strong> Volatility (launches in separate terminal)</p>
 
 ![Volatility Plugin Reference](../images/volatility_panel.png)
 
-<p align="left"><strong>Figure 24:</strong> Volatility Plugin Reference</p>
+<p align="left"><strong>Figure 25:</strong> Volatility Plugin Reference</p>
 
 ---
 

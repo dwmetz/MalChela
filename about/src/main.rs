@@ -38,7 +38,7 @@ fn main() {
     println!("{}", styled_line("gray", "            https://bakerstreetforensics.com"));
     println!();
     println!("{}", styled_line("rust", "MalChela - A YARA & Malware Analysis Toolkit written in Rust"));
-    println!("{}", styled_line("gray", "Version: 2.1.2"));
+    println!("{}", styled_line("gray", "Version: 2.2.1"));
     println!();
     println!("{}", styled_line("ABOUT", "ABOUT:"));
     println!("{}", styled_line("yellow", "   mal — malware"));
@@ -54,19 +54,21 @@ fn main() {
     let description_width = 70;
 
     let table_string = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}",
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Combine YARA", "Point it at a directory of YARA files and it will output one combined rule"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Extract Samples", "Point it at a directory of password protected malware files to extract all"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "File Analyzer", "Get the hash, entropy, packing, PE info, YARA and VT match status for a file"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "HashCheck", "Check a  hash table .txt or a .tsv lookup table for presence of a hash"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Hash It", "Point it to a file and get the MD5, SHA1 and SHA256 hash"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Mismatch Miner", "Analyzes a directory for exe files impersonating other file types (doc, png, etc)"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "MSTRINGS", "Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex."),
-        format!("  {:<feature_width$}|  {:<description_width$}\n", "MZMD5", "Recurse a directory, for files with MZ header, create hash list"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "MZHash", "Recurse a directory, for files with MZ header, create hash list"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "MZcount", "Recurse a directory, uses YARA to count MZ, Zip, PDF, other"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "NSRL Hash Lookup", "Query an MD5 or SHA1 hash against NSRL"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Strings to YARA", "Prompts for metadata and strings (text file) to create a YARA rule"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Malware Hash Lookup", "Query a hash value against VirusTotal & Malware Bazaar*"),
-        format!("  {:<feature_width$}|  {:<description_width$}\n", "XMZMD5", "Recurse a directory, for files without MZ, Zip or PDF header, create hash list"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "XMZHash", "Recurse a directory, for files without MZ, Zip or PDF header, create hash list"),
+
     );
 
     println!("{}", table_string);

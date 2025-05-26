@@ -75,9 +75,16 @@ tools:
   category: "Hashing Tools"
   exec_type: cargo
 
-- name: MZMD5
-  description: "Generates MD5 hashes for folder contents"
-  command: ["mzmd5"]
+- name: Hash Check
+  description: "Check a hash value against a lookup file"
+  command: ["hashcheck"]
+  input_type: file
+  category: "Hashing Tools"
+  exec_type: cargo
+
+- name: MZHash
+  description: "Generates hashes for folder contents"
+  command: ["mzhash"]
   input_type: folder
   category: "Hashing Tools"
   exec_type: cargo
@@ -103,9 +110,9 @@ tools:
   category: "YARA Tools"
   exec_type: cargo
 
-- name: XMZMD5
+- name: XMZHash
   description: "Generates MD5 hashes with extended output"
-  command: ["xmzmd5"]
+  command: ["xmzhash"]
   input_type: folder
   category: "Hashing Tools"
   exec_type: cargo

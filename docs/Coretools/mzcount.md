@@ -2,8 +2,30 @@ MZcount recursively scans a directory and counts the number of files that match 
 
 ![MZCount Table View](../images/mzcount_table.png)
 
-<p align="center"><strong>Figure 14:</strong> MZCount Table View</p>
+<p align="center"><strong>Figure 15:</strong> MZCount Table View</p>
 
 ![MZCount Detail View](../images/mzcount_detail.png)
 
-<p align="center"><strong>Figure 15:</strong> MZCount Detail View</p>
+<p align="center"><strong>Figure 16:</strong> MZCount Detail View</p>
+
+
+
+---
+
+### 🔧 CLI Syntax
+
+```bash
+cargo run -p mzcount -- /path_to_scan/
+```
+
+Scans the specified directory and prints results in the terminal.
+
+To enable table mode:
+
+```bash
+MZCOUNT_TABLE_DISPLAY=1 cargo run -p mzcount -- /path_to_scan/
+```
+
+Use this to display a live-updating summary of file types.
+
+If no path is provided, the tool will prompt you to enter it interactively. When run from the command line with a path, it defaults to detailed output with a table summary at the end.

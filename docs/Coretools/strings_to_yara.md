@@ -4,4 +4,24 @@ Lines beginning with hash: are deliberately ignored during rule generation — t
 
 ![Strings to YARA](../images/strings_to_yara.png)
 
-<p align="center"><strong>Figure 18:</strong> Strings to YARA</p>
+<p align="center"><strong>Figure 19:</strong> Strings to YARA</p>
+
+---
+
+### 🔧 CLI Syntax
+
+```bash
+cargo run -p strings_to_yara -- RuleName Author Description Hash /path/to/strings.txt
+```
+
+You can supply up to five positional arguments. If any are omitted, the tool will prompt you interactively.
+
+```bash
+Enter rule name:
+Enter author:
+Enter description:
+Enter hash (optional):
+Enter path to string list file:
+```
+
+Lines in the string file that begin with `hash:` are ignored and will not be included in the generated rule.

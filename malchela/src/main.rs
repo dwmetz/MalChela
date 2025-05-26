@@ -126,6 +126,12 @@ fn print_banner() {
     println!();
 }
 
+enum MenuAction {
+    Launch(Vec<String>),
+    Exit,
+    None,
+}
+
 fn main() {
     print_banner();
 
@@ -150,70 +156,63 @@ fn main() {
         })
         .collect();
 
+    let mut menu_labels = vec![];
+    let mut menu_actions = vec![];
+
+    for (group, tools) in &groups {
+        menu_labels.push(format!(
+            "{}  {}",
+            match group.as_str() {
+                "File Analysis" => "⚠",
+                "String Analysis" => "§",
+                "Hashing Tools" => "⌗",
+                "YARA Tools" => "☠",
+                "Threat Intel" => "☢",
+                "Utilities" => "⚙",
+                _ => "•",
+            },
+            group
+        ).green());
+        menu_actions.push(MenuAction::None);
+
+        for (label, command) in tools {
+            menu_labels.push(format!("• {}", label).cyan());
+            menu_actions.push(MenuAction::Launch(command.clone()));
+        }
+    }
+
+    menu_labels.push("⏻  Exit".green());
+    menu_actions.push(MenuAction::Exit);
+
+    let theme = NoPrefixTheme;
+
     loop {
         clear_screen();
         print_banner();
 
-        let mut tool_entries = vec![];
-        for (group, tools) in &groups {
-            tool_entries.push(format!(
-                "{}  {}",
-                match group.as_str() {
-                    "File Analysis" => "⚠",
-                    "Hashing Tools" => "⌗",
-                    "YARA Tools" => "☠",
-                    "Threat Intel" => "☢",
-                    "Utilities" => "⚙",
-                    _ => "•",
-                },
-                group
-            ).green());
-
-            for (label, _) in tools {
-                tool_entries.push(format!("        • {}", label).into());
-            }
-        }
-
-        tool_entries.push("⏻  Exit".to_string().green());
-
-        let theme = NoPrefixTheme;
-
         let selection = Select::with_theme(&theme)
             .with_prompt("    Choose a tool:")
-            .items(&tool_entries)
+            .items(&menu_labels)
             .default(0)
             .interact_opt()
             .unwrap();
 
         if let Some(index) = selection {
-            if tool_entries[index].contains("⏻") {
-                println!("{}", "Exiting...".yellow());
-                break;
-            }
-
-            let mut command_items = Vec::new();
-            for (_group, tools) in &groups {
-                for (_label, command) in tools {
-                    command_items.push(command);
+            match &menu_actions[index] {
+                MenuAction::Launch(command) => {
+                    println!("{}", format!("Launching: {}", command.join(" ")).cyan());
+                    let _ = Command::new("cargo")
+                        .args(command.iter())
+                        .spawn()
+                        .unwrap()
+                        .wait();
+                    pause();
                 }
-            }
-
-            // Count only actionable entries (ignoring headers and spacers)
-            let actionable_indices: Vec<usize> = tool_entries.iter()
-                .enumerate()
-                .filter(|(_, entry)| entry.to_string().contains("•"))
-                .map(|(i, _)| i)
-                .collect();
-
-            if let Some(cmd_index) = actionable_indices.iter().position(|&i| i == index) {
-                let command = &command_items[cmd_index];
-                println!("{}", format!("Launching: {}", command.join(" ")).cyan());
-                let _ = Command::new("cargo")
-                    .args(command.iter())
-                    .spawn()
-                    .unwrap()
-                    .wait();
-                pause();
+                MenuAction::Exit => {
+                    println!("{}", "Exiting...".yellow());
+                    break;
+                }
+                MenuAction::None => {}
             }
         } else {
             break;

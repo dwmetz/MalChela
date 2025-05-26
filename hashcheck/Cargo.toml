@@ -1,0 +1,7 @@
+[package]
+name = "hashcheck"
+version = "2.2.1"
+edition = "2021"
+
+[dependencies]
+chrono = "0.4.41"

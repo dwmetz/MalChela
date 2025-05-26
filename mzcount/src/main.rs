@@ -150,10 +150,8 @@ fn scan_file(file_path: &Path, rules: &Rules) -> Result<Vec<String>, io::Error> 
 
 fn main() {
     let input = std::env::var("MALCHELA_INPUT").unwrap_or_else(|_| {
-        println!("Enter directory to scan:");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).expect("Failed to read input");
-        input
+        eprintln!("Error: No input provided. Please set MALCHELA_INPUT.");
+        std::process::exit(1);
     });
 
     let directory_path = match fs::canonicalize(input.trim()) {

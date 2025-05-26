@@ -71,6 +71,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#cli-syntax" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -712,6 +717,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../hashcheck/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    HashCheck
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashit/" class="md-nav__link">
         
   
@@ -788,6 +816,19 @@
       
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    MStrings
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -799,6 +840,32 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -835,12 +902,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../mzmd5/" class="md-nav__link">
+      <a href="../mzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    MZMD5
+    MZHash
     
   </span>
   
@@ -904,12 +971,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../xmzmd5/" class="md-nav__link">
+      <a href="../xmzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    XMZMD5
+    XMZHash
     
   </span>
   
@@ -1221,6 +1288,23 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1242,7 +1326,23 @@
 
 <p>mStrings extracts strings from files and classifies them using regular expressions, YARA rules, and MITRE ATT&amp;CK mappings. It highlights potential indicators of compromise and suspicious behavior, grouping matches by tactic and technique. Ideal for quickly surfacing malicious capabilities in binaries, scripts, and documents.</p>
 <p><img alt="MStrings" src="../../images/mstrings.png" /></p>
-<p align="center"><strong>Figure 13:</strong> MStrings</p>
+<p align="center"><strong>Figure 14:</strong> MStrings</p>
+
+<hr />
+<h3 id="cli-syntax">🔧 CLI Syntax</h3>
+<pre><code class="language-bash">cargo run -p mstrings -- /path_to_file/
+</code></pre>
+<p>Scans the specified file and prints results in the terminal.</p>
+<pre><code class="language-bash">cargo run -p mstrings -- /path_to_file/ -o -t
+</code></pre>
+<p>Saves the results as a <code>.txt</code> file.</p>
+<p>Use <code>-o</code> to save output and include one of the following format flags:
+- <code>-t</code> → Save as <code>.txt</code>
+- <code>-j</code> → Save as <code>.json</code>
+- <code>-m</code> → Save as <code>.md</code></p>
+<p>If no file is provided, the tool will prompt you to enter the path interactively.</p>
+<pre><code class="language-bash">Enter the file path:
+</code></pre>
 
 
 

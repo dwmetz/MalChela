@@ -12,7 +12,7 @@
         <link rel="prev" href="../nsrlquery/">
       
       
-        <link rel="next" href="../xmzmd5/">
+        <link rel="next" href="../xmzhash/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -70,6 +70,11 @@
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
+      
+        
+        <a href="#cli-syntax" class="md-skip">
+          Skip to content
+        </a>
       
     </div>
     <div data-md-component="announce">
@@ -712,6 +717,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../hashcheck/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    HashCheck
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashit/" class="md-nav__link">
         
   
@@ -827,12 +855,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../mzmd5/" class="md-nav__link">
+      <a href="../mzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    MZMD5
+    MZHash
     
   </span>
   
@@ -880,6 +908,19 @@
       
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    StringsToYARA
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -891,6 +932,32 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -904,12 +971,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../xmzmd5/" class="md-nav__link">
+      <a href="../xmzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    XMZMD5
+    XMZHash
     
   </span>
   
@@ -1221,6 +1288,23 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1243,7 +1327,20 @@
 <p>Strings to YARA helps you rapidly build custom YARA rules by prompting for a rule name, optional metadata, and a list of string indicators. It integrates with the MalChela scratchpad, allowing you to paste or collect candidate strings interactively.</p>
 <p>Lines beginning with hash: are deliberately ignored during rule generation — this lets you use the scratchpad to track hashes alongside strings without polluting your YARA rule content.</p>
 <p><img alt="Strings to YARA" src="../../images/strings_to_yara.png" /></p>
-<p align="center"><strong>Figure 18:</strong> Strings to YARA</p>
+<p align="center"><strong>Figure 19:</strong> Strings to YARA</p>
+
+<hr />
+<h3 id="cli-syntax">🔧 CLI Syntax</h3>
+<pre><code class="language-bash">cargo run -p strings_to_yara -- RuleName Author Description Hash /path/to/strings.txt
+</code></pre>
+<p>You can supply up to five positional arguments. If any are omitted, the tool will prompt you interactively.</p>
+<pre><code class="language-bash">Enter rule name:
+Enter author:
+Enter description:
+Enter hash (optional):
+Enter path to string list file:
+</code></pre>
+<p>Lines in the string file that begin with <code>hash:</code> are ignored and will not be included in the generated rule.</p>
 
 
 

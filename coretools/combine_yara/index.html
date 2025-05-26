@@ -71,6 +71,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#cli-syntax" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -650,6 +655,19 @@
       
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    CombineYARA
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -661,6 +679,32 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -703,6 +747,29 @@
   
   <span class="md-ellipsis">
     FileAnalyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hashcheck/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    HashCheck
     
   </span>
   
@@ -835,12 +902,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../mzmd5/" class="md-nav__link">
+      <a href="../mzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    MZMD5
+    MZHash
     
   </span>
   
@@ -904,12 +971,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../xmzmd5/" class="md-nav__link">
+      <a href="../xmzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    XMZMD5
+    XMZHash
     
   </span>
   
@@ -1221,6 +1288,23 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1243,6 +1327,14 @@
 <p>Combine YARA merges multiple YARA rule files into a single consolidated rule set. It recursively scans a folder for .yar or .yara files and combines them into one output file. Ideal for organizing or deploying rule collections.</p>
 <p><img alt="Combine YARA" src="../../images/combineyara.png" /></p>
 <p align="center"><strong>Figure 7:</strong> Combine YARA</p>
+
+<hr />
+<h3 id="cli-syntax">🔧 CLI Syntax</h3>
+<pre><code class="language-bash">cargo run -p combine_yara /path_to_yara_rules/
+</code></pre>
+<p>If no path is provided, the tool will prompt you to enter the directory interactively.</p>
+<pre><code class="language-bash">Enter the directory path to scan for YARA rules:
+</code></pre>
 
 
 

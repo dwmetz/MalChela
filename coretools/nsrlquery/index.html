@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../mzmd5/">
+        <link rel="prev" href="../mzhash/">
       
       
         <link rel="next" href="../strings_to_yara/">
@@ -70,6 +70,11 @@
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
+      
+        
+        <a href="#cli-syntax" class="md-skip">
+          Skip to content
+        </a>
       
     </div>
     <div data-md-component="announce">
@@ -712,6 +717,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../hashcheck/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    HashCheck
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashit/" class="md-nav__link">
         
   
@@ -827,12 +855,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../mzmd5/" class="md-nav__link">
+      <a href="../mzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    MZMD5
+    MZHash
     
   </span>
   
@@ -857,6 +885,19 @@
       
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    NSRLQuery
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -868,6 +909,32 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -904,12 +971,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../xmzmd5/" class="md-nav__link">
+      <a href="../xmzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    XMZMD5
+    XMZHash
     
   </span>
   
@@ -1221,6 +1288,23 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1242,7 +1326,26 @@
 
 <p>NSRL Query checks a file hash against the National Software Reference Library (NSRL) by querying the CIRCL hash lookup service. It helps identify known, trusted software — allowing analysts to filter out benign files and focus on unknown or suspicious ones during forensic triage.</p>
 <p><img alt="NSRL Hash Lookup" src="../../images/nsrlquery.png" /></p>
-<p align="center"><strong>Figure 17:</strong> NSRL Hash Lookup</p>
+<p align="center"><strong>Figure 18:</strong> NSRL Hash Lookup</p>
+
+<hr />
+<h3 id="cli-syntax">🔧 CLI Syntax</h3>
+<pre><code class="language-bash">cargo run -p nsrlquery -- d41d8cd98f00b204e9800998ecf8427e
+</code></pre>
+<p>Performs a lookup using the CIRCL hashlookup API and displays the result in the terminal.</p>
+<pre><code class="language-bash">cargo run -p nsrlquery -- d41d8cd98f00b204e9800998ecf8427e -o -t
+</code></pre>
+<p>Saves the result as a <code>.txt</code> file.</p>
+<p>Use <code>-o</code> to save output and include one of the following format flags:
+- <code>-t</code> → Save as <code>.txt</code>
+- <code>-j</code> → Save as <code>.json</code>
+- <code>-m</code> → Save as <code>.md</code></p>
+<p>If no hash is provided, the tool will prompt you to enter it interactively.</p>
+<pre><code class="language-bash">Enter the hash value:
+</code></pre>
+<p>Only MD5 and SHA1 hashes are supported. If an unsupported hash length is entered:</p>
+<pre><code class="language-bash">Error: Unsupported hash length. Please enter a valid MD5 (32 chars) or SHA1 (40 chars) hash.
+</code></pre>
 
 
 

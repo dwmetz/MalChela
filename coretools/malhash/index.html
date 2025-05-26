@@ -71,6 +71,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#cli-syntax" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -712,6 +717,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../hashcheck/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    HashCheck
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashit/" class="md-nav__link">
         
   
@@ -742,6 +770,19 @@
       
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    MalHash
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -753,6 +794,32 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -835,12 +902,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../mzmd5/" class="md-nav__link">
+      <a href="../mzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    MZMD5
+    MZHash
     
   </span>
   
@@ -904,12 +971,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../xmzmd5/" class="md-nav__link">
+      <a href="../xmzhash/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    XMZMD5
+    XMZHash
     
   </span>
   
@@ -1221,6 +1288,23 @@
   
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cli-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1242,9 +1326,24 @@
 
 <p>MalHash queries malware intelligence sources using a provided hash. It checks VirusTotal and MalwareBazaar for file metadata, threat labels, antivirus detections, and known associations. A quick way to enrich an unknown sample or confirm if a hash is already known and classified in the wild.</p>
 <p><img alt="Malware Hash Lookup" src="../../images/malhash.png" /></p>
-<p align="center"><strong>Figure 11:</strong> Malware Hash Lookup</p>
+<p align="center"><strong>Figure 12:</strong> Malware Hash Lookup</p>
 
 <p>The first time you run MalHash, you’ll be prompted to <a href="../../configuration/api-configuration/">configure API keys</a> for VirusTotal and MalwareBazaar if they’re not already set.</p>
+<hr />
+<h3 id="cli-syntax">🔧 CLI Syntax</h3>
+<pre><code class="language-bash">cargo run -p malhash -- d41d8cd98f00b204e9800998ecf8427e
+</code></pre>
+<p>Displays enrichment results in the terminal for the provided hash.</p>
+<pre><code class="language-bash">cargo run -p malhash -- d41d8cd98f00b204e9800998ecf8427e -o -t
+</code></pre>
+<p>Saves the results as a <code>.txt</code> file.</p>
+<p>Use <code>-o</code> to save output and include one of the following format flags:
+- <code>-t</code> → Save as <code>.txt</code>
+- <code>-j</code> → Save as <code>.json</code>
+- <code>-m</code> → Save as <code>.md</code></p>
+<p>If no hash is provided, the tool will prompt you to enter it interactively.</p>
+<pre><code class="language-bash">Enter the malware hash value:
+</code></pre>
 
 
 

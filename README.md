@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
-  Malchela v2.2.0
+  Malchela v2.2.1
  </h1>
   <h4>
       A YARA & Malware Analysis Toolkit written in Rust.
@@ -26,20 +26,20 @@
    Features:
   </h3>
 
-| Program  | Function |
-| :-------------------  | ----------: |
-| Combine YARA	| Point it at a directory of YARA files and it will output one combined rule|
-| Extract Samples | Point it at a directory of password protected malware files to extract all|
-| File Analyzer | Get the hash, entropy, packing, PE info, YARA and VT match status for a file |
-| Hash It | Point it to a file and get the MD5, SHA1 and SHA256 hash|
-| Mismatch Miner | Hunts for exes disguised as other formats|
-| mStrings | Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex |
-| MZMD5 | Recurse a directory, for files with MZ header, create hash list|
-| MZcount | Recurse a directory, uses YARA to count MZ, Zip, PDF, other| 
-| NSRL Query | Query a MD5 or SHA1 hash against NSRL|
-| Strings to YARA | Prompts for metadata and strings (text file) to create a YARA rule|
-| Malware Hash Lookup | Query a hash value against VirusTotal & Malware Bazaar*|
-| XMZMD5 | Recurse a directory, for files without MZ, Zip or PDF header, create hash list|
+| Program             | Function |
+|---------------------|----------|
+| Combine YARA        | Combines all `.yara`/`.yar` files in a directory into a single rule file |
+| Extract Samples     | Recursively extracts password-protected malware archives (ZIP/RAR) using common passwords |
+| File Analyzer       | Analyzes a file for hashes, entropy, PE structure, fuzzy hashes, YARA matches, NSRL lookup, and VirusTotal status |
+| Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
+| Hash Check          | Checks if a given hash exists in a provided hash set file |
+| Mismatch Miner      | Scans for executables masquerading as other file types (e.g., JPG, PDF) by detecting magic number mismatches |
+| mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, and identifies IOCs |
+| mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for known-bad corpus generation |
+| mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
+| nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it’s known-good |
+| strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
+| xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for known-good environments |
 
 **The Malware Hash Lookup requires an api key for Virus Total and Malware Bazaar.  If unidentified , MalChela will prompt you to create them the first time you run the malware lookup function.*
 

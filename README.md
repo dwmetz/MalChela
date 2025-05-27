@@ -35,11 +35,11 @@
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
 | Mismatch Miner      | Scans for executables masquerading as other file types (e.g., JPG, PDF) by detecting magic number mismatches |
 | mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, and identifies IOCs |
-| mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for known-bad corpus generation |
+| mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
 | nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it’s known-good |
 | strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
-| xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for known-good environments |
+| xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for  non-Windows malware corpus |
 
 **The Malware Hash Lookup requires an api key for Virus Total and Malware Bazaar.  If unidentified , MalChela will prompt you to create them the first time you run the malware lookup function.*
 

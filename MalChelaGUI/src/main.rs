@@ -989,7 +989,9 @@ impl App for AppState {
                     if ui.button(RichText::new("📄 About").color(STONE_BEIGE)).on_hover_text("About MalChela and included tools").clicked() {
                         {
                             let mut out = self.command_output.lock().unwrap();
-                            out.clear(); 
+                            let mut lines = self.output_lines.lock().unwrap();
+                            out.clear();
+                            lines.clear();
                         }
                         let output = Arc::clone(&self.command_output);
                         let output_lines = Arc::clone(&self.output_lines);

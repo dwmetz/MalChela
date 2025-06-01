@@ -1187,7 +1187,22 @@ impl App for AppState {
                 // Only show the standard input config and command line preview if NOT mzhash or xmzhash
                 if tool.command.get(0).map(|s| s != "mzhash" && s != "xmzhash").unwrap_or(true) {
                     if !self.input_path.trim().is_empty() {
-                        let command_line = if tool.command.get(0).map(|s| s == "hashcheck").unwrap_or(false) {
+                        let command_line = if tool.exec_type.as_deref() == Some("script") || tool.exec_type.as_deref() == Some("binary") {
+                            let mut base = tool.command.join(" ");
+                            for arg in &tool.optional_args {
+                                base.push(' ');
+                                base.push_str(arg);
+                            }
+                            if tool.input_type != "hash" {
+                                base.push(' ');
+                                base.push_str(self.input_path.trim());
+                            }
+                            if !self.custom_args.trim().is_empty() {
+                                base.push(' ');
+                                base.push_str(&self.custom_args.trim());
+                            }
+                            base
+                        } else if tool.command.get(0).map(|s| s == "hashcheck").unwrap_or(false) {
                             format!("cargo run -p hashcheck -- {} {}", self.input_path.trim(), self.custom_args.trim())
                         } else {
                             let mut base = format!("cargo run -p {} --", tool.command[0]);

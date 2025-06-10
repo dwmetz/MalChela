@@ -16,6 +16,10 @@ pub struct TsharkPanel {
     compress_output: bool,
     show_reference_modal: bool,
     field_search: String,
+    export_objects: bool,
+    export_protocol: String,
+    case_subfolder: String,
+    save_to_case: bool,
 }
 
 impl Default for TsharkPanel {
@@ -35,6 +39,10 @@ impl Default for TsharkPanel {
             compress_output: false,
             show_reference_modal: false,
             field_search: String::new(),
+            export_objects: false,
+            export_protocol: "http".to_string(),
+            case_subfolder: String::new(),
+            save_to_case: false,
         }
     }
 }
@@ -64,125 +72,190 @@ impl TsharkPanel {
             self.show_file_dialog = false;
         }
 
-        ui.horizontal(|ui| {
-            ui.label("Display Filter (-Y):");
-            ui.text_edit_singleline(&mut self.display_filter);
-            if ui.button("?").clicked() {
-                self.show_reference_modal = true;
-            }
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("Display Output Format (-T):");
-            ui.radio_value(&mut self.display_output_type, "text".to_string(), "Text");
-            ui.radio_value(&mut self.display_output_type, "json".to_string(), "JSON");
-            ui.radio_value(&mut self.display_output_type, "pdml".to_string(), "PDML");
-            ui.radio_value(&mut self.display_output_type, "fields".to_string(), "Fields (with -e)");
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("Field:");
-            ui.text_edit_singleline(&mut self.current_field);
-            if ui.button("Add Field").clicked() && !self.current_field.is_empty() {
-                if !self.fields.contains(&self.current_field) {
-                    self.fields.push(self.current_field.clone());
+        ui.add_enabled_ui(!self.export_objects, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Display Filter (-Y):");
+                ui.text_edit_singleline(&mut self.display_filter);
+                if ui.button("?").clicked() {
+                    self.show_reference_modal = true;
                 }
-                self.current_field.clear();
-                self.display_output_type = "fields".to_string();
-            }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Display Output Format (-T):");
+                ui.radio_value(&mut self.display_output_type, "text".to_string(), "Text");
+                ui.radio_value(&mut self.display_output_type, "json".to_string(), "JSON");
+                ui.radio_value(&mut self.display_output_type, "pdml".to_string(), "PDML");
+                ui.radio_value(&mut self.display_output_type, "fields".to_string(), "Fields (with -e)");
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Field:");
+                ui.text_edit_singleline(&mut self.current_field);
+                if ui.button("Add Field").clicked() && !self.current_field.is_empty() {
+                    if !self.fields.contains(&self.current_field) {
+                        self.fields.push(self.current_field.clone());
+                    }
+                    self.current_field.clear();
+                    self.display_output_type = "fields".to_string();
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Fields:");
+                for (i, field) in self.fields.iter().enumerate() {
+                    ui.label(field);
+                    if ui.button("❌").clicked() {
+                        self.fields.remove(i);
+                        break;
+                    }
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.include_headers, "Include Headers (-E header=y)");
+                ui.checkbox(&mut self.save_output, "Save Decoded Output to File (-w)");
+            });
         });
 
-        ui.horizontal(|ui| {
-        ui.label("Fields:");
-        for (i, field) in self.fields.iter().enumerate() {
-            ui.label(field);
-            if ui.button("❌").clicked() {
-                self.fields.remove(i);
-                break;
-            }
-        }
-    });
 
-    ui.horizontal(|ui| {
-        ui.checkbox(&mut self.include_headers, "Include Headers (-E header=y)");
-        ui.checkbox(&mut self.save_output, "Save Decoded Output to File (-w)");
-    });
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut self.export_objects, "Export Objects (--export-objects)");
+            if self.export_objects {
+                ui.label("Protocol:");
+                egui::ComboBox::from_id_source("export_protocol")
+                    .selected_text(&self.export_protocol)
+                    .show_ui(ui, |ui: &mut egui::Ui| {
+                        for proto in &["dicom", "ftp-data", "http", "imf", "smb", "tftp"] {
+                            ui.selectable_value(&mut self.export_protocol, proto.to_string(), *proto);
+                        }
+                    });
+            }
+        });
 
         if self.save_output {
             ui.checkbox(&mut self.compress_output, "Compress Output as .gz");
         }
 
+        // Move Save to Case option here, after all option sections and before Run button
+        if self.save_output || self.export_objects {
+            ui.checkbox(&mut self.save_to_case, "Save Exports to Case");
+            if self.save_to_case {
+                ui.horizontal(|ui| {
+                    ui.label("Case Name:");
+                    ui.text_edit_singleline(&mut self.case_subfolder);
+                });
+            }
+        }
+
         if ui.button("Run").clicked() {
             use std::process::Command;
-            use std::fs::{write, self};
+            use std::fs::write;
 
+            let subfolder = if self.save_to_case {
+                if self.case_subfolder.trim().is_empty() {
+                    "cases/unspecified/tshark".to_string()
+                } else {
+                    format!("cases/{}/tshark", self.case_subfolder.trim())
+                }
+            } else {
+                "tshark".to_string()
+            };
             let save_path = format!(
-                "saved_output/tshark/report_{}.{}",
+                "saved_output/{}/report_{}.{}",
+                subfolder,
                 Local::now().format("%Y%m%d%H%M%S"),
                 if self.compress_output { "gz" } else { "pcap" }
             );
 
             self.running = true;
 
-            let mut args = vec!["-r", &self.input_path];
+            let mut args: Vec<String> = Vec::new();
+            self.command_preview.clear();
 
-            if self.display_output_type == "fields" && !self.fields.is_empty() {
-                args.push("-T");
-                args.push("fields");
-            } else if self.display_output_type != "text" {
-                args.push("-T");
-                args.push(&self.display_output_type);
-            }
-
-            for field in &self.fields {
-                args.push("-e");
-                args.push(field);
-            }
-
-            if self.include_headers {
-                args.push("-E");
-                args.push("header=y");
-            }
-
-            if !self.display_filter.is_empty() {
-                args.push("-Y");
-                args.push(&self.display_filter);
-            }
-
-            if self.save_output {
-                args.push("-w");
-                args.push(&save_path);
-                args.push("-P");
-            }
-
-            self.command_preview = format!(
-                "{}{}{}{}{}",
-                if !self.display_filter.is_empty() {
-                    format!("-r {} -Y {}", self.input_path, self.display_filter)
+            if self.export_objects {
+                let export_path = if self.save_to_case {
+                    if self.case_subfolder.trim().is_empty() {
+                        format!("saved_output/cases/unspecified/tshark/exported_objects/{}", self.export_protocol)
+                    } else {
+                        format!("saved_output/cases/{}/tshark/exported_objects/{}", self.case_subfolder.trim(), self.export_protocol)
+                    }
                 } else {
-                    format!("-r {}", self.input_path)
-                },
+                    format!("saved_output/tshark/exported_objects/{}", self.export_protocol)
+                };
+                let _ = std::fs::create_dir_all(&export_path);
+                args.push("-r".to_string());
+                args.push(self.input_path.clone());
+                args.push("--export-objects".to_string());
+                args.push(format!("{},{}", self.export_protocol, export_path));
+                self.command_preview = format!("-r {} --export-objects {},{}", 
+                    self.input_path, 
+                    self.export_protocol,
+                    export_path
+                );
+            } else {
+                args.push("-r".to_string());
+                args.push(self.input_path.clone());
+
                 if self.display_output_type == "fields" && !self.fields.is_empty() {
-                    format!(" -T fields{}", self.fields.iter().map(|f| format!(" -e {}", f)).collect::<String>())
+                    args.push("-T".to_string());
+                    args.push("fields".to_string());
                 } else if self.display_output_type != "text" {
-                    format!(" -T {}", self.display_output_type)
-                } else {
-                    "".to_string()
-                },
-                if self.include_headers { " -E header=y" } else { "" },
-                if self.save_output { format!(" -w {} -P", save_path) } else { "".to_string() },
-                "".to_string(),
-            );
+                    args.push("-T".to_string());
+                    args.push(self.display_output_type.clone());
+                }
+
+                for field in &self.fields {
+                    args.push("-e".to_string());
+                    args.push(field.clone());
+                }
+
+                if self.include_headers {
+                    args.push("-E".to_string());
+                    args.push("header=y".to_string());
+                }
+
+                if !self.display_filter.is_empty() {
+                    args.push("-Y".to_string());
+                    args.push(self.display_filter.clone());
+                }
+
+                if self.save_output {
+                    args.push("-w".to_string());
+                    args.push(save_path.clone());
+                    args.push("-P".to_string());
+                }
+
+                self.command_preview = format!(
+                    "{}{}{}{}{}",
+                    if !self.display_filter.is_empty() {
+                        format!("-r {} -Y {}", self.input_path, self.display_filter)
+                    } else {
+                        format!("-r {}", self.input_path)
+                    },
+                    if self.display_output_type == "fields" && !self.fields.is_empty() {
+                        format!(" -T fields{}", self.fields.iter().map(|f| format!(" -e {}", f)).collect::<String>())
+                    } else if self.display_output_type != "text" {
+                        format!(" -T {}", self.display_output_type)
+                    } else {
+                        "".to_string()
+                    },
+                    if self.include_headers { " -E header=y" } else { "" },
+                    if self.save_output { format!(" -w {} -P", save_path) } else { "".to_string() },
+                    "".to_string(),
+                );
+            }
+
 
             // dbg!(&args);
             // println!("Command: tshark {}", self.command_preview);
             let debug_info = format!("Command: tshark {}\n", self.command_preview);
             let _ = write("/tmp/tshark_debug.txt", debug_info);
 
-            let _ = fs::create_dir_all("saved_output/tshark");
+            let _ = std::fs::create_dir_all(format!("saved_output/{}", subfolder));
 
             let output = Command::new("tshark")
-                .args(&args)
+                .args(args.iter().map(|s| s.as_str()))
                 .output();
 
             match output {

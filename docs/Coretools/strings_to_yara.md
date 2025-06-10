@@ -11,7 +11,7 @@ Lines beginning with hash: are deliberately ignored during rule generation — t
 ### 🔧 CLI Syntax
 
 ```bash
-cargo run -p strings_to_yara -- RuleName Author Description Hash /path/to/strings.txt
+cargo run -p strings_to_yara -- RuleName Author Description Hash /path/to/strings.txt --case CaseName
 ```
 
 You can supply up to five positional arguments. If any are omitted, the tool will prompt you interactively.
@@ -23,5 +23,7 @@ Enter description:
 Enter hash (optional):
 Enter path to string list file:
 ```
+
+If the `--case` flag is supplied, the resulting YARA rule will be saved in the corresponding `saved_output/cases/CaseName/` directory.
 
 Lines in the string file that begin with `hash:` are ignored and will not be included in the generated rule.

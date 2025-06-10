@@ -14,6 +14,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 rand = "0.8"
 common_ui = { path = "../common_ui" }
+dispatch = "0.2.0"
 
 [[bin]]
 name = "malchela"

@@ -10,3 +10,4 @@ serde_json = "1.0.139"
 tokio = { version = "1.43.0", features = ["full"] }
 common_ui = { path = "../common_ui" }
 clap = { version = "4", features = ["derive"] }
+common_config = { path = "../common_config" }

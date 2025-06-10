@@ -1,10 +1,12 @@
 use std::fs::{self, File};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 use yara::{Compiler, Rules};
 use clearscreen;
+use clap::{Arg, Command};
+use chrono::Local;
 
 
 #[derive(Debug)]
@@ -55,7 +57,7 @@ rule zip_header {
 }
 
 fn display_table(counts: &Counts) {
-    println!("[TABLE_UPDATE]");
+    println!("RESULTS");
     println!("\n+----------------------+---------+");
 
     println!(
@@ -78,7 +80,7 @@ fn display_table(counts: &Counts) {
         "{}",
         format!("| Neither Header Files| {:>7} |", counts.neither_header)
     );
-    println!("+----------------------+---------+");
+    println!("+----------------------+---------+\n");
 }
 
 fn scan_and_count_files(
@@ -149,10 +151,28 @@ fn scan_file(file_path: &Path, rules: &Rules) -> Result<Vec<String>, io::Error> 
 }
 
 fn main() {
-    let input = std::env::var("MALCHELA_INPUT").unwrap_or_else(|_| {
-        eprintln!("Error: No input provided. Please set MALCHELA_INPUT.");
-        std::process::exit(1);
-    });
+    let matches = Command::new("mzcount")
+        .arg(Arg::new("input")
+            .help("Directory to scan")
+            .required(false)
+            .index(1)
+            .num_args(1..))
+        .arg(Arg::new("case").long("case").value_name("CASE").help("Optional case name"))
+        .arg(Arg::new("output").short('o').long("output").help("Save output report").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("text").short('t').long("text").help("Save as plain text").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("markdown").short('m').long("markdown").help("Save as markdown").action(clap::ArgAction::SetTrue))
+        .trailing_var_arg(true)
+        .allow_hyphen_values(true)
+        .get_matches();
+
+    let input = matches
+        .get_one::<String>("input")
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("MALCHELA_INPUT").ok())
+        .unwrap_or_else(|| {
+            eprintln!("Error: No input provided. Please pass a path or set MALCHELA_INPUT.");
+            std::process::exit(1);
+        });
 
     let directory_path = match fs::canonicalize(input.trim()) {
         Ok(path) => path,
@@ -164,6 +184,11 @@ fn main() {
             return;
         }
     };
+
+    let save_output = matches.get_flag("output");
+    let save_txt = matches.get_flag("text");
+    let save_md = matches.get_flag("markdown");
+    let case = matches.get_one::<String>("case");
 
     let use_table_display = std::env::var("MZCOUNT_TABLE_DISPLAY")
         .map(|val| val == "1")
@@ -196,6 +221,58 @@ fn main() {
 
             if counts.total_files == 0 {
                 println!("No files were scanned. Please check your directory.");
+            }
+
+            if save_output {
+                if !(save_txt || save_md) {
+                    println!("\nPlease specify an output format: -t for text, -m for markdown.");
+                    return;
+                }
+            }
+
+            if save_txt {
+                let out_dir = if let Some(case) = case {
+                    Path::new("saved_output").join("cases").join(case).join("mzcount")
+                } else {
+                    Path::new("saved_output").join("mzcount")
+                };
+                std::fs::create_dir_all(&out_dir).expect("Failed to create output directory");
+
+                let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+                let output_file = out_dir.join(format!("report_{}.txt", timestamp));
+                let mut file = File::create(output_file).expect("Failed to create report file");
+
+                writeln!(file, "PATH: {}", directory_path.display()).ok();
+                writeln!(file, "").ok();
+                writeln!(file, "Total Files: {}", counts.total_files).ok();
+                writeln!(file, "MZ Header Files: {}", counts.mz_header).ok();
+                writeln!(file, "PDF Header Files: {}", counts.pdf_header).ok();
+                writeln!(file, "ZIP Header Files: {}", counts.zip_header).ok();
+                writeln!(file, "Neither Header Files: {}", counts.neither_header).ok();
+                file.flush().ok();
+            }
+
+            if save_md {
+                let out_dir = if let Some(case) = case {
+                    Path::new("saved_output").join("cases").join(case).join("mzcount")
+                } else {
+                    Path::new("saved_output").join("mzcount")
+                };
+                std::fs::create_dir_all(&out_dir).expect("Failed to create output directory");
+
+                let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+                let output_file = out_dir.join(format!("report_{}.md", timestamp));
+                let mut file = File::create(output_file).expect("Failed to create report file");
+
+                writeln!(file, "**PATH:** `{}`\n", directory_path.display()).ok();
+                writeln!(file, "| Type | Count |").ok();
+                writeln!(file, "|------|-------|").ok();
+                writeln!(file, "| Total Files | {} |", counts.total_files).ok();
+                writeln!(file, "| MZ Header Files | {} |", counts.mz_header).ok();
+                writeln!(file, "| PDF Header Files | {} |", counts.pdf_header).ok();
+                writeln!(file, "| ZIP Header Files | {} |", counts.zip_header).ok();
+                writeln!(file, "| Neither Header Files | {} |", counts.neither_header).ok();
+                file.flush().ok();
             }
         }
         Err(e) => eprintln!("Error compiling YARA rules: {}", e),

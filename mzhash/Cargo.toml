@@ -13,3 +13,4 @@ rayon = "1.10.0"
 indicatif = "0.17.11"
 md-5 = "0.10.6"
 sha1 = "0.10.6"
+clap = { version = "4", features = ["derive"] }

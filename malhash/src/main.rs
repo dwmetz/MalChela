@@ -1,3 +1,6 @@
+fn is_gui_mode() -> bool {
+    std::env::var("MALCHELA_GUI_MODE").is_ok() && std::env::var("MALCHELA_WORKSPACE_MODE").is_err()
+}
 extern crate prettytable;
 
 use chrono::Utc;
@@ -125,6 +128,14 @@ fn main() {
     let json = args.contains(&"-j".to_string());
     let markdown = args.contains(&"-m".to_string());
 
+    // Add support for --case argument
+    let mut case_name: Option<String> = None;
+    for i in 1..args.len() {
+        if args[i] == "--case" && i + 1 < args.len() {
+            case_name = Some(args[i + 1].clone());
+        }
+    }
+
     let is_gui = args.len() > 1;
 
     let vt_api_key = read_api_key("vt-api.txt");
@@ -176,7 +187,16 @@ fn main() {
 
     let in_gui = std::env::var("MALCHELA_GUI_MODE").is_ok();
     let (mut report_file, report_path): (Box<dyn Write>, Option<(PathBuf, String)>) = if save_output && !in_gui {
-        let output_dir = get_output_dir("malhash");
+        // Determine output directory, supporting --case
+        let output_dir = if let Some(case) = &case_name {
+            let path = std::path::Path::new("saved_output").join("cases").join(case).join("malhash");
+            std::fs::create_dir_all(&path).expect("Failed to create case output directory");
+            path
+        } else {
+            let path = get_output_dir("malhash");
+            std::fs::create_dir_all(&path).expect("Failed to create default output directory");
+            path
+        };
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
 
         let format = if text {
@@ -223,7 +243,11 @@ fn main() {
     let final_vt_json = match submit_request(&vt_url) {
         Ok(vt_results) => {
             let line = "VIRUS TOTAL RESULTS:";
-            writeln!(stdout, "{}", styled_line("NOTE", line)).unwrap();
+            if is_gui_mode() {
+                writeln!(stdout, "{}", styled_line("NOTE", line)).unwrap();
+            } else {
+                writeln!(stdout, "{}", line).unwrap();
+            }
             writeln!(report_file, "{}", line).unwrap();
             format_vt_results(&vt_results, &mut report_file, &mut stdout);
             vt_results
@@ -246,7 +270,11 @@ fn main() {
     let final_mb_json = match submit_post_request(mb_url, mb_data, &mb_api_key) {
         Ok(mb_results) => {
             let line = "MALWARE BAZAAR RESULTS:";
-            writeln!(stdout, "{}", styled_line("NOTE", line)).unwrap();
+            if is_gui_mode() {
+                writeln!(stdout, "{}", styled_line("NOTE", line)).unwrap();
+            } else {
+                writeln!(stdout, "{}", line).unwrap();
+            }
             writeln!(report_file, "{}", line).unwrap();
             format_mb_results(&mb_results, &mut report_file, &mut stdout);
             mb_results
@@ -266,7 +294,11 @@ fn main() {
 
     {
         let line = "** END REPORT **";
-        writeln!(stdout, "{}", styled_line("green", line)).unwrap();
+        if is_gui_mode() {
+            writeln!(stdout, "{}", styled_line("green", line)).unwrap();
+        } else {
+            writeln!(stdout, "{}", line).unwrap();
+        }
         writeln!(report_file, "{}", line).unwrap();
     }
     if let Some((path, format)) = report_path {
@@ -274,8 +306,16 @@ fn main() {
             let output_text = serde_json::to_string_pretty(&final_report_json).expect("Failed to serialize JSON report");
             fs::write(&path, output_text).expect("Failed to write JSON output");
         }
-        println!("\n{}\n", styled_line("green", &format!("The results have been saved to: {}", path.display())));
+        if is_gui_mode() {
+            println!("\n{}\n", styled_line("green", &format!("The results have been saved to: {}", path.display())));
+        } else {
+            println!("\n\nThe results have been saved to: {}\n", path.display());
+        }
     } else {
-        println!("{}", styled_line("stone", "Output was not saved."));
+        if is_gui_mode() {
+            println!("{}", styled_line("stone", "Output was not saved."));
+        } else {
+            println!("Output was not saved.");
+        }
     }
 }

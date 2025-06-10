@@ -1,3 +1,6 @@
+fn is_gui_mode() -> bool {
+    std::env::var("MALCHELA_GUI_MODE").is_ok() && std::env::var("MALCHELA_WORKSPACE_MODE").is_err()
+}
 
 use std::fs::File;
 use std::io::Write;
@@ -6,6 +9,10 @@ use clap::Parser;
 use common_config::get_output_dir;
 use common_ui::styled_line;
 use serde::Serialize;
+
+fn plain_text(s: &str) -> String {
+    strip_ansi_escapes::strip_str(s)
+}
 
 #[derive(Parser)]
 #[command(name = "fileanalyzer", about = "Analyzes binary files for static indicators.")]
@@ -24,6 +31,9 @@ struct Args {
 
     #[arg(short = 'm', long, help = "Save as Markdown format")]
     markdown: bool,
+
+    #[arg(long, help = "Optional case name for routing output")]
+    case: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -103,39 +113,39 @@ async fn main() {
     let file_type = filetype::detect_file_type(&file_content);
     let line = styled_line("stone", &format!("File Type: {}", file_type));
     println!("{}", line);
-    writeln!(temp_file, "{}", line).ok();
+    writeln!(temp_file, "{}", plain_text(&line)).ok();
     let hash = hashing::calculate_sha256(&file_content);
     let md5 = hashing::calculate_md5(&file_content);
     let line = styled_line("stone", &format!("SHA-256 Hash: {:?}", hash));
     println!("{}", line);
-    writeln!(temp_file, "{}", line).ok();
+    writeln!(temp_file, "{}", plain_text(&line)).ok();
 
     let fuzzy_hash = match std::fs::metadata(&file_path) {
         Ok(meta) if meta.len() < 512 => {
             let msg = "Fuzzy Hash: (unable to compute – File too small for fuzzy hashing.)";
             let line = styled_line("yellow", msg);
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             None
         }
         Ok(_) => match fuzzy::calculate_fuzzy_hash(&file_path) {
             Ok(fh) => {
                 let line = styled_line("stone", &format!("Fuzzy Hash (ssdeep): {}", fh));
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
                 Some(fh)
             }
             Err(e) => {
                 let line = styled_line("yellow", &format!("Fuzzy Hash: (unable to compute – {})", e));
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
                 None
             }
         },
         Err(e) => {
             let line = styled_line("yellow", &format!("Fuzzy Hash: (unable to compute – {})", e));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             None
         }
     };
@@ -144,19 +154,19 @@ async fn main() {
         Ok(true) => {
             let line = styled_line("red", &format!("VirusTotal: Malicious"));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             Some(true)
         }
         Ok(false) => {
             let line = styled_line("yellow", "VirusTotal: Clean or Unknown");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             Some(false)
         }
         Err(e) => {
             let line = styled_line("yellow", &format!("VirusTotal: Error - {}", e));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             None
         }
     };
@@ -171,30 +181,30 @@ async fn main() {
             if output_str.contains("hash not found") || output_str.contains("not found in the database") {
                 let line = styled_line("stone", "NSRL: Not found");
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
                 Some(false)
             } else if output_str.contains("found in the database") {
                 let line = styled_line("stone", "NSRL: Present in NSRL");
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
                 Some(true)
             } else {
                 let line = styled_line("stone", &format!("NSRL: Unknown response - {}", output_str.trim()));
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
                 None
             }
         }
         Ok(_) => {
             let line = styled_line("stone", "NSRL: Not found");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             Some(false)
         }
         Err(e) => {
             let line = styled_line("stone", &format!("NSRL: Offline or Error - {}", e));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             None
         }
     };
@@ -204,28 +214,28 @@ async fn main() {
     if entropy_value > 7.5 {
         let line = styled_line("yellow", &format!("Entropy: {:.4} (High)", entropy_value));
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
     } else {
         let line = styled_line("yellow", &format!("Entropy: {:.4} (Normal)", entropy_value));
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
     }
 
     match packed::detect_packing(&file_path) {
         Ok(true) => {
             let line = styled_line("yellow", "File may be packed");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         Ok(false) => {
             let line = styled_line("yellow", "File is not packed");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         Err(e) => {
             let line = styled_line("yellow", &format!("Error during UPX detection: {}", e));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
     }
 
@@ -237,7 +247,7 @@ async fn main() {
             println!();
             let heading = styled_line("NOTE", "--- PE Header Details ---");
             println!("{}", heading);
-            writeln!(temp_file, "{}", heading).ok();
+            writeln!(temp_file, "{}", plain_text(&heading)).ok();
             pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("  PE Header parsed: {} sections, {} imports, {} exports", pe_info.sections.len(), pe_info.imports.len(), pe_info.exports.len()))));
             pe_output.push_str(&format!("{}\n", styled_line("stone", &format!("  Summary: {}", pe_info.summary))));
 
@@ -274,13 +284,13 @@ async fn main() {
                     Ok(hash) => {
                         let line = styled_line("stone", &format!("Import Hash (imphash): {}", hash));
                         println!("{}", line);
-                        writeln!(temp_file, "{}", line).ok();
+                        writeln!(temp_file, "{}", plain_text(&line)).ok();
                         Some(hash)
                     }
                     Err(e) => {
                         let line = styled_line("yellow", &format!("Imphash Error: {}", e));
                         println!("{}", line);
-                        writeln!(temp_file, "{}", line).ok();
+                        writeln!(temp_file, "{}", plain_text(&line)).ok();
                         None
                     }
                 };
@@ -324,13 +334,13 @@ async fn main() {
             use std::io::{self, Write};
             print!("{}", pe_output);
             io::stdout().flush().unwrap();
-            write!(temp_file, "{}", pe_output).ok();
+            write!(temp_file, "{}", plain_text(&pe_output)).ok();
             pe_info
         }
         Err(e) => {
             let line = styled_line("highlight", &format!("PE parse error: {}", e));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             return;
         }
     };
@@ -362,34 +372,34 @@ async fn main() {
     }
 
     if !bad_sections.is_empty() {
-        let line = styled_line("NOTE", "--- Heuristic Warnings ---");
-        println!("\n{}", line);
-        writeln!(temp_file, "\n{}", line).ok();
+        let heading = styled_line("NOTE", "--- Heuristic Warnings ---");
+        println!("\n{}", heading);
+        writeln!(temp_file, "{}", plain_text(&heading)).ok();
         printed_warning_header = true;
         let line = styled_line("stone", "- Uncommon Section Names:");
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
         for name in &bad_sections {
             let line = styled_line("stone", &format!("  - {}", name.clone()));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
     }
 
     if !suspicious_imports.is_empty() {
         if !printed_warning_header {
-            let line = styled_line("NOTE", "--- Heuristic Warnings ---");
-            println!("\n{}", line);
-            writeln!(temp_file, "\n{}", line).ok();
+            let heading = styled_line("NOTE", "--- Heuristic Warnings ---");
+            println!("\n{}", heading);
+            writeln!(temp_file, "{}", plain_text(&heading)).ok();
             printed_warning_header = true;
         }
         let line = styled_line("stone", "- Suspicious Imports:");
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
         for imp in &suspicious_imports {
             let line = styled_line("stone", &format!("  - {}", imp));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
     }
     // Add suspicious compile time warning if needed
@@ -401,7 +411,7 @@ async fn main() {
         }
         let line = styled_line("stone", "- Suspicious Compile Timestamp");
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
     }
 
     match metadata::get_metadata(&file_path) {
@@ -409,42 +419,42 @@ async fn main() {
             if let Some((size, modified)) = metadata.split_once(", Last Modified: ") {
                 let line = styled_line("highlight", &format!("- File Size: {}", size.trim().strip_prefix("Size: ").unwrap_or(size.trim())));
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
                 let line = styled_line("highlight", &format!("- Last Modified: {}", modified.trim()));
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
             } else {
                 let line = styled_line("highlight", &format!("Metadata: {}", metadata));
                 println!("{}", line);
-                writeln!(temp_file, "{}", line).ok();
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
             }
         },
         Err(e) => {
             let line = styled_line("highlight", &format!("Error fetching metadata: {}", e));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         },
     }
 
 
     let line = styled_line("NOTE", "--- Heuristic Indicators ---");
     println!("\n{}", line);
-    writeln!(temp_file, "\n{}", line).ok();
+    writeln!(temp_file, "{}", plain_text(&line)).ok();
     match vt_result {
         Some(true) => {
             let line = styled_line("red", "- VirusTotal: Malicious");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         Some(false) => {
             let line = styled_line("stone", "- VirusTotal: Clean or Unknown");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         None => {
             let line = styled_line("stone", "- VirusTotal: Error");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
     }
     // NSRL result in heuristic indicators
@@ -452,66 +462,74 @@ async fn main() {
         Some(true) => {
             let line = styled_line("stone", "- NSRL: Found");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         Some(false) => {
             let line = styled_line("stone", "- NSRL: Not Found");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         None => {
             let line = styled_line("stone", "- NSRL: Offline");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
     };
     if entropy_value > 7.5 {
         let line = styled_line("yellow", "- Entropy: High");
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
     } else {
         let line = styled_line("stone", "- Entropy: Normal");
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
     }
 
     match packed::detect_packing(&file_path) {
         Ok(true) => {
             let line = styled_line("yellow", "- Packed: Possibly");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         Ok(false) => {
             let line = styled_line("stone", "- Packed: Unlikely");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         Err(_) => {
             let line = styled_line("stone", "- Packed: Unknown");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
     }
 
     if signing::check_digital_signature(&file_content) {
         let line = styled_line("stone", "- Signature: Present");
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
     } else {
         let line = styled_line("stone", "- Signature: Absent");
         println!("{}", line);
-        writeln!(temp_file, "{}", line).ok();
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
     }
 
     if let Ok(matches) = yara_scan::scan_file_with_yara_rules(&file_path) {
         if !matches.is_empty() {
             let line = styled_line("yellow", &format!("- YARA Matches: [{}]", matches.join(", ")));
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
     }
     if save_output {
-        let output_dir = get_output_dir("fileanalyzer");
+        let output_dir = if let Some(ref case) = args.case {
+            let path = format!("saved_output/cases/{}/fileanalyzer", case);
+            std::fs::create_dir_all(&path).expect("Failed to create case output directory");
+            std::path::PathBuf::from(path)
+        } else {
+            let path = get_output_dir("fileanalyzer");
+            std::fs::create_dir_all(&path).expect("Failed to create default output directory");
+            path
+        };
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
 
         let format = if args.text {
@@ -557,11 +575,15 @@ async fn main() {
 
         match format {
             "txt" => {
+                use std::io::Write;
+                temp_file.flush().expect("Failed to flush temp file before saving report");
                 let text_path = output_dir.join(format!("report_{}.txt", timestamp));
                 fs::copy(&temp_path, &text_path).expect("Failed to save text report");
                 println!("\n{}", styled_line("green", &format!("Text report saved to: {}", text_path.display())));
             }
             "md" => {
+                use std::io::Write;
+                temp_file.flush().expect("Failed to flush temp file before saving report");
                 let md_path = output_dir.join(format!("report_{}.md", timestamp));
                 fs::copy(&temp_path, &md_path).expect("Failed to save markdown report");
                 println!("\n{}", styled_line("green", &format!("Markdown report saved to: {}", md_path.display())));
@@ -575,12 +597,12 @@ async fn main() {
             }
         }
     } else {
-        if std::env::var("MALCHELA_GUI_MODE").is_err() {
+        if !is_gui_mode() {
             println!();
             writeln!(temp_file).ok();
             let line = styled_line("stone", "Output was not saved. Use -o with -t, -j, or -m to export results.");
             println!("{}", line);
-            writeln!(temp_file, "{}", line).ok();
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
             writeln!(temp_file).ok();
             println!();
         }

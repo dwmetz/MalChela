@@ -15,11 +15,29 @@ fn main() {
 
     // Accept input directory and password via args or prompt
     let args: Vec<String> = env::args().collect();
+
+    let mut case_name: Option<String> = None;
+
     let (dir, password) = if args.len() >= 3 {
-        // GUI mode: arguments provided
-        (args[1].trim().trim_matches('"').to_string(), args[2].trim().to_string())
+        let mut input_dir = String::new();
+        let mut pwd = String::new();
+
+        let mut i = 1;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--case" if i + 1 < args.len() => {
+                    case_name = Some(args[i + 1].clone());
+                    i += 1;
+                }
+                _ if input_dir.is_empty() => input_dir = args[i].clone(),
+                _ if pwd.is_empty() => pwd = args[i].clone(),
+                _ => {}
+            }
+            i += 1;
+        }
+
+        (input_dir.trim().trim_matches('"').to_string(), pwd.trim().to_string())
     } else {
-        // CLI mode: prompt user
         let dir = prompt_for_directory();
         let password = prompt_for_password();
         (dir, password)
@@ -30,6 +48,15 @@ fn main() {
         exit(1);
     }
     println!("Using directory: {:?}", dir);
+
+    // Determine base output path
+    let case_output_dir = if let Some(ref name) = case_name {
+        let path = format!("saved_output/cases/{}", name);
+        std::fs::create_dir_all(&path).expect("Failed to create case output directory");
+        Some(path)
+    } else {
+        None
+    };
 
     // Recursively search for .zip files and extract them
     for entry in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
@@ -56,7 +83,12 @@ fn main() {
                 .arg("x")
                 .arg(zip_file)
                 .arg(format!("-p{}", password)) // Password
-                .arg(format!("-o{}", zip_file.parent().unwrap().display())) // Output directory
+                .arg(format!(
+                    "-o{}",
+                    case_output_dir
+                        .as_deref()
+                        .unwrap_or(&zip_file.parent().unwrap().to_string_lossy())
+                )) // Output directory
                 .output();
 
             match output {

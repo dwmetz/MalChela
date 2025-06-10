@@ -1,24 +1,15 @@
-Hash It generates cryptographic hashes (MD5, SHA1, and SHA256) for a given file. It’s useful for file integrity checks, hash-based lookups, or comparing suspected duplicates across datasets.
-
-![HashIt](../images/hashit.png)
-
-<p align="center"><strong>Figure 11:</strong> HashIt</p>
-
----
-
 ### 🔧 CLI Syntax
 
 ```bash
+# Example 1: Show hash values only
 cargo run -p hashit -- /path_to_file/
-```
 
-Displays the hash values in the terminal without saving a report.
-
-```bash
+# Example 2: Save as .txt
 cargo run -p hashit -- /path_to_file/ -o -t
-```
 
-Saves the results as a `.txt` file.
+# Example 3: Save to case folder
+cargo run -p hashit -- /path_to_file/ -o -t --case CaseName
+```
 
 Use `-o` to save output and include one of the following format flags:
 - `-t` → Save as `.txt`
@@ -27,6 +18,14 @@ Use `-o` to save output and include one of the following format flags:
 
 If no file is provided, the tool will prompt you to enter the path interactively.
 
-```bash
-Enter the file path:
+When `--case` is used, output will be saved under:
+
+```
+saved_output/cases/CaseName/hashit/
+```
+
+Otherwise, reports are saved to:
+
+```
+saved_output/hashit/
 ```

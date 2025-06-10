@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = [ "about", "combine_yara", "extract_samples", "fileanalyzer", "hashit", "mstrings", "malchela", "malhash", "mzcount", "strings_to_yara", "cached", "common_config", "mismatchminer", "MalChelaGUI", "nsrlquery", "config", "common_ui", "hashcheck", "mzhash", "xmzhash"]
+members = [ "about", "combine_yara", "extract_samples", "fileanalyzer", "hashit", "mstrings", "malchela", "malhash", "mzcount", "strings_to_yara", "cached", "common_config", "mismatchminer", "MalChelaGUI", "nsrlquery", "config", "common_ui", "hashcheck", "mzhash", "xmzhash", "fileminer"]

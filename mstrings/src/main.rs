@@ -1,5 +1,13 @@
+// Helper to determine if we're in true GUI mode (not workspace panel)
+fn is_gui_mode() -> bool {
+    std::env::var("MALCHELA_GUI_MODE").is_ok() && std::env::var("MALCHELA_WORKSPACE_MODE").is_err()
+}
 use std::fs::File;
 use std::io::{self, BufReader, Write, Read};
+
+use sha2::{Sha256, Digest};
+
+use common_ui::styled_line;
 
 use common_config::get_output_dir;
 
@@ -155,6 +163,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .version("0.1")
         .author("Author Name <dwmetz@gmail.com>")
         .about("Searches for strings in files with YARA-style detections")
+        .allow_hyphen_values(true)
+        .dont_collapse_args_in_usage(true)
+        .args_conflicts_with_subcommands(true)
+        .disable_help_subcommand(true)
         .arg(
             Arg::new("file")
                 .help("File to scan")
@@ -193,6 +205,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .action(clap::ArgAction::SetTrue)
                 .conflicts_with_all(&["text", "json"]),
         )
+        .arg(
+            Arg::new("case")
+                .long("case")
+                .num_args(1)
+                .help("Optional case name to group output"),
+        )
         .get_matches();
 
     let file_path = match matches.get_one::<String>("file").map(String::as_str) {
@@ -204,11 +222,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             input.trim().to_string()
         }
     };
+    let file_path_copy = file_path.clone(); // clone once for later reuse
 
-    let file = File::open(file_path)?;
+    let file = File::open(file_path.clone())?;
     let mut mstrings = Mstrings::new();
     let mut buffer = Vec::new();
     BufReader::new(file).read_to_end(&mut buffer)?;
+
+    // Calculate SHA256 hash of the file buffer
+    let mut hasher = Sha256::new();
+    hasher.update(&buffer);
+    let sha256 = format!("{:x}", hasher.finalize());
 
     let mut current = Vec::new();
     for &byte in &buffer {
@@ -249,9 +273,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    if std::env::var("MALCHELA_GUI").is_err() {
+    if !is_gui_mode() {
+        println!("{}", styled_line("stone", &format!("File: {}", file_path_copy)));
+        println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
         println!("\n{}\n", format!("{} unique detections matched.", display_matches.len()).truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
     } else {
+        println!("{}", styled_line("stone", &format!("File: {}", file_path_copy)));
+        println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
         println!("\n{} unique detections matched.\n", display_matches.len());
     }
 
@@ -265,7 +293,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)));
 
     // Ensure the table is printed
-    if std::env::var("MALCHELA_GUI").is_err() {
+    if !is_gui_mode() {
         let table_str = format!("{table}");
         let mut lines = table_str.lines();
         if let Some(top_border) = lines.next() {
@@ -320,14 +348,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
 
-    let save_output = matches.get_flag("output");
+    let save_output = matches.get_flag("output") || matches.contains_id("case");
     let text = matches.get_flag("text");
     let json = matches.get_flag("json");
     let markdown = matches.get_flag("markdown");
 
 
     if save_output {
-        let output_dir = get_output_dir("mstrings");
+        let output_dir = if let Some(case_name) = matches.get_one::<String>("case") {
+            std::path::Path::new("saved_output").join("cases").join(case_name).join("mstrings")
+        } else {
+            get_output_dir("mstrings")
+        };
+        std::fs::create_dir_all(&output_dir)?;
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
 
         let format = if text {
@@ -336,6 +369,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "json"
         } else if markdown {
             "md"
+        } else if matches.contains_id("case") {
+            "txt"
         } else {
             println!("\nOutput format required. Use -t, -j, or -m with -o.");
             println!();
@@ -345,6 +380,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Build the report content (reuse printed table and IOCs)
         let mut report_buffer = String::new();
+
+        // Add file and hash metadata at the top of the report
+        if format == "md" {
+            report_buffer.push_str(&format!("- **File**: `{}`\n", file_path_copy));
+            report_buffer.push_str(&format!("- **SHA256**: `{}`\n\n", sha256));
+        } else {
+            report_buffer.push_str(&format!("File: {}\n", file_path_copy));
+            report_buffer.push_str(&format!("SHA256: {}\n\n", sha256));
+        }
 
         // Add summary
         report_buffer.push_str(&format!("{} unique detections matched.\n\n", mstrings.matches.iter().filter(|m| m.rule_name.is_some()).count()));
@@ -409,13 +453,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let json_path = output_dir.join(format!("report_{}.json", timestamp));
                 let mut file = File::create(&json_path).expect("Failed to create JSON report file");
                 let matched_only: Vec<_> = mstrings.matches.iter().filter(|m| m.rule_name.is_some()).collect();
-                let json = serde_json::to_string_pretty(&matched_only).expect("Failed to serialize report");
+                let json = serde_json::to_string_pretty(&serde_json::json!({
+                    "file": file_path_copy,
+                    "sha256": sha256,
+                    "matches": matched_only
+                })).expect("Failed to serialize report");
                 file.write_all(json.as_bytes()).expect("Failed to write JSON report");
                 println!("\n{}", format!("JSON report saved to: {}", json_path.display()).green());
             }
         }
     } else {
-        if std::env::var("MALCHELA_GUI_MODE").is_err() {
+        if !is_gui_mode() {
             println!("\nOutput was not saved.\n");
         }
     }

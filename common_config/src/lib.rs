@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::error::Error;
 use std::env;
@@ -23,4 +24,11 @@ pub fn get_output_dir(tool_name: &str) -> PathBuf {
     dir.push("saved_output");
     dir.push(tool_name);
     dir
+}
+
+pub fn write_launch_script(script_name: &str, command: &str) -> Result<(), Box<dyn Error>> {
+    let mut file = fs::File::create(script_name)?;
+    writeln!(file, "#!/bin/bash")?;
+    writeln!(file, "{}", command)?;
+    Ok(())
 }

@@ -7,7 +7,7 @@ pub fn grouped_menu() -> Vec<MenuGroup> {
             "File Analysis".to_string(),
             vec![
                 ("  File Analyzer".to_string(), vec!["run".to_string(), "--bin".to_string(), "fileanalyzer".to_string()]),
-                ("  Mismatch Miner".to_string(), vec!["run".to_string(), "--bin".to_string(), "mismatchminer".to_string()]),
+                ("  File Miner".to_string(), vec!["run".to_string(), "--bin".to_string(), "fileminer".to_string()]),
             ],
         ),
         (

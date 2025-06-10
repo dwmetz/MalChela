@@ -27,6 +27,11 @@ MalChela supports three main workflows:
   cargo run -p fileanalyzer — /path/to/file -o
   ```
   
+
+Most tools now support a `--case <name>` argument to redirect saved output to a specific case folder under `saved_output/cases/`.
+
+Note: Some tools (e.g., `mstrings`, `fileanalyzer`, `malhash`) require the `-o` flag to trigger output saving—even when `--case` is specified. Others (like `strings_to_yara` or `mzcount`) save automatically when a case is provided. Refer to the Tool Behavior Reference below for details.
+
 ### Output Formats
 
 All tools that support saving reports use the following scheme:
@@ -42,6 +47,9 @@ To save output, use:
 
 - `-o` enables saving (CLI output is not saved by default)
 
+
+If a `--case` argument is supplied, the report will be saved to:
+`saved_output/cases/<case_name>/<tool>/report_<timestamp>.<ext>`
 
 Example:
 
@@ -113,6 +121,6 @@ Save Report
 | mstrings        | file                   | ✅            | ✅                 | Maps strings to MITRE             |
 | mzhash          | folder                 | ✅            | ✅                 | Hashes files with MZ header       |
 | nsrlquery       | file                   | ✅            | ✅                 | Queries CIRCL                     |
-| strings_to_yara | text file and metadata | ❌            | ✅                 | Generates YARA rules              |
-| mzcount         | folder                 | ❌            | ✅                 | Tallies file types                |
+| strings_to_yara | text file and metadata | Case Only     | ✅                 | Saves to case folder if `--case` is provided              |
+| mzcount         | folder                 | ❌            | ✅                 | Will save to case folder if `--case` is provided          |
 | xmzhash         | folder                 | ✅            | ✅                 | Hashes files without known headers|

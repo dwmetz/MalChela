@@ -1,3 +1,5 @@
+use std::env;
+use std::path::PathBuf;
 use sha1::Sha1;
 use md5::Md5;
 use std::collections::HashMap;
@@ -6,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use common_config::get_output_dir;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use walkdir::WalkDir;
 use yara::{Compiler, Rules};
 use sha2::{Digest, Sha256};
@@ -324,22 +326,54 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
 }
 
 fn main() {
-    let directory_to_scan = if let Ok(path) = std::env::var("MALCHELA_INPUT") {
-        path.trim().to_string()
-    } else if std::env::var("MALCHELA_GUI_MODE").is_ok() {
-        let args: Vec<String> = std::env::args().collect();
-        if args.len() > 1 {
-            args[1].trim().to_string()
-        } else {
-            eprintln!("No path provided to xmzhash in GUI mode. Set MALCHELA_INPUT or pass a path.");
-            std::process::exit(1);
+    let args: Vec<String> = env::args().collect();
+    let mut directory_to_scan: Option<String> = None;
+    let mut selected_algorithms: Vec<String> = vec![];
+    let mut allow_overwrite = env::var("XMZMD5_ALLOW_OVERWRITE").ok().as_deref() == Some("1");
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "-a" => {
+                if i + 1 < args.len() {
+                    selected_algorithms.push(args[i + 1].to_lowercase());
+                    i += 1;
+                }
+            }
+            "-o" => {
+                allow_overwrite = true;
+            }
+            "-p" => {
+                env::set_var("XMZMD5_PROGRESS", "1");
+            }
+            "--case" => {
+                if i + 1 < args.len() {
+                    env::set_var("MALCHELA_CASE", &args[i + 1]);
+                    i += 1;
+                }
+            }
+            val if !val.starts_with('-') => {
+                directory_to_scan = Some(val.to_string());
+            }
+            _ => {}
         }
+        i += 1;
+    }
+
+    let directory_to_scan = if let Some(path) = directory_to_scan {
+        path
+    } else if let Ok(path) = env::var("MALCHELA_INPUT") {
+        path.trim().to_string()
+    } else if env::var("MALCHELA_GUI_MODE").is_ok() {
+        eprintln!("No path provided to xmzhash in GUI mode. Set MALCHELA_INPUT or pass a path.");
+        std::process::exit(1);
     } else {
         eprintln!("Please enter the directory to scan:");
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).expect("Failed to read input.");
         input.trim().to_string()
     };
+
     let directory_to_scan = PathBuf::from(directory_to_scan);
 
     if !directory_to_scan.is_dir() {
@@ -347,36 +381,31 @@ fn main() {
         return;
     }
 
-    // Compile YARA rules
-    let yara_rules = match compile_yara_rules() {
-        Ok(rules) => rules,
-        Err(e) => {
-            eprintln!("[ERROR] Failed to compile YARA rules: {}", e);
-            return;
-        }
+    if selected_algorithms.is_empty() {
+        selected_algorithms = vec!["md5".to_string()];
+    }
+
+    let case_dir = env::var("MALCHELA_CASE").ok();
+    let output_dir = if let Some(case) = case_dir {
+        get_output_dir(&format!("cases/{}/xmzhash", case))
+    } else {
+        get_output_dir("xmzhash")
     };
+    let output_file = output_dir.join("XMZMD5_HASHES.txt");
 
-    let output_dir = get_output_dir("xmzhash");
-    let output_filename = output_dir.join("XMZ256.txt");
-
-    let args: Vec<String> = std::env::args().collect();
-    let mut allow_overwrite = std::env::var("MZHASH_ALLOW_OVERWRITE").ok().as_deref() == Some("1");
-    allow_overwrite = allow_overwrite || args.contains(&"-o".to_string());
-
+    // Add overwrite check here if needed...
     let all_outputs = vec![
-        output_filename.clone(),
-        output_filename.with_file_name("XMZ256_index.tsv"),
-        output_filename.with_file_name("XMZMD5_HASHES.txt"),
-        output_filename.with_file_name("XMZMD5_index.tsv"),
-        output_filename.with_file_name("XMZSHA1_HASHES.txt"),
-        output_filename.with_file_name("XMZSHA1_index.tsv"),
-        output_filename.with_file_name("XMZSHA256_HASHES.txt"),
-        output_filename.with_file_name("XMZSHA256_index.tsv"),
+        output_file.clone(),
+        output_file.with_file_name("XMZMD5_index.tsv"),
+        output_file.with_file_name("XMZSHA1_HASHES.txt"),
+        output_file.with_file_name("XMZSHA1_index.tsv"),
+        output_file.with_file_name("XMZSHA256_HASHES.txt"),
+        output_file.with_file_name("XMZSHA256_index.tsv"),
     ];
 
     for path in &all_outputs {
         if path.exists() && !allow_overwrite {
-            if std::env::var("MALCHELA_GUI_MODE").is_ok() {
+            if env::var("MALCHELA_GUI_MODE").is_ok() {
                 println!("File already exists. Enable 'Allow Overwrite' if you want to replace this file.");
                 return;
             } else {
@@ -392,24 +421,15 @@ fn main() {
         }
     }
 
-    // Enable progress-only mode if -p is passed
-    if args.contains(&"-p".to_string()) {
-        std::env::set_var("MZHASH_PROGRESS", "1");
-    }
-
-    let mut selected_algorithms: Vec<String> = vec![];
-    let mut i = 1;
-    while i < args.len() {
-        if args[i] == "-a" && i + 1 < args.len() {
-            selected_algorithms.push(args[i + 1].to_lowercase());
-            i += 1;
+    // Compile YARA rules
+    let yara_rules = match compile_yara_rules() {
+        Ok(rules) => rules,
+        Err(e) => {
+            eprintln!("[ERROR] Failed to compile YARA rules: {}", e);
+            return;
         }
-        i += 1;
-    }
-    if selected_algorithms.is_empty() {
-        selected_algorithms = vec!["sha256".to_string()];
-    }
+    };
 
-    // Scan the directory recursively and write results to the output file
-    let _ = scan_and_hash_files(&directory_to_scan, &yara_rules, &output_filename, &selected_algorithms);
+    // Call existing scan or hash logic using `directory_to_scan` and `output_file`
+    let _ = scan_and_hash_files(&directory_to_scan, &yara_rules, &output_file, &selected_algorithms);
 }

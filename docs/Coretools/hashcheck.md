@@ -15,25 +15,26 @@ HashCheck supports **MD5**, **SHA1**, and **SHA256** formats.
 ### 🔧 CLI Syntax
 
 ```bash
+# Example 1: Basic usage
 cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f
-```
-*Searches for the hash in the provided TSV or TXT file. Prompts interactively if not supplied.*
 
-#### Optional Output Formats
-
-Use `-o` to save results, along with one of the following:
-
-```bash
+# Example 2: Save output as .txt
 cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -t
-```
-*Saves the result as a `.txt` file.*
 
-```bash
-cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -j
+# Example 3: Save output to case folder
+cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -t --case CaseName
 ```
-*Saves the result as a `.json` file.*
 
-```bash
-cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -m
+*HashCheck accepts a hash and a lookup file (TSV or TXT). If not provided, you’ll be prompted interactively.*
+
+When `--case` is used, output will be saved under:
+
 ```
-*Saves the result as a `.md` (Markdown) file.*
+saved_output/cases/CaseName/hashcheck/
+```
+
+Without `--case`, reports are saved to the default:
+
+```
+saved_output/hashcheck/
+```

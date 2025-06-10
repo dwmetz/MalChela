@@ -25,3 +25,4 @@ common_ui = { path = "../common_ui" }
 clap = { version = "4", features = ["derive"] }
 pelite = "0.10.0"
 md-5 = "0.10"
+strip-ansi-escapes = "0.2.1"

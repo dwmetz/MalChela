@@ -31,6 +31,10 @@ struct CliArgs {
     /// Output as Markdown
     #[clap(short = 'm', long = "markdown", action)]
     markdown: bool,
+
+    /// Optional case name for saving to a case-specific directory
+    #[clap(long = "case")]
+    case: Option<String>,
 }
 
 fn main() {
@@ -68,14 +72,22 @@ fn main() {
     sha256_hasher.update(&buffer);
     let sha256_hash = sha256_hasher.finalize();
 
-
-
+    
+    println!("{}", styled_line("stone", &format!("File: {}", file_path)));
     println!("{}", styled_line("stone", &format!("MD5: {:x}", md5_hash)));
     println!("{}", styled_line("stone", &format!("SHA1: {:x}", sha1_hash)));
     println!("{}", styled_line("stone", &format!("SHA256: {:x}", sha256_hash)));
 
     if save_output {
-        let output_dir = get_output_dir("hashit");
+        let output_dir = if let Some(case_name) = &cli.case {
+            let path = std::path::Path::new("saved_output").join("cases").join(case_name).join("hashit");
+            std::fs::create_dir_all(&path).expect("Failed to create case output directory");
+            path
+        } else {
+            let path = get_output_dir("hashit");
+            std::fs::create_dir_all(&path).expect("Failed to create default output directory");
+            path
+        };
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
 
         let format = if cli.text {
@@ -96,6 +108,7 @@ fn main() {
                 fs::create_dir_all(output_dir.clone()).expect("Failed to create output directory");
                 let mut file = File::create(&text_path).expect("Failed to create report file");
 
+                writeln!(file, "File: {}", file_path).unwrap();
                 writeln!(file, "MD5: {:x}", md5_hash).unwrap();
                 writeln!(file, "SHA1: {:x}", sha1_hash).unwrap();
                 writeln!(file, "SHA256: {:x}", sha256_hash).unwrap();
@@ -108,6 +121,7 @@ fn main() {
                 let mut file = File::create(&md_path).expect("Failed to create markdown report file");
 
                 writeln!(file, "# Hash Report").unwrap();
+                writeln!(file, "- **File**: `{}`", file_path).unwrap();
                 writeln!(file, "- **MD5**: {:x}", md5_hash).unwrap();
                 writeln!(file, "- **SHA1**: {:x}", sha1_hash).unwrap();
                 writeln!(file, "- **SHA256**: {:x}", sha256_hash).unwrap();
@@ -120,6 +134,7 @@ fn main() {
                 let mut file = File::create(&json_path).expect("Failed to create JSON report file");
 
                 let json = serde_json::json!({
+                    "file": file_path,
                     "md5": format!("{:x}", md5_hash),
                     "sha1": format!("{:x}", sha1_hash),
                     "sha256": format!("{:x}", sha256_hash)

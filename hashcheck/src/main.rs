@@ -43,6 +43,14 @@ fn main() {
         (file_path, hash_value, false, String::new())
     };
 
+    let mut case_name: Option<String> = None;
+    for i in 1..args.len() {
+        if args[i] == "--case" && i + 1 < args.len() {
+            case_name = Some(args[i + 1].clone());
+            break;
+        }
+    }
+
     // Open and read file
     if !Path::new(&file_path).exists() {
         eprintln!("File not found: {}", file_path);
@@ -96,9 +104,15 @@ fn main() {
     }
 
     if save_output {
-        let mut path = std::env::current_dir().unwrap_or_else(|_| ".".into());
-        path.push("saved_output/hashcheck");
-        std::fs::create_dir_all(&path).ok();
+        let path = if let Some(case) = case_name {
+            let p = Path::new("saved_output").join("cases").join(case).join("hashcheck");
+            std::fs::create_dir_all(&p).ok();
+            p
+        } else {
+            let p = Path::new("saved_output").join("hashcheck");
+            std::fs::create_dir_all(&p).ok();
+            p
+        };
         let timestamp = Local::now().format("%Y%m%d_%H%M%S");
         let output_file = path.join(format!("report_{}.{}", timestamp, output_format));
         let report = match output_format.as_str() {

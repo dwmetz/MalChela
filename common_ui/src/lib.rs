@@ -1,3 +1,11 @@
+use egui::Color32;
+
+// Color constants for GUI mode use
+pub const OXIDE_ORANGE: Color32 = Color32::from_rgb(200, 100, 50);
+pub const STONE_BEIGE: Color32 = Color32::from_rgb(210, 200, 190);
+pub const CYAN: Color32 = Color32::from_rgb(100, 255, 255);
+
+
 use colored::Colorize;
 
 pub fn styled_line(tag: &str, content: &str) -> String {

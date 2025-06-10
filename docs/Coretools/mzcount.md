@@ -15,17 +15,31 @@ MZcount recursively scans a directory and counts the number of files that match 
 ### 🔧 CLI Syntax
 
 ```bash
+# Example 1: Scan a directory and view results in terminal
 cargo run -p mzcount -- /path_to_scan/
-```
 
-Scans the specified directory and prints results in the terminal.
-
-To enable table mode:
-
-```bash
+# Example 2: Enable table mode
 MZCOUNT_TABLE_DISPLAY=1 cargo run -p mzcount -- /path_to_scan/
+
+# Example 3: Save results as .txt
+cargo run -p mzcount -- /path_to_scan/ -- -o -t
+
+# Example 4: Save results to a case folder
+cargo run -p mzcount -- /path_to_scan/ -- -o -t --case CaseName
 ```
 
-Use this to display a live-updating summary of file types.
+If no path is provided, the tool will prompt you to enter it interactively.
 
-If no path is provided, the tool will prompt you to enter it interactively. When run from the command line with a path, it defaults to detailed output with a table summary at the end.
+Use `-o` to save output and `-t` to specify plain text format.
+
+When `--case` is used, output is saved under:
+
+```
+saved_output/cases/CaseName/mzcount/
+```
+
+Otherwise, output is saved under:
+
+```
+saved_output/mzcount/
+```

@@ -9,12 +9,21 @@ Extract Samples recursively unpacks password-protected archives commonly used in
 ### 🔧 CLI Syntax
 
 ```bash
+# Example 1: No case name
 cargo run -p extract_samples /path_to_directory/ infected
 ```
 
-If no path or password is provided, the tool will prompt you to enter them interactively.
+In this mode, extracted files will be placed in the same location as each archive found.
 
 ```bash
-Enter the directory path to scan for archives:
-Enter the password to use for extraction:
+# Example 2: With case name
+cargo run -p extract_samples /path_to_directory/ infected --case Case123
 ```
+
+When `--case` is provided, all extracted files will be saved under:
+
+```
+/saved_output/cases/Case123/extract_samples/
+```
+
+If no path or password is provided, the tool will prompt for them interactively.

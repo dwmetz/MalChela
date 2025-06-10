@@ -11,17 +11,17 @@ FileAnalyzer performs deep static analysis on a single file. It extracts hashes,
 ### 🔧 CLI Syntax
 
 ```bash
+# Example 1: No case name
 cargo run -p fileanalyzer -- /path_to_file/ -o -t
+
+# Example 2: With case name
+cargo run -p fileanalyzer -- /path_to_file/ -o -t --case Case123
 ```
 
-If no file path is provided, the tool will prompt you to enter it interactively.
+When `--case` is provided, output will be saved under:
 
-```bash
-Enter the path to the file you want to analyze:
+```
+/saved_output/cases/Case123/fileanalyzer/
 ```
 
-Use `-o` to save output and include one of the following format flags:
-- `-t` → Save as `.txt`
-- `-j` → Save as `.json`
-- `-m` → Save as `.md`
-
+If `--case` is not specified, files will be saved in the default `saved_output/fileanalyzer/` folder.

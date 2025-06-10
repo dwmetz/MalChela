@@ -21,18 +21,29 @@ These hash sets (.tsv preferred) can be used with [HashCheck](hashcheck.md).
 ### 🔧 CLI Syntax
 
 ```bash
-cargo run -p mzhash /path_to_directory/
-```
-*Generates SHA256 hashes (default).*
+# Example 1: Generate default SHA256 hashes
+cargo run -p mzhash -- /path_to_directory/
 
-```bash
-cargo run -p mzhash /path_to_directory/ -- -a MD5 -a SHA1 -a SHA256
-```
-*Generates all three hash types.*
+# Example 2: Generate all three hash types (MD5, SHA1, SHA256)
+cargo run -p mzhash -- /path_to_directory/ -a MD5 -a SHA1 -a SHA256
 
-```bash
-cargo run -p mzhash /path_to_directory/ -- -a SHA1 -a SHA256
+# Example 3: Generate SHA1 and SHA256 only
+cargo run -p mzhash -- /path_to_directory/ -a SHA1 -a SHA256
+
+# Example 4: Save output to a case folder
+cargo run -p mzhash -- /path_to_directory/ -a SHA256 --case CaseName
 ```
-*Generates SHA1 and SHA256 only.*
+
+If `--case` is specified, output will be saved to:
+
+```
+saved_output/cases/CaseName/mzhash/
+```
+
+Otherwise, hashes are saved to:
+
+```
+saved_output/mzhash/
+```
 
 You can combine multiple `-a` flags in any order.

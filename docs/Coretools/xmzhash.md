@@ -21,18 +21,23 @@ These hash sets (.tsv preferred) can be used with [HashCheck](hashcheck.md).
 ### 🔧 CLI Syntax
 
 ```bash
-cargo run -p xmzhash /path_to_directory/
+cargo run -p xmzhash -- /path_to_directory/
 ```
 *Generates SHA256 hashes (default).*
 
 ```bash
-cargo run -p xmzhash /path_to_directory/ -- -a MD5 -a SHA1 -a SHA256
+cargo run -p xmzhash -- -a MD5 -a SHA1 -a SHA256 /path_to_directory/
 ```
 *Generates all three hash types.*
 
 ```bash
-cargo run -p xmzhash /path_to_directory/ -- -a SHA1 -a SHA256
+cargo run -p xmzhash -- -a SHA1 -a SHA256 /path_to_directory/
 ```
 *Generates SHA1 and SHA256 only.*
 
-You can combine multiple `-a` flags in any order.
+```bash
+cargo run -p xmzhash -- -a SHA256 /path_to_directory/ --case MyCase
+```
+*Saves results to the specified case folder.*
+
+You can combine multiple `-a` flags in any order. If no directory is passed, you will be prompted.

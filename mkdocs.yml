@@ -33,10 +33,10 @@ nav:
       - CombineYARA: coretools/combine_yara.md
       - ExtractSamples: coretools/extract_samples.md
       - FileAnalyzer: coretools/fileanalyzer.md
+      - FileMiner: coretools/fileminer.md
       - HashCheck: coretools/hashcheck.md
       - HashIt: coretools/hashit.md
       - MalHash: coretools/malhash.md
-      - MismatchMiner: coretools/mismatchminer.md
       - MStrings: coretools/mstrings.md
       - MZCount: coretools/mzcount.md      
       - MZHash: coretools/mzhash.md

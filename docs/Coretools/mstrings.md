@@ -9,16 +9,15 @@ mStrings extracts strings from files and classifies them using regular expressio
 ### 🔧 CLI Syntax
 
 ```bash
+# Example 1: Scan a file
 cargo run -p mstrings -- /path_to_file/
-```
 
-Scans the specified file and prints results in the terminal.
-
-```bash
+# Example 2: Save output as .txt
 cargo run -p mstrings -- /path_to_file/ -o -t
-```
 
-Saves the results as a `.txt` file.
+# Example 3: Save output to a case folder
+cargo run -p mstrings -- /path_to_file/ -o -t --case CaseXYZ
+```
 
 Use `-o` to save output and include one of the following format flags:
 - `-t` → Save as `.txt`
@@ -27,6 +26,14 @@ Use `-o` to save output and include one of the following format flags:
 
 If no file is provided, the tool will prompt you to enter the path interactively.
 
-```bash
-Enter the file path:
+When `--case` is used, output is saved to:
+
+```
+saved_output/cases/CaseXYZ/mstrings/
+```
+
+Otherwise, results are saved to:
+
+```
+saved_output/mstrings/
 ```

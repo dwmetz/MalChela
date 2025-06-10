@@ -11,16 +11,15 @@ The first time you run MalHash, you’ll be prompted to [configure API keys](../
 ### 🔧 CLI Syntax
 
 ```bash
+# Example 1: Lookup only
 cargo run -p malhash -- d41d8cd98f00b204e9800998ecf8427e
-```
 
-Displays enrichment results in the terminal for the provided hash.
-
-```bash
+# Example 2: Save output as .txt
 cargo run -p malhash -- d41d8cd98f00b204e9800998ecf8427e -o -t
-```
 
-Saves the results as a `.txt` file.
+# Example 3: Save output to a case folder
+cargo run -p malhash -- d41d8cd98f00b204e9800998ecf8427e -o -t --case Case123
+```
 
 Use `-o` to save output and include one of the following format flags:
 - `-t` → Save as `.txt`
@@ -29,7 +28,14 @@ Use `-o` to save output and include one of the following format flags:
 
 If no hash is provided, the tool will prompt you to enter it interactively.
 
-```bash
-Enter the malware hash value:
+When `--case` is used, output is saved to:
+
+```
+saved_output/cases/Case123/malhash/
 ```
 
+Otherwise, reports are saved to:
+
+```
+saved_output/malhash/
+```

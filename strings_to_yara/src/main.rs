@@ -73,8 +73,25 @@ fn prompt(msg: &str) -> String {
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let rule_name = args.get(1).cloned().unwrap_or_else(|| prompt("Rule name: "));
-    let mut author = args.get(2).cloned().unwrap_or_else(|| prompt("Author (or leave blank for Anonymous): "));
+    let mut filtered_args = vec![];
+    let mut skip_next = false;
+
+for (_i, arg) in args.iter().enumerate().skip(1) {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if arg == "--case" {
+            skip_next = true;
+            continue;
+        }
+        filtered_args.push(arg.clone());
+    }
+
+    let case_name = args.iter().position(|x| x == "--case").and_then(|i| args.get(i + 1));
+
+    let rule_name = filtered_args.get(0).cloned().unwrap_or_else(|| prompt("Rule name: "));
+    let mut author = filtered_args.get(1).cloned().unwrap_or_else(|| prompt("Author (or leave blank for Anonymous): "));
     if author.is_empty() {
         author = "Anonymous".to_string();
     }
@@ -84,9 +101,9 @@ fn main() -> io::Result<()> {
         }
     }
 
-    let description = args.get(3).cloned().unwrap_or_else(|| prompt("Description (optional): "));
-    let hash_value = args.get(4).cloned().unwrap_or_else(|| prompt("Hash value (optional): "));
-    let strings_file = args.get(5).cloned().unwrap_or_else(|| prompt("Path to strings file: "));
+    let description = filtered_args.get(2).cloned().unwrap_or_else(|| prompt("Description (optional): "));
+    let hash_value = filtered_args.get(3).cloned().unwrap_or_else(|| prompt("Hash value (optional): "));
+    let strings_file = filtered_args.get(4).cloned().unwrap_or_else(|| prompt("Path to strings file: "));
 
     println!("Using input file: {}", strings_file);
     println!("Rule Name: {}", rule_name);
@@ -99,7 +116,11 @@ fn main() -> io::Result<()> {
         Ok(yara_rule) => {
             println!("\n--- YARA Rule Content ---\n{}", yara_rule);
 
-            let output_dir = get_output_dir("strings_to_yara");
+            let output_dir = if let Some(case) = case_name {
+                get_output_dir(&format!("cases/{}", case))
+            } else {
+                get_output_dir("strings_to_yara")
+            };
             std::fs::create_dir_all(&output_dir)?;
 
             let filename = format!("{}.yar", rule_name);

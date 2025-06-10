@@ -13,6 +13,7 @@ use walkdir::WalkDir;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 use indicatif::{ProgressBar, ProgressStyle};
+use clap::{Arg, Command};
 
 /// Compile YARA rules for detecting MZ headers.
 fn compile_yara_rules() -> Result<Rules, yara::Error> {
@@ -112,9 +113,15 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
     let mut index_outputs: HashMap<&str, Arc<Mutex<File>>> = HashMap::new();
     let algorithms = algorithms;
 
+    // Ensure the output directory exists before creating output files
+    if let Err(e) = std::fs::create_dir_all(output_file) {
+        eprintln!("Failed to create output directory {:?}: {}", output_file, e);
+        std::process::exit(1);
+    }
+
     for algo in algorithms {
-        let hash_path = output_file.with_file_name(format!("MZ{}.txt", algo.to_uppercase()));
-        let index_path = output_file.with_file_name(format!("MZ{}_index.tsv", algo.to_uppercase()));
+        let hash_path = output_file.join(format!("MZ{}.txt", algo.to_uppercase()));
+        let index_path = output_file.join(format!("MZ{}_index.tsv", algo.to_uppercase()));
         hash_outputs.insert(algo.as_str(), Arc::new(Mutex::new(File::create(hash_path).expect("Failed to create hash file"))));
         index_outputs.insert(algo.as_str(), Arc::new(Mutex::new(File::create(index_path).expect("Failed to create index file"))));
     }
@@ -122,7 +129,7 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
     let timeout_log = Arc::new(Mutex::new(OpenOptions::new()
         .create(true)
         .append(true)
-        .open(output_file.with_file_name("timeout.log"))
+        .open(output_file.join("timeout.log"))
         .expect("Failed to create timeout log file")));
 
     let timeout_count = Arc::new(Mutex::new(0usize));
@@ -207,13 +214,13 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
     let timeouts = timeout_count.lock().unwrap();
     if *timeouts > 0 {
         println!("{} file(s) timed out during scanning.", *timeouts);
-        println!("Timeout log location: {:?}", output_file.with_file_name("timeout.log").canonicalize().unwrap());
+        println!("Timeout log location: {:?}", output_file.join("timeout.log").canonicalize().unwrap());
     }
 
     let mut output_paths = vec![];
     for algo in algorithms {
-        output_paths.push(output_file.with_file_name(format!("MZ{}.txt", algo.to_uppercase())).display().to_string());
-        output_paths.push(output_file.with_file_name(format!("MZ{}_index.tsv", algo.to_uppercase())).display().to_string());
+        output_paths.push(output_file.join(format!("MZ{}.txt", algo.to_uppercase())).display().to_string());
+        output_paths.push(output_file.join(format!("MZ{}_index.tsv", algo.to_uppercase())).display().to_string());
     }
 
     (count, scanned, output_paths)
@@ -221,16 +228,42 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
 
 fn main() {
     let start_time = Instant::now();
-    let input = if let Ok(gui_path) = std::env::var("MALCHELA_INPUT") {
+    let matches = Command::new("mzhash")
+        .version("2.2.1")
+        .about("Hashing tool for MZ header files")
+        .arg(Arg::new("algorithm")
+            .short('a')
+            .long("algorithm")
+            .action(clap::ArgAction::Append)
+            .required(false)
+            .help("Hashing algorithm(s) to use (e.g., SHA256, MD5, SHA1)"))
+        .arg(Arg::new("progress")
+            .short('p')
+            .long("progress")
+            .action(clap::ArgAction::SetTrue)
+            .help("Show progress bar"))
+        .arg(Arg::new("case")
+            .long("case")
+            .num_args(1)
+            .help("Specify case name"))
+        .arg(Arg::new("input")
+            .index(1)
+            .required(false)
+            .help("Directory to scan"))
+        .get_matches();
+
+    let input = matches.get_one::<String>("input").cloned();
+    let progress = matches.get_flag("progress");
+    let case = matches.get_one::<String>("case").cloned();
+    let algorithms: Vec<String> = matches.get_many::<String>("algorithm").map(|vals| vals.map(|v| v.to_string()).collect()).unwrap_or_default();
+
+    let input = if let Some(path) = input {
+        path
+    } else if let Ok(gui_path) = std::env::var("MALCHELA_INPUT") {
         gui_path.trim().to_string()
     } else if std::env::var("MALCHELA_GUI_MODE").is_ok() {
-        let args: Vec<String> = std::env::args().collect();
-        if args.len() > 1 {
-            args[1].trim().to_string()
-        } else {
-            eprintln!("No path provided to mzhash in GUI mode. Pass a folder or set MALCHELA_INPUT.");
-            std::process::exit(1);
-        }
+        eprintln!("No path provided to mzhash in GUI mode. Pass a folder or set MALCHELA_INPUT.");
+        std::process::exit(1);
     } else {
         println!("Please enter the directory to scan:");
         let mut input = String::new();
@@ -259,14 +292,24 @@ fn main() {
         process::exit(1);
     }
 
-    let mut output_file_path = get_output_dir("mzhash");
-    output_file_path.push("MZSHA256.txt");
+    eprintln!("MALCHELA_CASE: {:?}", std::env::var("MALCHELA_CASE"));
+    let output_file_path = if let Some(case) = case {
+        std::env::set_var("MALCHELA_CASE", &case);
+        let mut path = std::path::PathBuf::from("saved_output");
+        path.push("cases");
+        path.push(case);
+        path.push("mzhash");
+        std::fs::create_dir_all(&path).expect("Failed to create case output directory");
+        path
+    } else {
+        get_output_dir("mzhash")
+    };
+    // output_file_path now points to the directory; do not append filename yet
 
     let mut allow_overwrite = std::env::var("MZHASH_ALLOW_OVERWRITE").ok().as_deref() == Some("1");
-    let args: Vec<String> = std::env::args().collect();
-    allow_overwrite = allow_overwrite || args.contains(&"-o".to_string());
+    allow_overwrite = allow_overwrite || std::env::args().any(|arg| arg == "-o");
 
-    if output_file_path.exists() && !allow_overwrite {
+    if output_file_path.join("MZSHA256.txt").exists() && !allow_overwrite {
         if std::env::var("MALCHELA_GUI_MODE").is_ok() {
             println!("File already exists. Enable 'Allow Overwrite' if you want to replace this file.");
             process::exit(0);
@@ -289,28 +332,20 @@ fn main() {
         }
     };
 
-    let args: Vec<String> = std::env::args().collect();
-    if args.contains(&"-p".to_string()) {
+    if progress {
         std::env::set_var("MZHASH_PROGRESS", "1");
     }
 
-    let mut selected_algorithms: Vec<String> = vec![];
-
-    let mut i = 1;
-    while i < args.len() {
-        if args[i] == "-a" && i + 1 < args.len() {
-            selected_algorithms.push(args[i + 1].to_lowercase());
-            i += 1;
-        }
-        i += 1;
-    }
-
-    if selected_algorithms.is_empty() {
-        selected_algorithms = vec!["sha256".to_string()];
-    }
+    let selected_algorithms = if algorithms.is_empty() {
+        vec!["sha256".to_string()]
+    } else {
+        algorithms.iter().map(|a| a.to_lowercase()).collect()
+    };
 
     let (total_hashes, mz_matches, output_paths) =
         scan_and_hash_files(&directory_to_scan, &yara_rules, &output_file_path, &selected_algorithms);
+
+    eprintln!("Final output_file_path: {:?}", output_file_path);
 
     println!("\nScan completed.");
     println!("Number of files scanned: {}", WalkDir::new(&directory_to_scan).into_iter().filter_map(|e| e.ok()).filter(|e| e.path().is_file()).count());

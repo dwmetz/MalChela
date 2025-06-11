@@ -38,7 +38,7 @@ fn main() {
     println!("{}", styled_line("gray", "            https://bakerstreetforensics.com"));
     println!();
     println!("{}", styled_line("rust", "MalChela - A YARA & Malware Analysis Toolkit written in Rust"));
-    println!("{}", styled_line("gray", "Version: 2.2.1"));
+    println!("{}", styled_line("gray", "Version: 3.0.0"));
     println!();
     println!("{}", styled_line("ABOUT", "ABOUT:"));
     println!("{}", styled_line("yellow", "   mal — malware"));

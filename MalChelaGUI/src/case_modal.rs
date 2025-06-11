@@ -289,39 +289,21 @@ impl CaseModal {
                                                             // Small delay to allow GUI to update the status before heavy work
                                                             std::thread::sleep(std::time::Duration::from_millis(800));
                                                             if let Some(bin) = find_7z_binary() {
-                                                                use std::process::{Command, Stdio};
-                                                                // Prepare to spawn the process asynchronously
-                                                                let child = match Command::new(bin)
+                                                                use std::process::Command;
+                                                                // Prepare to run the process synchronously
+                                                                let output = Command::new(bin)
                                                                     .arg("a")
                                                                     .arg("-tzip")
                                                                     .arg("-y")
                                                                     .arg(format!("-p{}", password))
                                                                     .arg(archive_path.to_string_lossy().to_string())
                                                                     .arg(case_dir.to_string_lossy().to_string())
-                                                                    .stdout(Stdio::piped())
-                                                                    .stderr(Stdio::piped())
-                                                                    .spawn() {
-                                                                    Ok(child) => child,
-                                                                    Err(e) => {
-                                                                        println!("❌ Failed to spawn 7z: {}", e);
-                                                                        {
-                                                                            let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = format!("❌ Failed to spawn 7z: {}", e);
-                                                                            ctx.request_repaint();
-                                                                        }
-                                                                        return;
-                                                                    }
-                                                                };
-
-                                                                // Instead of streaming stderr, just show a static "in progress" status
+                                                                    .output();
                                                                 {
                                                                     let mut status = archive_status_clone.lock().unwrap();
                                                                     *status = "📦 Archiving in progress...".to_string();
                                                                     ctx.request_repaint();
                                                                 }
-
-                                                                // Wait for completion (collect output for error/success)
-                                                                let output = child.wait_with_output();
                                                                 match output {
                                                                     Ok(output) if output.status.success() => {
                                                                         let stdout = String::from_utf8_lossy(&output.stdout);

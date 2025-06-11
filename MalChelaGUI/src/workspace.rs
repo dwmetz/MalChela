@@ -334,17 +334,14 @@ impl WorkspacePanel {
                     ui.label(RichText::new(status).color(CYAN));
                 }
 
-                // --- TAG SECTION: Extract and display tags from notes ---
+                // --- TAG SECTION: Extract, display, add, and remove tags ---
                 {
                     use std::collections::HashSet;
 
-
                     ui.separator();
-                    ui.label(RichText::new("🏷️ Tags:").strong().size(16.0).color(OXIDE_ORANGE));
+                    ui.label(RichText::new("🏷 Tags:").strong().size(16.0).color(OXIDE_ORANGE));
 
                     let mut tag_set = HashSet::new();
-
-                    // Pull tags from case notes
                     for line in self.notes.lines() {
                         for word in line.split_whitespace() {
                             if word.starts_with('#') && word.len() > 1 {
@@ -353,17 +350,44 @@ impl WorkspacePanel {
                         }
                     }
 
-                    // Display extracted tags
-                    if tag_set.is_empty() {
-                        ui.label(RichText::new("No tags found in notes.").color(CYAN));
-                    } else {
-                        let mut sorted_tags: Vec<_> = tag_set.into_iter().collect();
-                        sorted_tags.sort();
-                        for tag in sorted_tags {
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(&tag).color(CYAN));
-                            });
+                    // Add manual tags (stored inside notes for now as a workaround)
+                    let mut new_tag = String::new();
+                    ui.horizontal(|ui| {
+                        ui.label("Add Tag:");
+                        if ui.text_edit_singleline(&mut new_tag).lost_focus() && !new_tag.is_empty() {
+                            let normalized = if new_tag.starts_with('#') {
+                                new_tag.clone()
+                            } else {
+                                format!("#{}", new_tag)
+                            };
+                            if !self.notes.contains(&normalized) {
+                                self.notes.push_str(&format!("\n{}", normalized));
+                            }
                         }
+                    });
+
+                    // Display tags and offer remove buttons (only for tags not present in notes)
+                    let mut tags_to_remove = Vec::new();
+                    let mut sorted_tags: Vec<_> = tag_set.iter().cloned().collect();
+                    sorted_tags.sort();
+                    for tag in sorted_tags {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(&tag).color(CYAN));
+                            if !self.notes.contains(&tag) {
+                                if ui.button("❌").clicked() {
+                                    tags_to_remove.push(tag.clone());
+                                }
+                            }
+                        });
+                    }
+
+                    // Remove manually added tags (from notes for now)
+                    for tag in tags_to_remove {
+                        self.notes = self.notes
+                            .lines()
+                            .filter(|line| line.trim() != tag)
+                            .collect::<Vec<_>>()
+                            .join("\n");
                     }
 
                     ui.separator();

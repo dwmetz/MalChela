@@ -287,7 +287,7 @@ impl CaseModal {
                                                                 ctx.request_repaint();
                                                             }
                                                             // Small delay to allow GUI to update the status before heavy work
-                                                            std::thread::sleep(std::time::Duration::from_millis(300));
+                                                            std::thread::sleep(std::time::Duration::from_millis(800));
                                                             if let Some(bin) = find_7z_binary() {
                                                                 let output = std::process::Command::new(bin)
                                                                     .arg("a")
@@ -431,7 +431,7 @@ impl CaseModal {
                                                     }
                                                 }
                                             });
-                                            ctx.request_repaint(); // Continuous updates
+                                            // ctx.request_repaint(); // Continuous updates
                                         }
                                     }
                                 });

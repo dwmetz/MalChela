@@ -314,9 +314,9 @@ impl CaseModal {
                                                                     }
                                                                 };
 
-                                                                // Stream stdout lines as they are emitted
-                                                                if let Some(stdout) = child.stdout.take() {
-                                                                    let reader = BufReader::new(stdout);
+                                                                // Stream stderr lines as they are emitted
+                                                                if let Some(stderr) = child.stderr.take() {
+                                                                    let reader = BufReader::new(stderr);
                                                                     for line in reader.lines().flatten() {
                                                                         {
                                                                             let mut status = archive_status_clone.lock().unwrap();

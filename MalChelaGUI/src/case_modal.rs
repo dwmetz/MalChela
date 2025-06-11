@@ -65,7 +65,12 @@ impl CaseModal {
 
     fn render_contents(&mut self, ui: &mut Ui, app_state: &mut crate::AppState, ctx: &Context, preview_path: Option<std::path::PathBuf>) {
         ui.horizontal(|ui| {
-            ui.heading(RichText::new("📁 Case Management").color(crate::RUST_ORANGE));
+            ui.label(RichText::new("📁 Case Management").color(crate::RUST_ORANGE));
+            ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
+                if ui.button("❌").clicked() {
+                    self.visible = false;
+                }
+            });
         });
         ui.separator();
 
@@ -210,7 +215,8 @@ impl CaseModal {
                                 .show(ctx, |ui| {
                                     // Title and close button at top
                                     ui.horizontal(|ui| {
-                                        ui.label(RichText::new("📦 Archive a Case").color(crate::RUST_ORANGE));
+                                        // Removed redundant heading inside the archive modal
+                                        // ui.label(RichText::new("📦 Archive a Case").color(crate::RUST_ORANGE));
                                         ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
                                             if ui.button("❌").clicked() {
                                                 SHOW_ARCHIVE_MODAL = false;
@@ -355,9 +361,7 @@ impl CaseModal {
                                         if let Ok(status) = archive_status.lock() {
                                             ui.add_space(8.0);
                                             ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                                                if !status.is_empty() {
-                                                    ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
-                                                }
+                                                ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
                                             });
                                         }
                                     }

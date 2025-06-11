@@ -44,7 +44,7 @@ impl CaseModal {
         let mut temp_is_open = visible_clone;
         let this = self as *mut Self;
 
-        Window::new("")
+        Window::new(RichText::new("📁 Case Management").color(crate::RUST_ORANGE))
             .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
             .collapsible(false)
             .resizable(false)
@@ -64,15 +64,7 @@ impl CaseModal {
     }
 
     fn render_contents(&mut self, ui: &mut Ui, app_state: &mut crate::AppState, ctx: &Context, preview_path: Option<std::path::PathBuf>) {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("📁 Case Management").color(crate::RUST_ORANGE));
-            ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
-                if ui.button("❌").clicked() {
-                    self.visible = false;
-                }
-            });
-        });
-        ui.separator();
+        // Removed redundant header row and separator.
 
         ui.horizontal_top(|ui| {
             // Left: Logo

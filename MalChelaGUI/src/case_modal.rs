@@ -1,11 +1,3 @@
-fn find_7z_binary() -> Option<String> {
-    for candidate in ["7z", "7zz", "7zr"] {
-        if which::which(candidate).is_ok() {
-            return Some(candidate.to_string());
-        }
-    }
-    None
-}
 
 use eframe::egui::{Context, Ui, Window, Grid, RichText, Align2, ScrollArea, Button, Color32, Vec2, TextEdit};
 use std::sync::{Arc, Mutex};
@@ -21,7 +13,7 @@ pub struct CaseModal {
     pub new_case_input_type: String,
     pub new_case_input_path: Option<std::path::PathBuf>,
     pub selected_case_name: Arc<Mutex<Option<String>>>,
-    pub password: Arc<Mutex<String>>,
+
 }
 
 impl Default for CaseModal {
@@ -36,7 +28,7 @@ impl Default for CaseModal {
             new_case_input_type: "file".to_string(),
             new_case_input_path: None,
             selected_case_name: Arc::new(Mutex::new(None)),
-            password: Arc::new(Mutex::new(String::new())),
+
         }
     }
 }
@@ -233,9 +225,6 @@ impl CaseModal {
                                     }
 
                                     ui.separator();
-                                    ui.label("Optional Password (not yet applied):");
-                                    let mut password_guard = self.password.lock().unwrap();
-                                    ui.text_edit_singleline(&mut *password_guard);
 
                                     ui.horizontal(|ui| {
                                         if ui.button("Archive").clicked() {
@@ -250,12 +239,10 @@ impl CaseModal {
                                             let ctx = ctx.clone();
                                             let archive_status_clone = archive_status_clone.clone();
                                             // Move archive logic into a background thread for responsiveness
-                                            let password = self.password.lock().unwrap().trim().to_string();
                                             std::thread::spawn({
                                                 let ctx = ctx.clone();
                                                 let archive_status_clone = archive_status_clone.clone();
                                                 let case_name = self.selected_case_name.lock().unwrap().clone();
-                                                // let password = self.password.lock().unwrap().trim().to_string(); // moved above
                                                 move || {
                                                     if let Some(case_name) = case_name.clone() {
                                                         use chrono::Local;
@@ -278,128 +265,63 @@ impl CaseModal {
                                                             return;
                                                         }
 
-                                                        if !password.is_empty() {
-                                                            println!("🔐 Creating password-protected archive with 7z-compatible binary");
-                                                            // Show status update for password-protected archive
-                                                            {
-                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                *status = format!("📦 Archiving: {}", case_dir.display());
-                                                                ctx.request_repaint();
-                                                            }
-                                                            // Small delay to allow GUI to update the status before heavy work
-                                                            std::thread::sleep(std::time::Duration::from_millis(800));
-                                                            if let Some(bin) = find_7z_binary() {
-                                                                use std::process::Command;
-                                                                // Prepare to run the process synchronously
-                                                                let output = Command::new(bin)
-                                                                    .arg("a")
-                                                                    .arg("-tzip")
-                                                                    .arg("-y")
-                                                                    .arg(format!("-p{}", password))
-                                                                    .arg(archive_path.to_string_lossy().to_string())
-                                                                    .arg(case_dir.to_string_lossy().to_string())
-                                                                    .output();
-                                                                {
-                                                                    let mut status = archive_status_clone.lock().unwrap();
-                                                                    *status = "📦 Archiving in progress...".to_string();
-                                                                    ctx.request_repaint();
-                                                                }
-                                                                match output {
-                                                                    Ok(output) if output.status.success() => {
-                                                                        let stdout = String::from_utf8_lossy(&output.stdout);
-                                                                        println!("{}", stdout);
+                                                        println!("📦 Archiving case: {}", case_name);
+                                                        {
+                                                            let mut status = archive_status_clone.lock().unwrap();
+                                                            *status = format!("📦 Archiving case: {}", case_name);
+                                                            ctx.request_repaint();
+                                                        }
+
+                                                        match std::fs::File::create(&archive_path) {
+                                                            Ok(file) => {
+                                                                let mut zip = zip::ZipWriter::new(file);
+                                                                let options: zip::write::FileOptions<'_, ()> =
+                                                                    zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+                                                                for entry in walkdir::WalkDir::new(&case_dir).into_iter().filter_map(Result::ok) {
+                                                                    let path = entry.path();
+                                                                    if path.is_file() {
+                                                                        // Update status for each file being archived
                                                                         {
                                                                             let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = format!("{}\n✅ Created password-protected archive: {}", stdout, archive_path.display());
+                                                                            *status = format!("📦 Archiving: {}", path.display());
+                                                                            ctx.request_repaint();
+                                                                        }
+                                                                        if let Ok(mut f) = std::fs::File::open(path) {
+                                                                            if let Ok(rel_path) = path.strip_prefix(&case_dir) {
+                                                                                zip.start_file(rel_path.to_string_lossy(), options).expect("Failed to add file to zip");
+                                                                                std::io::copy(&mut f, &mut zip).expect("Failed to write file contents");
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                                match zip.finish() {
+                                                                    Ok(_) => {
+                                                                        println!("✅ Archived to {}", archive_path.display());
+                                                                        {
+                                                                            let mut status = archive_status_clone.lock().unwrap();
+                                                                            *status = format!("✅ Archived to {}", archive_path.display());
                                                                             ctx.request_repaint();
                                                                         }
                                                                         // Do not auto-close the archive modal; let user close manually
                                                                     }
-                                                                    Ok(output) => {
-                                                                        let stderr = String::from_utf8_lossy(&output.stderr);
-                                                                        println!("❌ 7z failed:\n{}", stderr);
-                                                                        {
-                                                                            let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = format!("❌ 7z failed:\n{}", stderr);
-                                                                            ctx.request_repaint();
-                                                                        }
-                                                                    }
                                                                     Err(e) => {
-                                                                        println!("❌ Failed to run 7z: {}", e);
+                                                                        println!("❌ Failed to finalize archive: {}", e);
                                                                         {
                                                                             let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = format!("❌ Failed to run 7z: {}", e);
+                                                                            *status = format!("❌ Failed to finalize archive: {}", e);
                                                                             ctx.request_repaint();
                                                                         }
                                                                     }
                                                                 }
-                                                            } else {
-                                                                println!("❌ No 7-Zip compatible binary found (7z, 7zz, or 7zr).");
+                                                            }
+                                                            Err(e) => {
+                                                                println!("❌ Failed to create archive file: {}", e);
                                                                 {
                                                                     let mut status = archive_status_clone.lock().unwrap();
-                                                                    *status = "❌ No 7-Zip binary found on system.".to_string();
+                                                                    *status = format!("❌ Failed to create archive file: {}", e);
                                                                     ctx.request_repaint();
-                                                                }
-                                                            }
-                                                        } else {
-                                                            println!("📦 Archiving case without password: {}", case_name);
-                                                            {
-                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                *status = format!("📦 Archiving case without password: {}", case_name);
-                                                                ctx.request_repaint();
-                                                            }
-
-                                                            match std::fs::File::create(&archive_path) {
-                                                                Ok(file) => {
-                                                                    let mut zip = zip::ZipWriter::new(file);
-                                                                    let options: zip::write::FileOptions<'_, ()> =
-                                                                        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-                                                                    for entry in walkdir::WalkDir::new(&case_dir).into_iter().filter_map(Result::ok) {
-                                                                        let path = entry.path();
-                                                                        if path.is_file() {
-                                                                            // Update status for each file being archived
-                                                                            {
-                                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                                *status = format!("📦 Archiving: {}", path.display());
-                                                                                ctx.request_repaint();
-                                                                            }
-                                                                            if let Ok(mut f) = std::fs::File::open(path) {
-                                                                                if let Ok(rel_path) = path.strip_prefix(&case_dir) {
-                                                                                    zip.start_file(rel_path.to_string_lossy(), options).expect("Failed to add file to zip");
-                                                                                    std::io::copy(&mut f, &mut zip).expect("Failed to write file contents");
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    }
-
-                                                                    match zip.finish() {
-                                                                        Ok(_) => {
-                                                                            println!("✅ Archived to {}", archive_path.display());
-                                                                            {
-                                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                                *status = format!("✅ Archived to {}", archive_path.display());
-                                                                                ctx.request_repaint();
-                                                                            }
-                                                                            // Do not auto-close the archive modal; let user close manually
-                                                                        }
-                                                                        Err(e) => {
-                                                                            println!("❌ Failed to finalize archive: {}", e);
-                                                                            {
-                                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                                *status = format!("❌ Failed to finalize archive: {}", e);
-                                                                                ctx.request_repaint();
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                                Err(e) => {
-                                                                    println!("❌ Failed to create archive file: {}", e);
-                                                                    {
-                                                                        let mut status = archive_status_clone.lock().unwrap();
-                                                                        *status = format!("❌ Failed to create archive file: {}", e);
-                                                                        ctx.request_repaint();
-                                                                    }
                                                                 }
                                                             }
                                                         }

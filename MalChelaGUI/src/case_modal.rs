@@ -290,9 +290,8 @@ impl CaseModal {
                                                             std::thread::sleep(std::time::Duration::from_millis(800));
                                                             if let Some(bin) = find_7z_binary() {
                                                                 use std::process::{Command, Stdio};
-                                                                use std::io::{BufReader, BufRead};
                                                                 // Prepare to spawn the process asynchronously
-                                                                let mut child = match Command::new(bin)
+                                                                let child = match Command::new(bin)
                                                                     .arg("a")
                                                                     .arg("-tzip")
                                                                     .arg("-y")
@@ -314,16 +313,11 @@ impl CaseModal {
                                                                     }
                                                                 };
 
-                                                                // Stream stderr lines as they are emitted
-                                                                if let Some(stderr) = child.stderr.take() {
-                                                                    let reader = BufReader::new(stderr);
-                                                                    for line in reader.lines().flatten() {
-                                                                        {
-                                                                            let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = line.clone();
-                                                                        }
-                                                                        ctx.request_repaint();
-                                                                    }
+                                                                // Instead of streaming stderr, just show a static "in progress" status
+                                                                {
+                                                                    let mut status = archive_status_clone.lock().unwrap();
+                                                                    *status = "📦 Archiving in progress...".to_string();
+                                                                    ctx.request_repaint();
                                                                 }
 
                                                                 // Wait for completion (collect output for error/success)

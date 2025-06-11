@@ -44,7 +44,13 @@ impl CaseModal {
         let mut temp_is_open = visible_clone;
         let this = self as *mut Self;
 
-        Window::new(RichText::new("📁 Case Management").color(crate::RUST_ORANGE))
+        Window::new(
+            RichText::new("📁 Case Management")
+                .color(crate::RUST_ORANGE)
+                .strong()
+        )
+            .title_bar(true)
+            .title_alignment(eframe::egui::Align::LEFT)
             .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
             .collapsible(false)
             .resizable(false)

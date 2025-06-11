@@ -289,15 +289,45 @@ impl CaseModal {
                                                             // Small delay to allow GUI to update the status before heavy work
                                                             std::thread::sleep(std::time::Duration::from_millis(800));
                                                             if let Some(bin) = find_7z_binary() {
-                                                                let output = std::process::Command::new(bin)
+                                                                use std::process::{Command, Stdio};
+                                                                use std::io::{BufReader, BufRead};
+                                                                // Prepare to spawn the process asynchronously
+                                                                let mut child = match Command::new(bin)
                                                                     .arg("a")
                                                                     .arg("-tzip")
                                                                     .arg("-y")
                                                                     .arg(format!("-p{}", password))
                                                                     .arg(archive_path.to_string_lossy().to_string())
                                                                     .arg(case_dir.to_string_lossy().to_string())
-                                                                    .output();
+                                                                    .stdout(Stdio::piped())
+                                                                    .stderr(Stdio::piped())
+                                                                    .spawn() {
+                                                                    Ok(child) => child,
+                                                                    Err(e) => {
+                                                                        println!("❌ Failed to spawn 7z: {}", e);
+                                                                        {
+                                                                            let mut status = archive_status_clone.lock().unwrap();
+                                                                            *status = format!("❌ Failed to spawn 7z: {}", e);
+                                                                            ctx.request_repaint();
+                                                                        }
+                                                                        return;
+                                                                    }
+                                                                };
 
+                                                                // Stream stdout lines as they are emitted
+                                                                if let Some(stdout) = child.stdout.take() {
+                                                                    let reader = BufReader::new(stdout);
+                                                                    for line in reader.lines().flatten() {
+                                                                        {
+                                                                            let mut status = archive_status_clone.lock().unwrap();
+                                                                            *status = line.clone();
+                                                                        }
+                                                                        ctx.request_repaint();
+                                                                    }
+                                                                }
+
+                                                                // Wait for completion (collect output for error/success)
+                                                                let output = child.wait_with_output();
                                                                 match output {
                                                                     Ok(output) if output.status.success() => {
                                                                         let stdout = String::from_utf8_lossy(&output.stdout);

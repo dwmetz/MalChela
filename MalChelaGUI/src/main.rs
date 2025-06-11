@@ -2414,7 +2414,25 @@ fn main() {
             .with_icon(icon.unwrap_or_else(|| std::sync::Arc::new(IconData { rgba: vec![0; 4], width: 1, height: 1 }))),
         ..Default::default()
     };
-    eframe::run_native("MalChela", native_options, Box::new(|_cc| Box::new(app))).unwrap();
+
+    // --- Set up FiraCode font definitions ---
+    use egui::{FontDefinitions, FontData, FontFamily};
+    let mut font_defs = FontDefinitions::default();
+    font_defs.font_data.insert(
+        "fira_code".to_owned(),
+        FontData::from_static(include_bytes!("../assets/fonts/FiraCode-Regular.ttf")),
+    );
+    font_defs.families.entry(FontFamily::Proportional).or_default().insert(0, "fira_code".to_owned());
+    font_defs.families.entry(FontFamily::Monospace).or_default().insert(0, "fira_code".to_owned());
+
+    eframe::run_native(
+        "MalChela",
+        native_options,
+        Box::new(|cc| {
+            cc.egui_ctx.set_fonts(font_defs);
+            Box::new(app)
+        }),
+    ).unwrap();
 }
 
 

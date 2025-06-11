@@ -67,6 +67,8 @@ pub struct WorkspacePanel {
     pub preview_contents: String,
     #[serde(skip)]
     pub new_tag: String,
+    #[serde(skip)]
+    pub has_misc_files: bool,
 }
 
 impl Default for WorkspacePanel {
@@ -102,6 +104,7 @@ impl WorkspacePanel {
             show_preview_modal: false,
             preview_contents: String::new(),
             new_tag: String::new(),
+            has_misc_files: false,
         }
     }
 
@@ -441,14 +444,20 @@ impl WorkspacePanel {
                 }
                 // --- END TAG SECTION ---
 
-                if self.case_reports.iter().any(|(_, files)| !files.is_empty()) {
+                if self.case_reports.iter().any(|(tool, files)| {
+                    if tool == "misc" {
+                        self.has_misc_files && !files.is_empty()
+                    } else {
+                        !files.is_empty()
+                    }
+                }) {
                     use crate::egui::{CollapsingHeader, Color32};
                     ui.label(RichText::new("📄 Case Files:").strong().size(16.0).color(OXIDE_ORANGE));
                     for (tool, files) in &self.case_reports {
                         if files.is_empty() {
                             continue;
                         }
-                        if tool == "misc" && files.is_empty() {
+                        if tool == "misc" && !self.has_misc_files {
                             continue;
                         }
                         CollapsingHeader::new(RichText::new(format!("{}:", tool)).strong().color(STONE_BEIGE))
@@ -638,35 +647,7 @@ impl WorkspacePanel {
                     self.save_status_timestamp = Some(std::time::Instant::now());
                     // println!("📂 Loaded case from: {}", path.display());
 
-                    self.case_reports.clear();
-                    if let Some(name) = &self.active_case_name {
-                        let case_root = std::env::current_dir()
-                            .unwrap_or_else(|_| PathBuf::from("."))
-                            .join("saved_output")
-                            .join("cases")
-                            .join(name);
-
-                        if let Ok(entries) = fs::read_dir(&case_root) {
-                            for entry in entries.flatten() {
-                                if let Ok(metadata) = entry.metadata() {
-                                    if metadata.is_dir() {
-                                        let tool_name = entry.file_name().to_string_lossy().into_owned();
-                                        let mut files = Vec::new();
-                                        for walk_entry in WalkDir::new(entry.path())
-                                            .into_iter()
-                                            .filter_map(Result::ok)
-                                            .filter(|e| e.file_type().is_file())
-                                        {
-                                            files.push(walk_entry.into_path());
-                                        }
-                                        if !files.is_empty() {
-                                            self.case_reports.insert(tool_name, files);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    self.refresh_case_reports();
                     // Auto-tag known external tools based on folder presence
                     let known_external_tools = ["vol3", "tshark"];
                     for tool in known_external_tools.iter() {
@@ -693,6 +674,7 @@ impl WorkspacePanel {
     }
     pub fn refresh_case_reports(&mut self) {
         self.case_reports.clear();
+        self.has_misc_files = false;
         if let Some(name) = &self.active_case_name {
             let case_root = std::env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
@@ -719,11 +701,12 @@ impl WorkspacePanel {
                         } else if metadata.is_file() {
                             let file_path = entry.path();
                             if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
-                                if name != ".DS_Store" {
+                                if name != ".DS_Store" && name != "case.json" {
                                     self.case_reports
                                         .entry("misc".to_string())
                                         .or_default()
-                                        .push(file_path);
+                                        .push(file_path.clone());
+                                    self.has_misc_files = true;
                                 }
                             }
                         }
@@ -753,6 +736,7 @@ impl WorkspacePanel {
         self.save_status = None;
         self.save_status_timestamp = None;
         self.case_reports.clear();
+        self.has_misc_files = false;
         self.suggested_tools = vec![
             "mstrings".to_string(),
             "malhash".to_string(),
@@ -810,6 +794,16 @@ impl WorkspacePanel {
         self.minimized = false;
         self.show_command_output = false;
         self.refresh_case_reports();
+        // Auto-tag known external tools based on folder presence
+        let known_external_tools = ["vol3", "tshark"];
+        for tool in known_external_tools.iter() {
+            if self.case_reports.contains_key(*tool) {
+                let tag = format!("#{}", tool);
+                if !self.notes.contains(&tag) {
+                    self.notes.push_str(&format!("\n{}", tag));
+                }
+            }
+        }
     }
 }
 impl WorkspacePanel {

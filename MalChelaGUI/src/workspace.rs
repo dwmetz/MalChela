@@ -407,7 +407,7 @@ impl WorkspacePanel {
                     Ok(contents) => contents,
                     Err(e) => format!("❌ Failed to read file: {}", e),
                 };
-                Window::new("📄 File Preview")
+                Window::new(RichText::new("📄 File Preview").color(OXIDE_ORANGE))
                     .open(&mut modal_is_open)
                     .resizable(true)
                     .vscroll(true)

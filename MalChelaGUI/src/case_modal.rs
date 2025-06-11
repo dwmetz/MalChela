@@ -185,30 +185,35 @@ impl CaseModal {
                     ui.end_row();
 
                     ui.label(RichText::new("📦 Archive Case").color(crate::LIGHT_CYAN));
-                    static mut SHOW_ARCHIVE_MODAL: bool = false;
-                    static mut ARCHIVE_IN_PROGRESS: bool = false;
+                    // Use thread-local for modal and progress flags
+                    thread_local! {
+                        static SHOW_ARCHIVE_MODAL: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
+                        static ARCHIVE_IN_PROGRESS: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
+                    }
                     // Use Arc<Mutex<String>> for status
-                    // Declare it outside the unsafe so it's only created once per function call
+                    // Declare it outside so it's only created once per function call
                     let archive_status = Arc::new(Mutex::new(String::new()));
 
                     if ui.add(Button::new(RichText::new("Browse").color(Color32::BLACK)).fill(crate::RUST_ORANGE)).clicked() {
-                        unsafe { SHOW_ARCHIVE_MODAL = true; }
+                        SHOW_ARCHIVE_MODAL.with(|v| *v.borrow_mut() = true);
                     }
                     ui.end_row();
 
-                    unsafe {
-                        if SHOW_ARCHIVE_MODAL {
+                    let mut show_modal = false;
+                    SHOW_ARCHIVE_MODAL.with(|v| show_modal = *v.borrow());
+                    if show_modal {
                             // Use Arc<Mutex<String>> for status message
                             let archive_status_clone = archive_status.clone();
-                            // SAFER: use addr_of_mut and cast to *mut bool, then use unsafe block to get mutable ref
-                            let modal_open_ptr = std::ptr::addr_of_mut!(SHOW_ARCHIVE_MODAL) as *mut bool;
+                            // Use split declaration for open_flag to avoid borrow conflicts
+                            let mut open_flag = true;
+                            SHOW_ARCHIVE_MODAL.with(|v| open_flag = *v.borrow());
                             Window::new(RichText::new("📦 Archive a Case").color(crate::RUST_ORANGE))
                                 .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
                                 .collapsible(false)
                                 .title_bar(true)
                                 .resizable(false)
                                 .default_width(420.0)
-                                .open(&mut *modal_open_ptr)
+                                .open(&mut open_flag)
                                 .show(ctx, |ui| {
                                     // Title bar already has close button; remove redundant close button.
                                     ui.separator();
@@ -232,7 +237,7 @@ impl CaseModal {
                                     ui.horizontal(|ui| {
                                         if ui.button("Archive").clicked() {
                                             // Set archive-in-progress flag
-                                            ARCHIVE_IN_PROGRESS = true;
+                                            ARCHIVE_IN_PROGRESS.with(|v| *v.borrow_mut() = true);
                                             // Immediately update GUI status for feedback (on main thread)
                                             {
                                                 let mut status = archive_status_clone.lock().unwrap();
@@ -264,7 +269,7 @@ impl CaseModal {
                                                                 *status = format!("❌ Failed to create archive directory: {}", e);
                                                                 ctx.request_repaint();
                                                             }
-                                                            ARCHIVE_IN_PROGRESS = false;
+                                                            ARCHIVE_IN_PROGRESS.with(|v| *v.borrow_mut() = false);
                                                             return;
                                                         }
 
@@ -335,7 +340,7 @@ impl CaseModal {
                                                         }
                                                     }
                                                     // Reset archive-in-progress flag when done (in all arms)
-                                                    ARCHIVE_IN_PROGRESS = false;
+                                                    ARCHIVE_IN_PROGRESS.with(|v| *v.borrow_mut() = false);
                                                 }
                                             });
                                         }
@@ -347,7 +352,8 @@ impl CaseModal {
                                     // Show status message only after Archive is clicked or while in progress,
                                     // and always show the latest archive_status
                                     {
-                                        let working = ARCHIVE_IN_PROGRESS;
+                                        let mut working = false;
+                                        ARCHIVE_IN_PROGRESS.with(|v| working = *v.borrow());
                                         if let Ok(status) = archive_status.lock() {
                                             if working || !status.is_empty() {
                                                 ui.add_space(8.0);
@@ -358,8 +364,10 @@ impl CaseModal {
                                         }
                                     }
                                 });
+                            if !open_flag {
+                                SHOW_ARCHIVE_MODAL.with(|v| *v.borrow_mut() = false);
+                            }
                         }
-                    }
 
                     ui.label(RichText::new("🔄 Restore Case").color(crate::LIGHT_CYAN));
                     if ui.add(Button::new(RichText::new("Browse").color(Color32::BLACK)).fill(crate::RUST_ORANGE)).clicked() {
@@ -393,6 +401,56 @@ impl CaseModal {
         } else {
             self.render_case_list(ui, app_state);
         }
+
+        // --- Tags Section ---
+        use std::collections::HashSet;
+
+        ui.separator();
+        ui.label(RichText::new("🏷️ Tags").color(crate::RUST_ORANGE).size(16.0));
+
+        // Collect tags from case notes if available
+        let mut found_tags = HashSet::new();
+        if let Some(selected_case) = &*self.selected_case_name.lock().unwrap() {
+            let case_notes_path = format!("saved_output/cases/{}/case_notes.txt", selected_case);
+            if let Ok(content) = std::fs::read_to_string(&case_notes_path) {
+                for line in content.lines() {
+                    for word in line.split_whitespace() {
+                        if let Some(tag) = word.strip_prefix('#') {
+                            found_tags.insert(tag.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Display and allow tag editing
+        static mut MANUAL_TAGS: Vec<String> = Vec::new();
+        ui.horizontal(|ui| {
+            if ui.button("➕ Add Tag").clicked() {
+                unsafe { MANUAL_TAGS.push(String::new()); }
+            }
+        });
+
+        ui.vertical(|ui| {
+            let mut to_remove = None;
+            for (i, tag) in unsafe { MANUAL_TAGS.iter_mut().enumerate() } {
+                ui.horizontal(|ui| {
+                    if ui.text_edit_singleline(tag).changed() {
+                        // tag edited in place
+                    }
+                    if ui.button("❌").clicked() {
+                        to_remove = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = to_remove {
+                unsafe { MANUAL_TAGS.remove(i); }
+            }
+
+            for tag in found_tags {
+                ui.label(RichText::new(format!("#{}", tag)).color(crate::LIGHT_CYAN));
+            }
+        });
 
         if let Some(path) = &preview_path {
             if let Ok(raw) = std::fs::read(path) {

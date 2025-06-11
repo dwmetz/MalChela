@@ -1,5 +1,6 @@
 use crate::egui::ComboBox;
 
+
 use sha2::{Sha256, Digest};
 use std::fs;
 use walkdir::WalkDir;
@@ -179,7 +180,9 @@ impl WorkspacePanel {
                                 .join("saved_output")
                                 .join("archives");
                             let _ = std::fs::create_dir_all(&archive_dir);
-                            let archive_path = archive_dir.join(format!("{}.zip", case_name));
+                            let now = chrono::Local::now();
+                            let timestamp = now.format("%Y-%m-%d_%H-%M-%S").to_string();
+                            let archive_path = archive_dir.join(format!("{}_{}.zip", case_name, timestamp));
                             let file = std::fs::File::create(&archive_path).expect("Failed to create archive file");
                             let walkdir = walkdir::WalkDir::new(&case_dir);
                             let it = walkdir.into_iter();

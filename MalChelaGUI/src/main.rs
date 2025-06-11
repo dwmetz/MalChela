@@ -1306,7 +1306,6 @@ impl App for AppState {
             }
             // --- FULL TAKEOVER CASE WORKSPACE PANEL ---
             if self.workspace.is_visible && !self.workspace.minimized {
-                println!("🧪 Rendering workspace panel — visible: {}", self.workspace.is_visible);
                 self.workspace.show(ui);
                 return;
             }

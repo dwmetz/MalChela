@@ -165,6 +165,42 @@ impl WorkspacePanel {
                                 .spawn();
                         }
                     }
+                    // 📦 Archive Case button
+                    ui.add_space(8.0);
+                    if ui.button(button_text("📦 Archive Case")).clicked() {
+                        if let Some(case_name) = &self.active_case_name {
+                            let case_dir = std::env::current_dir()
+                                .unwrap_or_else(|_| PathBuf::from("."))
+                                .join("saved_output")
+                                .join("cases")
+                                .join(case_name);
+                            let archive_dir = std::env::current_dir()
+                                .unwrap_or_else(|_| PathBuf::from("."))
+                                .join("saved_output")
+                                .join("archives");
+                            let _ = std::fs::create_dir_all(&archive_dir);
+                            let archive_path = archive_dir.join(format!("{}.zip", case_name));
+                            let file = std::fs::File::create(&archive_path).expect("Failed to create archive file");
+                            let walkdir = walkdir::WalkDir::new(&case_dir);
+                            let it = walkdir.into_iter();
+                            let mut zip = zip::ZipWriter::new(file);
+                            let options: zip::write::FileOptions<()> = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+                            for entry in it.filter_map(|e| e.ok()) {
+                                let path = entry.path();
+                                let name = path.strip_prefix(&case_dir).unwrap();
+                                if path.is_file() {
+                                    zip.start_file(name.to_string_lossy(), options).unwrap();
+                                    let mut f = std::fs::File::open(path).unwrap();
+                                    std::io::copy(&mut f, &mut zip).unwrap();
+                                } else if !name.as_os_str().is_empty() {
+                                    zip.add_directory(name.to_string_lossy(), options).unwrap();
+                                }
+                            }
+                            zip.finish().expect("Failed to finalize archive");
+                            self.save_status = Some(format!("📦 Case archived to: {}", archive_path.display()));
+                            self.save_status_timestamp = Some(std::time::Instant::now());
+                        }
+                    }
                 });
                 ui.separator();
                 // Insert separator above the Case Management heading for visual separation (per instructions)

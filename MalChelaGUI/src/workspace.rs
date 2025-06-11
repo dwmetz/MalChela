@@ -126,25 +126,12 @@ impl WorkspacePanel {
                 ui.horizontal(|ui| {
                     use crate::egui::Color32;
                     let button_text = |label: &str| RichText::new(label).size(16.0).color(Color32::from_rgb(144, 238, 144));
+                    // 1. "📝 Case Notes"
                     if ui.button(button_text("📝 Case Notes")).clicked() {
                         self.show_notes_modal = true;
                     }
                     ui.add_space(8.0);
-                    if ui.button(button_text("💾 Save Case")).clicked() {
-                        self.save_case_metadata();
-                    }
-                    ui.add_space(8.0);
-                    if ui.button(button_text("➖ Minimize")).clicked() {
-                        self.minimized = true;
-                    }
-                    ui.add_space(8.0);
-                    if ui.button(button_text("🔄 Refresh Case")).clicked() {
-                        self.selected_results.clear();
-                        self.show_command_output = false;
-                        self.refresh_case_reports();
-                    }
-                    ui.add_space(8.0);
-                    // 📂 Open Case Folder button
+                    // 2. "📂 Open Case Folder"
                     if ui.button(button_text("📂 Open Case Folder")).clicked() {
                         if let Some(case_name) = &self.active_case_name {
                             let case_path = std::env::current_dir()
@@ -166,8 +153,20 @@ impl WorkspacePanel {
                                 .spawn();
                         }
                     }
-                    // 📦 Archive Case button
                     ui.add_space(8.0);
+                    // 3. "🔄 Refresh Case"
+                    if ui.button(button_text("🔄 Refresh Case")).clicked() {
+                        self.selected_results.clear();
+                        self.show_command_output = false;
+                        self.refresh_case_reports();
+                    }
+                    ui.add_space(8.0);
+                    // 4. "💾 Save Case"
+                    if ui.button(button_text("💾 Save Case")).clicked() {
+                        self.save_case_metadata();
+                    }
+                    ui.add_space(8.0);
+                    // 5. "📦 Archive Case"
                     if ui.button(button_text("📦 Archive Case")).clicked() {
                         if let Some(case_name) = &self.active_case_name {
                             let case_dir = std::env::current_dir()
@@ -203,6 +202,11 @@ impl WorkspacePanel {
                             self.save_status = Some(format!("📦 Case archived to: {}", archive_path.display()));
                             self.save_status_timestamp = Some(std::time::Instant::now());
                         }
+                    }
+                    ui.add_space(8.0);
+                    // 6. "➖ Minimize"
+                    if ui.button(button_text("➖ Minimize")).clicked() {
+                        self.minimized = true;
                     }
                 });
                 ui.separator();

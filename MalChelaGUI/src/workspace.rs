@@ -667,6 +667,16 @@ impl WorkspacePanel {
                             }
                         }
                     }
+                    // Auto-tag known external tools based on folder presence
+                    let known_external_tools = ["vol3", "tshark"];
+                    for tool in known_external_tools.iter() {
+                        if self.case_reports.contains_key(*tool) {
+                            let tag = format!("#{}", tool);
+                            if !self.notes.contains(&tag) {
+                                self.notes.push_str(&format!("\n{}", tag));
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     self.save_status = Some(format!("❌ Failed to parse case.json: {}", e));

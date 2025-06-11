@@ -250,11 +250,12 @@ impl CaseModal {
                                             let ctx = ctx.clone();
                                             let archive_status_clone = archive_status_clone.clone();
                                             // Move archive logic into a background thread for responsiveness
+                                            let password = self.password.lock().unwrap().trim().to_string();
                                             std::thread::spawn({
                                                 let ctx = ctx.clone();
                                                 let archive_status_clone = archive_status_clone.clone();
                                                 let case_name = self.selected_case_name.lock().unwrap().clone();
-                                                let password = self.password.lock().unwrap().trim().to_string();
+                                                // let password = self.password.lock().unwrap().trim().to_string(); // moved above
                                                 move || {
                                                     if let Some(case_name) = case_name.clone() {
                                                         use chrono::Local;

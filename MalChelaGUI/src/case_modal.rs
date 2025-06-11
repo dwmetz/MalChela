@@ -402,55 +402,6 @@ impl CaseModal {
             self.render_case_list(ui, app_state);
         }
 
-        // --- Tags Section ---
-        use std::collections::HashSet;
-
-        ui.separator();
-        ui.label(RichText::new("🏷️ Tags").color(crate::RUST_ORANGE).size(16.0));
-
-        // Collect tags from case notes if available
-        let mut found_tags = HashSet::new();
-        if let Some(selected_case) = &*self.selected_case_name.lock().unwrap() {
-            let case_notes_path = format!("saved_output/cases/{}/case_notes.txt", selected_case);
-            if let Ok(content) = std::fs::read_to_string(&case_notes_path) {
-                for line in content.lines() {
-                    for word in line.split_whitespace() {
-                        if let Some(tag) = word.strip_prefix('#') {
-                            found_tags.insert(tag.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        // Display and allow tag editing
-        static mut MANUAL_TAGS: Vec<String> = Vec::new();
-        ui.horizontal(|ui| {
-            if ui.button("➕ Add Tag").clicked() {
-                unsafe { MANUAL_TAGS.push(String::new()); }
-            }
-        });
-
-        ui.vertical(|ui| {
-            let mut to_remove = None;
-            for (i, tag) in unsafe { MANUAL_TAGS.iter_mut().enumerate() } {
-                ui.horizontal(|ui| {
-                    if ui.text_edit_singleline(tag).changed() {
-                        // tag edited in place
-                    }
-                    if ui.button("❌").clicked() {
-                        to_remove = Some(i);
-                    }
-                });
-            }
-            if let Some(i) = to_remove {
-                unsafe { MANUAL_TAGS.remove(i); }
-            }
-
-            for tag in found_tags {
-                ui.label(RichText::new(format!("#{}", tag)).color(crate::LIGHT_CYAN));
-            }
-        });
 
         if let Some(path) = &preview_path {
             if let Ok(raw) = std::fs::read(path) {

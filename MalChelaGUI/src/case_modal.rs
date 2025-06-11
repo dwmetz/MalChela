@@ -13,6 +13,7 @@ pub struct CaseModal {
     pub new_case_input_type: String,
     pub new_case_input_path: Option<std::path::PathBuf>,
     pub selected_case_name: Arc<Mutex<Option<String>>>,
+    pub status_message: Option<String>,
 
 }
 
@@ -28,7 +29,7 @@ impl Default for CaseModal {
             new_case_input_type: "file".to_string(),
             new_case_input_path: None,
             selected_case_name: Arc::new(Mutex::new(None)),
-
+            status_message: None,
         }
     }
 }
@@ -371,7 +372,81 @@ impl CaseModal {
 
                     ui.label(RichText::new("🔄 Restore Case").color(crate::LIGHT_CYAN));
                     if ui.add(Button::new(RichText::new("Browse").color(Color32::BLACK)).fill(crate::RUST_ORANGE)).clicked() {
-                        // restore logic
+                        if let Some(zip_path) = rfd::FileDialog::new()
+                            .add_filter("Zip Archive", &["zip"])
+                            .set_directory("saved_output/archives")
+                            .pick_file()
+                        {
+                            let file = match std::fs::File::open(&zip_path) {
+                                Ok(f) => f,
+                                Err(e) => {
+                                    println!("❌ Failed to open zip file: {}", e);
+                                    return;
+                                }
+                            };
+
+                            let mut archive = match zip::ZipArchive::new(file) {
+                                Ok(a) => a,
+                                Err(e) => {
+                                    println!("❌ Failed to read zip archive: {}", e);
+                                    return;
+                                }
+                            };
+
+                            let mut contains_case_json = false;
+                            for i in 0..archive.len() {
+                                if let Ok(file) = archive.by_index(i) {
+                                    if file.name().ends_with("case.json") {
+                                        contains_case_json = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if !contains_case_json {
+                                self.status_message = Some("❌ Not a valid case archive.".to_string());
+                                return;
+                            }
+
+                            let file_stem = zip_path.file_stem().and_then(|s| s.to_str()).unwrap_or("restored_case");
+                            let restore_path = std::path::Path::new("saved_output/cases").join(file_stem);
+
+                            if let Err(e) = std::fs::create_dir_all(&restore_path) {
+                                println!("❌ Failed to create restore directory: {}", e);
+                                return;
+                            }
+
+                            let file = std::fs::File::open(&zip_path).expect("Failed to reopen zip file");
+                            let mut archive = zip::ZipArchive::new(file).expect("Failed to reopen archive");
+                            for i in 0..archive.len() {
+                                let mut file = archive.by_index(i).unwrap();
+                                let outpath = restore_path.join(file.name());
+
+                                if (&*file.name()).ends_with('/') {
+                                    std::fs::create_dir_all(&outpath).unwrap();
+                                } else {
+                                    if let Some(p) = outpath.parent() {
+                                        if !p.exists() {
+                                            std::fs::create_dir_all(&p).unwrap();
+                                        }
+                                    }
+                                    let mut outfile = std::fs::File::create(&outpath).unwrap();
+                                    std::io::copy(&mut file, &mut outfile).unwrap();
+                                }
+                            }
+
+                            let case_json_path = restore_path.join("case.json");
+                            if case_json_path.exists() {
+                                app_state.workspace.reset();
+                                app_state.load_existing_case(&case_json_path);
+                                app_state.workspace.load_case_metadata(case_json_path);
+                                app_state.workspace.is_visible = true;
+                                app_state.workspace.minimized = false;
+                                self.visible = false;
+                            } else {
+                                self.status_message = Some("❌ Restored zip did not contain a valid case.json.".to_string());
+                            }
+                        }
                     }
                     ui.end_row();
                 });

@@ -103,7 +103,7 @@ impl WorkspacePanel {
 
     pub fn render_scrollable_content(&mut self, ui: &mut Ui) {
         if self.preview_contents.is_empty() {
-            println!("⚠️ Preview contents is empty at render start");
+            // println!("⚠️ Preview contents is empty at render start");
         }
         if let Some(t) = self.save_status_timestamp {
             if t.elapsed().as_secs() > 3 {
@@ -333,6 +333,42 @@ impl WorkspacePanel {
                 if let Some(status) = &self.save_status {
                     ui.label(RichText::new(status).color(CYAN));
                 }
+
+                // --- TAG SECTION: Extract and display tags from notes ---
+                {
+                    use std::collections::HashSet;
+
+
+                    ui.separator();
+                    ui.label(RichText::new("🏷️ Tags:").strong().size(16.0).color(OXIDE_ORANGE));
+
+                    let mut tag_set = HashSet::new();
+
+                    // Pull tags from case notes
+                    for line in self.notes.lines() {
+                        for word in line.split_whitespace() {
+                            if word.starts_with('#') && word.len() > 1 {
+                                tag_set.insert(word.to_string());
+                            }
+                        }
+                    }
+
+                    // Display extracted tags
+                    if tag_set.is_empty() {
+                        ui.label(RichText::new("No tags found in notes.").color(CYAN));
+                    } else {
+                        let mut sorted_tags: Vec<_> = tag_set.into_iter().collect();
+                        sorted_tags.sort();
+                        for tag in sorted_tags {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(&tag).color(CYAN));
+                            });
+                        }
+                    }
+
+                    ui.separator();
+                }
+                // --- END TAG SECTION ---
 
                 if self.case_reports.iter().any(|(_, files)| !files.is_empty()) {
                     use crate::egui::{CollapsingHeader, Color32};
@@ -699,6 +735,7 @@ impl WorkspacePanel {
     pub fn render_tool_selection_panel(&mut self, ui: &mut Ui) {
         // For now, keep the original content in the left column for demonstration:
         ui.vertical(|ui| {
+            // println!("🧪 Rendering workspace panel — visible: {}", self.is_visible);
             self.render_scrollable_content(ui);
             ui.add_space(12.0);
         });

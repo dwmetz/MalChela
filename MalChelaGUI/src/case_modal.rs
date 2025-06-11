@@ -205,7 +205,7 @@ impl CaseModal {
                             let archive_status_clone = archive_status.clone();
                             // SAFER: use addr_of_mut and cast to *mut bool, then use unsafe block to get mutable ref
                             let modal_open_ptr = std::ptr::addr_of_mut!(SHOW_ARCHIVE_MODAL) as *mut bool;
-                            Window::new("📦 Archive a Case")
+                            Window::new(RichText::new("📦 Archive a Case").color(crate::RUST_ORANGE))
                                 .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
                                 .collapsible(false)
                                 .title_bar(true)
@@ -213,16 +213,7 @@ impl CaseModal {
                                 .default_width(420.0)
                                 .open(&mut *modal_open_ptr)
                                 .show(ctx, |ui| {
-                                    // Title and close button at top
-                                    ui.horizontal(|ui| {
-                                        // Removed redundant heading inside the archive modal
-                                        // ui.label(RichText::new("📦 Archive a Case").color(crate::RUST_ORANGE));
-                                        ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
-                                            if ui.button("❌").clicked() {
-                                                SHOW_ARCHIVE_MODAL = false;
-                                            }
-                                        });
-                                    });
+                                    // Title bar already has close button; remove redundant close button.
                                     ui.separator();
 
                                     let selected_case_name = self.selected_case_name.clone();
@@ -356,13 +347,17 @@ impl CaseModal {
                                         //     SHOW_ARCHIVE_MODAL = false;
                                         // }
                                     });
-                                    // Show status message, scrollable and always updates (even if empty)
+                                    // Show status message only after Archive is clicked or while in progress,
+                                    // and always show the latest archive_status
                                     {
+                                        let working = ARCHIVE_IN_PROGRESS;
                                         if let Ok(status) = archive_status.lock() {
-                                            ui.add_space(8.0);
-                                            ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                                                ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
-                                            });
+                                            if working || !status.is_empty() {
+                                                ui.add_space(8.0);
+                                                ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+                                                    ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
+                                                });
+                                            }
                                         }
                                     }
                                 });

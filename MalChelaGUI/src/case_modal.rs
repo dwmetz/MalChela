@@ -208,7 +208,16 @@ impl CaseModal {
                                 .default_width(420.0)
                                 .open(&mut *modal_open_ptr)
                                 .show(ctx, |ui| {
-                                    ui.label(RichText::new("Select a Case to Archive").color(crate::RUST_ORANGE));
+                                    // Title and close button at top
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new("📦 Archive a Case").color(crate::RUST_ORANGE));
+                                        ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
+                                            if ui.button("❌").clicked() {
+                                                SHOW_ARCHIVE_MODAL = false;
+                                            }
+                                        });
+                                    });
+                                    ui.separator();
 
                                     let selected_case_name = self.selected_case_name.clone();
                                     if let Ok(entries) = std::fs::read_dir("saved_output/cases") {
@@ -338,9 +347,10 @@ impl CaseModal {
                                                 }
                                             });
                                         }
-                                        if ui.button("Cancel").clicked() {
-                                            SHOW_ARCHIVE_MODAL = false;
-                                        }
+                                        // Remove/cancel button below, as close "X" is now at the top
+                                        // if ui.button("Cancel").clicked() {
+                                        //     SHOW_ARCHIVE_MODAL = false;
+                                        // }
                                     });
                                     // Show status message, scrollable and always updates (even if empty)
                                     {

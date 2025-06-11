@@ -64,6 +64,8 @@ pub struct WorkspacePanel {
     pub show_preview_modal: bool,
     #[serde(skip)]
     pub preview_contents: String,
+    #[serde(skip)]
+    pub new_tag: String,
 }
 
 impl Default for WorkspacePanel {
@@ -98,6 +100,7 @@ impl WorkspacePanel {
             preview_file: None,
             show_preview_modal: false,
             preview_contents: String::new(),
+            new_tag: String::new(),
         }
     }
 
@@ -351,18 +354,19 @@ impl WorkspacePanel {
                     }
 
                     // Add manual tags (stored inside notes for now as a workaround)
-                    let mut new_tag = String::new();
                     ui.horizontal(|ui| {
                         ui.label("Add Tag:");
-                        if ui.text_edit_singleline(&mut new_tag).lost_focus() && !new_tag.is_empty() {
-                            let normalized = if new_tag.starts_with('#') {
-                                new_tag.clone()
+                        let response = ui.text_edit_singleline(&mut self.new_tag);
+                        if response.lost_focus() && !self.new_tag.is_empty() {
+                            let normalized = if self.new_tag.starts_with('#') {
+                                self.new_tag.clone()
                             } else {
-                                format!("#{}", new_tag)
+                                format!("#{}", self.new_tag)
                             };
                             if !self.notes.contains(&normalized) {
                                 self.notes.push_str(&format!("\n{}", normalized));
                             }
+                            self.new_tag.clear();
                         }
                     });
 
@@ -712,6 +716,7 @@ impl WorkspacePanel {
             self.selected_tools.insert(tool.clone(), false);
             self.tool_output_formats.insert(tool.clone(), "txt".to_string());
         }
+        self.new_tag = String::new();
     }
 
 
@@ -759,7 +764,6 @@ impl WorkspacePanel {
     pub fn render_tool_selection_panel(&mut self, ui: &mut Ui) {
         // For now, keep the original content in the left column for demonstration:
         ui.vertical(|ui| {
-            // println!("🧪 Rendering workspace panel — visible: {}", self.is_visible);
             self.render_scrollable_content(ui);
             ui.add_space(12.0);
         });

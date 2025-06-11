@@ -141,11 +141,11 @@ fn main() {
         clear_screen();
         print_banner();
 
-        println!("Available Tools:");
+        println!("  {}", "Available Tools:".cyan());
         let formatted_tools: Vec<String> = tool_menu
             .iter()
             .enumerate()
-            .map(|(i, entry)| format!("[{}] {} ({})", i + 1, entry.display_name, entry.shortcode))
+            .map(|(i, entry)| format!("  {}", format!("[{}] {} ({})", i + 1, entry.display_name, entry.shortcode).cyan()))
             .collect();
 
         let max_width = formatted_tools
@@ -164,9 +164,9 @@ fn main() {
                 None => println!("{}", left),
             }
         }
-        println!("\n[0] Exit");
+        println!("\n{}", "[0] Exit".cyan());
 
-        print!("\nSelect a tool by number or shortcode: ");
+        print!("\n{} ", "Select a tool by number or shortcode:".cyan());
         io::stdout().flush().unwrap();
 
         let mut input = String::new();

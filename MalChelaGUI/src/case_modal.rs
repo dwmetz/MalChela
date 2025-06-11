@@ -20,6 +20,8 @@ pub struct CaseModal {
     pub new_case_name: String,
     pub new_case_input_type: String,
     pub new_case_input_path: Option<std::path::PathBuf>,
+    pub selected_case_name: Arc<Mutex<Option<String>>>,
+    pub password: Arc<Mutex<String>>,
 }
 
 impl Default for CaseModal {
@@ -33,6 +35,8 @@ impl Default for CaseModal {
             new_case_name: String::new(),
             new_case_input_type: "file".to_string(),
             new_case_input_path: None,
+            selected_case_name: Arc::new(Mutex::new(None)),
+            password: Arc::new(Mutex::new(String::new())),
         }
     }
 }
@@ -214,25 +218,24 @@ impl CaseModal {
                                 .show(ctx, |ui| {
                                     ui.label(RichText::new("Select a Case to Archive").color(crate::RUST_ORANGE));
 
-                                    static mut SELECTED_CASE_NAME: Option<String> = None;
+                                    let selected_case_name = self.selected_case_name.clone();
                                     if let Ok(entries) = std::fs::read_dir("saved_output/cases") {
                                         for entry in entries.flatten() {
                                             if entry.path().is_dir() {
                                                 if let Some(name) = entry.file_name().to_str() {
-                                                    let is_selected = SELECTED_CASE_NAME.as_deref() == Some(name);
+                                                    let is_selected = selected_case_name.lock().unwrap().as_deref() == Some(name);
                                                     if ui.radio(is_selected, name).clicked() {
-                                                        SELECTED_CASE_NAME = Some(name.to_string());
+                                                        *selected_case_name.lock().unwrap() = Some(name.to_string());
                                                     }
                                                 }
                                             }
                                         }
                                     }
 
-                                    static mut PASSWORD: String = String::new();
                                     ui.separator();
                                     ui.label("Optional Password (not yet applied):");
-                                    let password_ref = &mut *std::ptr::addr_of_mut!(PASSWORD);
-                                    ui.text_edit_singleline(password_ref);
+                                    let mut password_guard = self.password.lock().unwrap();
+                                    ui.text_edit_singleline(&mut *password_guard);
 
                                     ui.horizontal(|ui| {
                                         if ui.button("Archive").clicked() {
@@ -250,8 +253,8 @@ impl CaseModal {
                                             std::thread::spawn({
                                                 let ctx = ctx.clone();
                                                 let archive_status_clone = archive_status_clone.clone();
-                                                let case_name = SELECTED_CASE_NAME.clone();
-                                                let password = PASSWORD.trim().to_string();
+                                                let case_name = self.selected_case_name.lock().unwrap().clone();
+                                                let password = self.password.lock().unwrap().trim().to_string();
                                                 move || {
                                                     if let Some(case_name) = case_name.clone() {
                                                         use chrono::Local;

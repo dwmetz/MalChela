@@ -50,7 +50,6 @@ impl CaseModal {
                 .strong()
         )
             .title_bar(true)
-            .title_alignment(eframe::egui::Align::LEFT)
             .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
             .collapsible(false)
             .resizable(false)

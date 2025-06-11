@@ -348,15 +348,17 @@ impl CaseModal {
                                         if let Ok(status) = archive_status.lock() {
                                             ui.add_space(8.0);
                                             ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                                                if working {
-                                                    ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
-                                                } else {
-                                                    // Always show final message after completion
-                                                    if !status.is_empty() {
-                                                        ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
+                                                if !status.is_empty() {
+                                                    let display = if status.contains("✅") || status.contains("❌") || status.contains("⚠️") {
+                                                        status.clone()
+                                                    } else if status.starts_with("📦 Archiving") {
+                                                        status.clone()
                                                     } else {
-                                                        ui.label(RichText::new("⏳ Ready.").color(crate::LIGHT_CYAN));
-                                                    }
+                                                        format!("✅ {}", status)
+                                                    };
+                                                    ui.label(RichText::new(display).color(crate::LIGHT_CYAN));
+                                                } else if working {
+                                                    ui.label(RichText::new("⏳ Archiving...").color(crate::LIGHT_CYAN));
                                                 }
                                             });
                                             // ctx.request_repaint(); // Continuous updates

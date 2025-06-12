@@ -1359,7 +1359,6 @@ impl App for AppState {
                         &preview_custom_args,
                         preview_output_path,
                     );
-                    println!("📄 Final command string before write: {}", full_command_str);
                     self.vol3_panel.launch_command = Some(full_command_str.clone());
 
                     self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
@@ -1397,7 +1396,6 @@ impl App for AppState {
                                 &custom_args,
                                 output_path,
                             );
-                            println!("📄 Final command string before write: {}", full_command_str);
                             write_launch_script("launch_vol3.command", &full_command_str);
 
                             // --- Restored launch logic for Vol3 (exactly as in production) ---
@@ -1458,6 +1456,14 @@ impl App for AppState {
                 }
                 // Only show the standard input config and command line preview if NOT mzhash or xmzhash
                 if tool.command.get(0).map(|s| s != "mzhash" && s != "xmzhash").unwrap_or(true) {
+                    use std::fmt::Write as _;
+                    // Determine exec_type
+                    #[derive(PartialEq)]
+                    enum ExecType { Cargo, Binary }
+                    let exec_type = match tool.exec_type.as_deref() {
+                        Some("binary") | Some("Binary") => ExecType::Binary,
+                        _ => ExecType::Cargo,
+                    };
                     if tool.command.get(0).map(|s| s == "strings_to_yara").unwrap_or(false) {
                         let mut preview = format!(
                             "cargo run -p strings_to_yara -- \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"",
@@ -1473,8 +1479,27 @@ impl App for AppState {
                         }
                         ui.label(RichText::new(preview).color(GREEN).strong());
                     } else if let Some(ref p) = self.input_path {
+                        let input_path_str = p.display().to_string();
                         let command_line = if tool.command.get(0).map(|s| s == "hashcheck").unwrap_or(false) {
-                            format!("cargo run -p hashcheck -- {} {}", p.display(), self.custom_args.trim())
+                            match exec_type {
+                                ExecType::Binary => {
+                                    let mut s = String::new();
+                                    write!(
+                                        &mut s,
+                                        "{} {}",
+                                        tool.command.join(" "),
+                                        input_path_str
+                                    ).unwrap();
+                                    if !self.custom_args.trim().is_empty() {
+                                        s.push(' ');
+                                        s.push_str(self.custom_args.trim());
+                                    }
+                                    s
+                                }
+                                ExecType::Cargo => {
+                                    format!("cargo run -p hashcheck -- {} {}", input_path_str, self.custom_args.trim())
+                                }
+                            }
                         } else if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
                             let case_name = self.case_name.clone().unwrap_or_else(|| "unnamed_case".to_string());
                             let _output_dir = format!("saved_output/cases/{}/vol3", case_name);
@@ -1490,20 +1515,50 @@ impl App for AppState {
                             );
                             command_string
                         } else {
-                            let mut base = format!("cargo run -p {} --", tool.command[0]);
-                            if tool.command.len() > 1 {
-                                base.push(' ');
-                                base.push_str(&tool.command[1..].join(" "));
+                            match exec_type {
+                                ExecType::Binary => {
+                                    // Determine file position for input_path_str
+                                    let mut cmd_vec = tool.command.clone();
+                                    let mut file_pos = None;
+                                    if let Some(idx) = cmd_vec.iter().position(|s| s == "first") {
+                                        file_pos = Some(idx - 1);
+                                        cmd_vec.retain(|s| s != "first" && s != "last");
+                                    } else if let Some(_) = cmd_vec.iter().position(|s| s == "last") {
+                                        file_pos = Some(cmd_vec.len());
+                                        cmd_vec.retain(|s| s != "first" && s != "last");
+                                    } else if tool.input_type != "hash" {
+                                        file_pos = Some(1);
+                                    }
+                                    let mut arg_vec = cmd_vec.clone();
+                                    if let Some(idx) = file_pos {
+                                        if idx <= arg_vec.len() {
+                                            arg_vec.insert(idx, input_path_str.clone());
+                                        }
+                                    }
+                                    let mut s = arg_vec.join(" ");
+                                    if !self.custom_args.trim().is_empty() {
+                                        s.push(' ');
+                                        s.push_str(self.custom_args.trim());
+                                    }
+                                    s
+                                }
+                                ExecType::Cargo => {
+                                    let mut base = format!("cargo run -p {} --", tool.command[0]);
+                                    if tool.command.len() > 1 {
+                                        base.push(' ');
+                                        base.push_str(&tool.command[1..].join(" "));
+                                    }
+                                    if tool.input_type != "hash" {
+                                        base.push(' ');
+                                        base.push_str(&input_path_str);
+                                    }
+                                    if !self.custom_args.trim().is_empty() {
+                                        base.push(' ');
+                                        base.push_str(&self.custom_args.trim());
+                                    }
+                                    base
+                                }
                             }
-                            if tool.input_type != "hash" {
-                                base.push(' ');
-                                base.push_str(&p.display().to_string());
-                            }
-                            if !self.custom_args.trim().is_empty() {
-                                base.push(' ');
-                                base.push_str(&self.custom_args.trim());
-                            }
-                            base
                         };
                         ui.label(RichText::new(command_line).color(GREEN).strong());
                     }

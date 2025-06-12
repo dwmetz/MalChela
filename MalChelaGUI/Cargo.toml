@@ -31,6 +31,8 @@ common_config = { path = "../common_config" }
 zip = "4.0.0"
 dispatch = "0.2.0"
 
+
+
 [package.metadata.bundle]
 name = "MalChela"
 identifier = "com.bakerstreet.malchela"

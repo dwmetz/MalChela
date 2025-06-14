@@ -17,7 +17,16 @@ fn main() -> std::io::Result<()> {
     for entry in WalkDir::new(search_dir)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "yar"))
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext_str| {
+                    let ext = ext_str.to_ascii_lowercase();
+                    ext == "yar" || ext == "yara"
+                })
+                .unwrap_or(false)
+        })
     {
         let path = entry.path();
         let content = std::fs::read_to_string(path)?;

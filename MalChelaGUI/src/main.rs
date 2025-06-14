@@ -1129,12 +1129,27 @@ impl App for AppState {
                                     }
                                     if btn.clicked() {
                                         self.selected_tool = Some(tool.clone());
-                                        if tool.input_type != "hash" {
-                                            self.input_path = None;
-                                        }
                                         self.custom_args.clear();
                                         self.show_home = false;
                                         self.workspace.minimize();
+
+                                        // Reset all input paths and values based on input_type
+                                        match tool.input_type.as_str() {
+                                            "file" | "folder" => {
+                                                self.input_path = None;
+                                                self.scratchpad_path.clear();
+                                            }
+                                            "hash" => {
+                                                self.input_path = None;
+                                            }
+                                            _ => {}
+                                        }
+
+                                        // Clear fields that may carry over between tools
+                                        self.scratchpad_path.clear();
+                                        self.string_source_path.clear();
+                                        self.rule_name.clear();
+                                        self.author_name.clear();
                                     }
                                 }
                             }

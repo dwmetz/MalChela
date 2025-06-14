@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 walkdir = "2"
-which = "7.0.2"
+which = "7.0.3"

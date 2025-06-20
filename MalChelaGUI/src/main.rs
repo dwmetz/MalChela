@@ -644,14 +644,16 @@ impl AppState {
                         *arg = "--mismatch".to_string();
                     }
                 }
-                // Add -o, -t, -j, -m flags if enabled in GUI (as per instructions)
-                // These should be added after initial args vector is created, but before command is run.
-                // We only add if save_report.0 is true (i.e., saving report)
+                // Only add -o for save_report if tool supports output flag
+                // Use .contains("mzhash") to match mzhash/xmzhash and similar
+                let tool_id = command.get(0).cloned().unwrap_or_default();
+                if save_report.0
+                    && !tool_id.contains("mzhash")
+                    && tool_id != "strings_to_yara"
+                {
+                    args.push("-o".to_string());
+                }
                 if save_report.0 {
-                    // Only add -o for save_report if NOT mzhash/xmzhash
-                    if !command.get(0).map(|s| s == "mzhash" || s == "xmzhash").unwrap_or(false) {
-                        args.push("-o".to_string());
-                    }
                     match save_report.1.as_str() {
                         ".txt" => args.push("-t".to_string()),
                         ".json" => args.push("-j".to_string()),
@@ -678,7 +680,7 @@ impl AppState {
                     }
                     // Only pass overwrite flag if checkbox enabled in GUI
                     if allow_overwrite {
-                        args.push("-o".to_string());
+                        args.push("--overwrite".to_string());
                     }
                 } else if command.get(0).map(|s| s == "xmzhash").unwrap_or(false) {
                     for algo in &selected_algorithms {
@@ -686,7 +688,7 @@ impl AppState {
                         args.push(algo.to_string());
                     }
                     if allow_overwrite {
-                        args.push("-o".to_string());
+                        args.push("--overwrite".to_string());
                     }
                 }
                 args.extend(gui_mode_args.clone());
@@ -1660,11 +1662,12 @@ CentralPanel::default().show(ctx, |ui| {
                     egui::ScrollArea::vertical()
                         .stick_to_bottom(true)
                         .show(ui, |ui| {
-                            let output_lines = self.output_lines.lock().unwrap();
-                            let lines = output_lines.clone();
-                            for line in lines.iter() {
-                                ui.label(line);
+                            if let Ok(output_lines) = self.output_lines.lock() {
+                                for line in output_lines.iter() {
+                                    ui.label(line);
+                                }
                             }
+                            ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
                         });
                     return;
                 }

@@ -2,6 +2,15 @@
 
 **FileMiner** is a command-line tool that recursively scans a directory to analyze files by magic bytes and hash, identifying mismatches between file extensions and true types. It is useful for forensic triage, anomaly detection, and preparing follow-up analysis using other tools in the MalChela suite.
 
+![File Analyzer](../images/fileanalyzer.png)
+
+<p align="center"><strong>Figure 14:</strong> File Analyzer</p>
+
+![File Analyzer with Subtool Output](../images/fileanalyzer_with_subtool_output.png)
+
+<p align="center"><strong>Figure 15:</strong> File Analyzer with Subtool Output</p>
+
+
 ## Function Overview
 
 - Identifies file types using magic byte detection (`infer`)

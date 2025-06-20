@@ -2,7 +2,7 @@ MalHash queries malware intelligence sources using a provided hash. It checks Vi
 
 ![Malware Hash Lookup](../images/malhash.png)
 
-<p align="center"><strong>Figure 12:</strong> Malware Hash Lookup</p>
+<p align="center"><strong>Figure 18:</strong> Malware Hash Lookup</p>
 
 The first time you run MalHash, you’ll be prompted to [configure API keys](../configuration/api-configuration.md) for VirusTotal and MalwareBazaar if they’re not already set.
 

@@ -4,7 +4,7 @@ Hash lists should be in `.tsv` format (tab-separated values) for best compatibil
 
 ![HashCheck](../images/hashcheck.png)
 
-<p align="center"><strong>Figure 10:</strong> Hash Check</p>
+<p align="center"><strong>Figure 16:</strong> Hash Check</p>
 
 You can generate .tsv lookup files using [MZHash](mzhash.md) or [XMZHash](xmzhash.md).
 

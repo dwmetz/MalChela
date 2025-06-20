@@ -240,7 +240,7 @@ fn main() {
             (Box::new(file), Some((report_path, format.to_string())))
         }
     } else {
-        (Box::new(OpenOptions::new().write(true).open("/dev/null").unwrap()), None)
+        (Box::new(std::io::sink()), None)
     };
 
     write_both(&mut report_file, &mut stdout, &format!("HASH: {}", hash));

@@ -135,35 +135,35 @@ tools:
 # If you have YARA-X, Tshark, or Volatility3 installed and in your path,
 # Uncomment the entries below to enable special panels in MalChela
 # 
-- name: YARA-X
-  description: "Run YARA-X with custom rule and target file"
-  command: ["yr"]
-  input_type: file
-  file_position: "last"
-  category: "YARA Tools"
-  optional_args: []
-  exec_type: binary
-  cargo: false
-
-- name: TShark
-  description: "Analyze network traffic"
-  command: ["tshark"]
-  input_type: file
-  accepted_extensions: ["pcap", "pcapng"]
-  file_position: "last"
-  category: "Network Analysis"
-  optional_args: []
-  exec_type: binary
-
-- name: Volatility 3
-  description: "Memory analysis using Volatility 3"
-  command: ["/Users/dmetz/.local/bin/vol3"]
-  input_type: "file"
-  file_position: "first"
-  category: "Memory Forensics"
-  gui_mode_args: []
-  exec_type: binary
-
+# - name: YARA-X
+#   description: "Run YARA-X with custom rule and target file"
+#   command: ["yr"]
+#   input_type: file
+#   file_position: "last"
+#   category: "YARA Tools"
+#   optional_args: []
+#   exec_type: binary
+#   cargo: false
+# 
+# - name: TShark
+#   description: "Analyze network traffic"
+#   command: ["tshark"]
+#   input_type: file
+#   accepted_extensions: ["pcap", "pcapng"]
+#   file_position: "last"
+#   category: "Network Analysis"
+#   optional_args: []
+#   exec_type: binary
+# 
+# - name: Volatility 3
+#   description: "Memory analysis using Volatility 3"
+#   command: ["/Users/dmetz/.local/bin/vol3"]
+#   input_type: "file"
+#   file_position: "first"
+#   category: "Memory Forensics"
+#   gui_mode_args: []
+#   exec_type: binary
+# 
 # -------------------------------------
 # Example 3rd party integrations:
 # - name: capa

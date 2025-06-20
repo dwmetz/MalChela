@@ -250,6 +250,10 @@ fn main() {
             .index(1)
             .required(false)
             .help("Directory to scan"))
+        .arg(Arg::new("overwrite")
+            .long("overwrite")
+            .action(clap::ArgAction::SetTrue)
+            .help("Allow overwriting existing output files"))
         .get_matches();
 
     let input = matches.get_one::<String>("input").cloned();
@@ -292,7 +296,7 @@ fn main() {
         process::exit(1);
     }
 
-    eprintln!("MALCHELA_CASE: {:?}", std::env::var("MALCHELA_CASE"));
+
     let output_file_path = if let Some(case) = case {
         std::env::set_var("MALCHELA_CASE", &case);
         let mut path = std::path::PathBuf::from("saved_output");
@@ -307,7 +311,7 @@ fn main() {
     // output_file_path now points to the directory; do not append filename yet
 
     let mut allow_overwrite = std::env::var("MZHASH_ALLOW_OVERWRITE").ok().as_deref() == Some("1");
-    allow_overwrite = allow_overwrite || std::env::args().any(|arg| arg == "-o");
+    allow_overwrite = allow_overwrite || std::env::args().any(|arg| arg == "--overwrite");
 
     if output_file_path.join("MZSHA256.txt").exists() && !allow_overwrite {
         if std::env::var("MALCHELA_GUI_MODE").is_ok() {

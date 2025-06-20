@@ -1,8 +1,31 @@
+# tools.yaml - MalChela Tool Configuration File
+#
+# This file defines tools that will appear in the MalChela GUI.
+# Each tool block consists of:
+#   - name: Unique name used for display and reference
+#   - category: Category under which the tool appears in the GUI
+#   - command: The command to run (must be in PATH or relative to workspace)
+#   - input_type: One of "file", "folder", or "hash"
+#
+# To disable a tool without deleting it, simply comment out its block using "#".
+#
+# Example usage:
+#
+# - name: fileanalyzer
+#   description: "Extracts metadata, entropy, hashes, and YARA matches"
+#   category: "File Analysis"
+#   command: "fileanalyzer"
+#   input_type: "file"
+#
+# Tools can be written in any language and don’t need to be Rust-based,
+# as long as they are executable and accept input via stdin, env vars,
+# or CLI arguments as expected.
+#
+# This file is loaded once at startup. Any changes require restarting the GUI.
 
-edition: "Doug's Dev Edition"
+edition: " "
 
 tools:
-
 
 - name: "mStrings"
   description: "Extracts strings with IOC and MITRE mapping"
@@ -74,15 +97,6 @@ tools:
   category: "Threat Intel"
   exec_type: cargo
 
-- name: PCAP to CSV (.zip)
-  description: "Converts PCAP for processing in Magnet Axiom"
-  command: ["python3"]
-  input_type: "file"
-  file_position: "last"
-  category: "Utilities"
-  optional_args: ["scripts/tshark_to_csv.py"]
-  exec_type: script
-
 - name: Strings to YARA
   description: "Converts string sets into YARA rules"
   command: ["strings_to_yara"]
@@ -105,10 +119,22 @@ tools:
   exec_type: cargo
 
 # -------------------------------------
-# Example 3rd party integrations:
-# Below is a disabled example for capa
-# Uncomment to enable if capa is in your PATH
-
+# Example script in workspace integration:
+# This script is included in MalChela (requires Tshark)
+# - name: PCAP to CSV (.zip)
+#   description: "Converts PCAP for processing in Magnet Axiom"
+#   command: ["python3"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "Utilities"
+#   optional_args: ["scripts/tshark_to_csv.py"]
+#   exec_type: script
+# 
+# -------------------------------------
+# Special Tools Integrations:
+# If you have YARA-X, Tshark, or Volatility3 installed and in your path,
+# Uncomment the entries below to enable special panels in MalChela
+# 
 - name: YARA-X
   description: "Run YARA-X with custom rule and target file"
   command: ["yr"]
@@ -117,6 +143,7 @@ tools:
   category: "YARA Tools"
   optional_args: []
   exec_type: binary
+  cargo: false
 
 - name: TShark
   description: "Analyze network traffic"
@@ -137,4 +164,33 @@ tools:
   gui_mode_args: []
   exec_type: binary
 
-
+# -------------------------------------
+# Example 3rd party integrations:
+# - name: capa
+#   description: "Detects capabilities in binaries via rules"
+#   command: ["capa"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "File Analysis"
+#   optional_args: []
+#   exec_type: binary
+# 
+# - name: exiftool
+#   description: "Displays metadata for various file types"
+#   command: ["exiftool"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "Metadata Analysis"
+#   optional_args: []
+#   exec_type: binary
+# 
+# - name: pdf-parser
+#   description: "Parses and analyzes suspicious PDF structures"
+#   command: ["python3"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "PDF Analysis"
+#   optional_args: ["/Users/dmetz/Tools/pdfparser/pdf-parser.py"]
+#   exec_type: script
+# 
+#  ** Note: See User Guide for Python requirements

@@ -27,6 +27,7 @@ nav:
   - Configuration:
       - tools.yaml: configuration/tools-yaml.md
       - api configuration: configuration/api-configuration.md
+  - Case Management: cases.md
   - Core Tools:
       - Overview: coretools/index.md
       - Usage: coretools/usage.md

@@ -18,7 +18,7 @@ pub struct Vol3Plugin {
     pub args: Vec<Vol3Arg>,
     pub description: Option<String>,
 }
-
+#[derive(Clone)]
 pub struct Vol3Panel {
     pub selected_plugin: Option<String>,
     pub custom_plugin_name: String,

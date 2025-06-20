@@ -211,6 +211,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .num_args(1)
                 .help("Optional case name to group output"),
         )
+        .arg(
+            Arg::new("output-file")
+                .long("output-file")
+                .num_args(1)
+                .help("Custom output file name (used with --output)"),
+        )
         .get_matches();
 
     let file_path = match matches.get_one::<String>("file").map(String::as_str) {
@@ -355,10 +361,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
     if save_output {
-        let output_dir = if let Some(case_name) = matches.get_one::<String>("case") {
-            std::path::Path::new("saved_output").join("cases").join(case_name).join("mstrings")
-        } else {
-            get_output_dir("mstrings")
+        let output_dir = match matches.get_one::<String>("case") {
+            Some(case_name) => get_output_dir("cases").join(case_name).join("mstrings"),
+            None => get_output_dir("mstrings"),
         };
         std::fs::create_dir_all(&output_dir)?;
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
@@ -377,6 +382,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Output was not saved.");
             return Ok(());
         };
+
+        let custom_name = matches.get_one::<String>("output-file").map(|s| s.as_str());
 
         // Build the report content (reuse printed table and IOCs)
         let mut report_buffer = String::new();
@@ -438,19 +445,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match format {
             "txt" => {
-                let text_path = output_dir.join(format!("report_{}.txt", timestamp));
+                let text_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.txt", timestamp)));
+                if let Some(parent) = text_path.parent() {
+                    std::fs::create_dir_all(parent).expect("Failed to create output directory");
+                }
                 let mut file = File::create(&text_path).expect("Failed to save text report");
                 file.write_all(report_buffer.as_bytes()).expect("Failed to write report");
                 println!("\n{}", format!("Text report saved to: {}", text_path.display()).green());
             }
             "md" => {
-                let md_path = output_dir.join(format!("report_{}.md", timestamp));
+                let md_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.md", timestamp)));
+                if let Some(parent) = md_path.parent() {
+                    std::fs::create_dir_all(parent).expect("Failed to create output directory");
+                }
                 let mut file = File::create(&md_path).expect("Failed to save markdown report");
                 file.write_all(report_buffer.as_bytes()).expect("Failed to write report");
                 println!("\n{}", format!("Markdown report saved to: {}", md_path.display()).green());
             }
             _ => {
-                let json_path = output_dir.join(format!("report_{}.json", timestamp));
+                let json_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.json", timestamp)));
+                if let Some(parent) = json_path.parent() {
+                    std::fs::create_dir_all(parent).expect("Failed to create output directory");
+                }
                 let mut file = File::create(&json_path).expect("Failed to create JSON report file");
                 let matched_only: Vec<_> = mstrings.matches.iter().filter(|m| m.rule_name.is_some()).collect();
                 let json = serde_json::to_string_pretty(&serde_json::json!({

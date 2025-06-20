@@ -1,9 +1,11 @@
+use eframe::egui;
+use walkdir::WalkDir;
+use crate::AppState;
 use crate::egui::ComboBox;
 
 
 use sha2::{Sha256, Digest};
 use std::fs;
-use walkdir::WalkDir;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -110,7 +112,7 @@ impl WorkspacePanel {
 
     pub fn render_scrollable_content(&mut self, ui: &mut Ui) {
         if self.preview_contents.is_empty() {
-            // println!("⚠️ Preview contents is empty at render start");
+            // (debug output removed)
         }
         if let Some(t) = self.save_status_timestamp {
             if t.elapsed().as_secs() > 3 {
@@ -207,7 +209,13 @@ impl WorkspacePanel {
                         }
                     }
                     ui.add_space(8.0);
-                    // 6. "➖ Minimize"
+                    // 6. "❌ Exit Case"
+                    if ui.button(button_text("❌ Exit Case")).clicked() {
+                        self.save_case_metadata();
+                        self.reset();
+                    }
+                    ui.add_space(8.0);
+                    // 7. "➖ Minimize"
                     if ui.button(button_text("➖ Minimize")).clicked() {
                         self.minimized = true;
                     }
@@ -244,8 +252,8 @@ impl WorkspacePanel {
                         ui.label(RichText::new(hash).color(STONE_BEIGE));
                     });
                 }
-                // Insert suggested tools block here
-                if !self.suggested_tools.is_empty() {
+                // Insert suggested tools block here (only for file-based cases)
+                if self.input_type.as_deref() == Some("file") && !self.suggested_tools.is_empty() {
                     use crate::egui::{CollapsingHeader, Color32};
                     ui.separator();
                     CollapsingHeader::new(RichText::new("🔎 Suggested Tools:").strong().size(16.0).color(OXIDE_ORANGE))
@@ -501,7 +509,7 @@ impl WorkspacePanel {
                                                 }
                                             }
 
-                                            println!("🔍 Preview loaded for {}:\n{}", file.display(), self.preview_contents);
+
                                         }
                                     } else {
                                         ui.label(RichText::new(label_text).color(Color32::from_rgb(144, 238, 144)));
@@ -560,6 +568,9 @@ impl WorkspacePanel {
             // Right panel: Command output and reports
             self.render_output_and_reports_panel(&mut right[0]);
         });
+        // Show launch_status (not update_status) from AppState, if present
+        // (Assuming app_state is available in this scope; otherwise, this is a placeholder for where you would call it)
+        // render_status_message(ui, &app_state.launch_status);
         if self.show_notes_modal {
             // Avoid double mutable borrow by copying state into a local variable
             let mut show = self.show_notes_modal;
@@ -615,7 +626,6 @@ impl WorkspacePanel {
                 self.save_status = Some(format!("✅ Case metadata saved to: {}", metadata_path.display()));
                 self.save_status_timestamp = Some(std::time::Instant::now());
                 self.notes_save_confirmed = Some(std::time::Instant::now());
-                // println!("✅ Case metadata saved to: {}", metadata_path.display());
             }
         }
     }
@@ -645,7 +655,7 @@ impl WorkspacePanel {
                     }
                     self.save_status = Some(format!("📂 Loaded case from: {}", path.display()));
                     self.save_status_timestamp = Some(std::time::Instant::now());
-                    // println!("📂 Loaded case from: {}", path.display());
+                    // (debug output removed)
 
                     self.refresh_case_reports();
                     // Auto-tag known external tools based on folder presence
@@ -662,56 +672,57 @@ impl WorkspacePanel {
                 Err(e) => {
                     self.save_status = Some(format!("❌ Failed to parse case.json: {}", e));
                     self.save_status_timestamp = Some(std::time::Instant::now());
-                    eprintln!("❌ Failed to parse case.json: {}", e);
+                    // debug error output removed
                 }
             },
             Err(e) => {
                 self.save_status = Some(format!("❌ Failed to read case.json: {}", e));
                 self.save_status_timestamp = Some(std::time::Instant::now());
-                eprintln!("❌ Failed to read case.json: {}", e);
+                // debug error output removed
             }
         }
     }
     pub fn refresh_case_reports(&mut self) {
+        use std::collections::BTreeMap;
         self.case_reports.clear();
         self.has_misc_files = false;
-        if let Some(name) = &self.active_case_name {
-            let case_root = std::env::current_dir()
+        if let Some(case_name) = &self.active_case_name {
+            let case_path = std::env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
                 .join("saved_output")
                 .join("cases")
-                .join(name);
+                .join(case_name);
 
-            if let Ok(entries) = std::fs::read_dir(&case_root) {
-                for entry in entries.flatten() {
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.is_dir() {
-                            let tool_name = entry.file_name().to_string_lossy().into_owned();
-                            let mut files = Vec::new();
-                            for walk_entry in WalkDir::new(entry.path())
-                                .into_iter()
-                                .filter_map(Result::ok)
-                                .filter(|e| e.file_type().is_file())
-                            {
-                                files.push(walk_entry.into_path());
-                            }
-                            if !files.is_empty() {
-                                self.case_reports.insert(tool_name, files);
-                            }
-                        } else if metadata.is_file() {
-                            let file_path = entry.path();
-                            if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
-                                if name != ".DS_Store" && name != "case.json" {
-                                    self.case_reports
-                                        .entry("misc".to_string())
-                                        .or_default()
-                                        .push(file_path.clone());
-                                    self.has_misc_files = true;
+            if case_path.exists() && case_path.is_dir() {
+                let mut tool_files: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+                for entry in WalkDir::new(&case_path).into_iter().filter_map(Result::ok) {
+                    let path = entry.path();
+                    if path.is_file() {
+                        // Determine which tool (or misc) this file belongs to
+                        if let Ok(rel_path) = path.strip_prefix(&case_path) {
+                            let components: Vec<_> = rel_path.components().collect();
+                            if components.len() >= 2 {
+                                // e.g., tool_name/filename or tool_name/subdir/file
+                                if let Some(tool_osstr) = components[0].as_os_str().to_str() {
+                                    let tool_name = tool_osstr.to_string();
+                                    // Ignore tracking folder
+                                    if tool_name != "tracking" {
+                                        tool_files.entry(tool_name).or_default().push(path.to_path_buf());
+                                    }
+                                }
+                            } else if components.len() == 1 {
+                                // File directly in case_path (misc)
+                                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                    if name != ".DS_Store" && name != "case.json" {
+                                        tool_files.entry("misc".to_string()).or_default().push(path.to_path_buf());
+                                        self.has_misc_files = true;
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                self.case_reports = tool_files;
             }
         }
     }
@@ -754,6 +765,13 @@ impl WorkspacePanel {
             self.tool_output_formats.insert(tool.clone(), "txt".to_string());
         }
         self.new_tag = String::new();
+        // Reset FileMinerPanel state if present as fields in this struct
+        #[allow(unused)]
+        {
+            // If FileMinerPanel fields are named visible and scan_path:
+            self.is_visible = false;
+ 
+        }
     }
 
 
@@ -820,5 +838,11 @@ impl WorkspacePanel {
     pub fn render_output_and_reports_panel(&mut self, _ui: &mut Ui) {
         // Implementation for the right panel would go here.
         // For now, nothing is rendered.
+    }
+}
+/// Render update check status, if present in AppState.
+pub fn render_update_check(ui: &mut egui::Ui, state: &mut AppState) {
+    if let Some(update_status) = &state.update_status {
+        ui.label(update_status.clone());
     }
 }

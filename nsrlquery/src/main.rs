@@ -64,6 +64,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .value_name("CASE")
                 .help("Specify case name"),
         )
+        .arg(
+            Arg::new("output-file")
+                .long("output-file")
+                .value_name("FILENAME")
+                .help("Specify output file name (without extension)"),
+        )
         .get_matches_from(args);
 
     let mut hash = matches.get_one::<String>("hash").cloned();
@@ -94,6 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let output_format = output_format.unwrap_or(OutputFormat::Text);
     let case_name = matches.get_one::<String>("case");
+    let output_filename = matches.get_one::<String>("output-file");
 
     if is_gui_mode() {
         println!("\n{}", styled_line("NOTE", "Results from CIRCL Hash Lookup:"));
@@ -284,13 +291,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 OutputFormat::Json => "json",
                 OutputFormat::Markdown => "md",
             };
-            let output_dir = if let Some(case) = case_name {
-                get_output_dir(&format!("cases/{}/nsrlquery", case))
+            let (base_output_dir, base_filename) = if let Some(case) = case_name {
+                (
+                    get_output_dir("cases").join(case).join("nsrlquery"),
+                    format!("report_{}", chrono::Local::now().format("%Y%m%d_%H%M%S")),
+                )
             } else {
-                std::env::current_dir()?.join("saved_output/nsrlquery")
+                (
+                    get_output_dir("nsrlquery"),
+                    format!("report_{}", chrono::Local::now().format("%Y%m%d_%H%M%S")),
+                )
             };
-            fs::create_dir_all(&output_dir)?;
-            let output_path = output_dir.join(format!("report_{}.{}", hash, ext));
+            let output_path = if let Some(name) = output_filename {
+                let output_path = {
+                    let sanitized = name.trim_end_matches(&format!(".{}", ext)).to_string();
+                    let corrected = if sanitized.ends_with(ext) {
+                        sanitized
+                    } else {
+                        format!("{}.{}", sanitized, ext)
+                    };
+                    base_output_dir.join(corrected)
+                };
+                output_path
+            } else {
+                base_output_dir.join(format!("{}.{}", base_filename, ext))
+            };
+            std::fs::create_dir_all(&base_output_dir)?;
             match output_format {
                 OutputFormat::Text | OutputFormat::Markdown => {
                     fs::write(&output_path, &report)?;
@@ -343,13 +369,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 OutputFormat::Json => "json",
                 OutputFormat::Markdown => "md",
             };
-            let output_dir = if let Some(case) = case_name {
-                get_output_dir(&format!("cases/{}/nsrlquery", case))
+            let (base_output_dir, base_filename) = if let Some(case) = case_name {
+                (
+                    get_output_dir("cases").join(case).join("nsrlquery"),
+                    format!("report_{}", chrono::Local::now().format("%Y%m%d_%H%M%S")),
+                )
             } else {
-                std::env::current_dir()?.join("saved_output/nsrlquery")
+                (
+                    get_output_dir("nsrlquery"),
+                    format!("report_{}", chrono::Local::now().format("%Y%m%d_%H%M%S")),
+                )
             };
-            fs::create_dir_all(&output_dir)?;
-            let output_path = output_dir.join(format!("report_{}.{}", hash, ext));
+            let output_path = if let Some(name) = output_filename {
+                let output_path = {
+                    let sanitized = name.trim_end_matches(&format!(".{}", ext)).to_string();
+                    let corrected = if sanitized.ends_with(ext) {
+                        sanitized
+                    } else {
+                        format!("{}.{}", sanitized, ext)
+                    };
+                    base_output_dir.join(corrected)
+                };
+                output_path
+            } else {
+                base_output_dir.join(format!("{}.{}", base_filename, ext))
+            };
+            std::fs::create_dir_all(&base_output_dir)?;
             match output_format {
                 OutputFormat::Text | OutputFormat::Markdown => {
                     fs::write(&output_path, &report)?;

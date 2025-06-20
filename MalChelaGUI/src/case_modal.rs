@@ -1,9 +1,15 @@
-
 use eframe::egui::{Context, Ui, Window, Grid, RichText, Align2, ScrollArea, Button, Color32, Vec2, TextEdit};
 use std::sync::{Arc, Mutex};
 
+use crate::AppState;
+use crate::ActivePanel;
+use crate::InputType;
 
+
+
+#[derive(Clone)]
 pub struct CaseModal {
+    pub show_modal: bool,
     pub visible: bool,
     pub search_query: String,
     pub search_results: Vec<std::path::PathBuf>,
@@ -14,12 +20,14 @@ pub struct CaseModal {
     pub new_case_input_path: Option<std::path::PathBuf>,
     pub selected_case_name: Arc<Mutex<Option<String>>>,
     pub status_message: Option<String>,
-
+    pub archive_status_timestamp: Option<std::time::Instant>,
+    pub archive_status: Arc<Mutex<String>>,
 }
 
 impl Default for CaseModal {
     fn default() -> Self {
         Self {
+            show_modal: false,
             visible: false,
             search_query: String::new(),
             search_results: vec![],
@@ -30,6 +38,8 @@ impl Default for CaseModal {
             new_case_input_path: None,
             selected_case_name: Arc::new(Mutex::new(None)),
             status_message: None,
+            archive_status_timestamp: None,
+            archive_status: Arc::new(Mutex::new(String::new())),
         }
     }
 }
@@ -192,8 +202,8 @@ impl CaseModal {
                         static ARCHIVE_IN_PROGRESS: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
                     }
                     // Use Arc<Mutex<String>> for status
-                    // Declare it outside so it's only created once per function call
-                    let archive_status = Arc::new(Mutex::new(String::new()));
+                    // Use the struct field for archive_status
+                    let archive_status = self.archive_status.clone();
 
                     if ui.add(Button::new(RichText::new("Browse").color(Color32::BLACK)).fill(crate::RUST_ORANGE)).clicked() {
                         SHOW_ARCHIVE_MODAL.with(|v| *v.borrow_mut() = true);
@@ -245,6 +255,8 @@ impl CaseModal {
                                                 *status = "⏳ Preparing to archive...".to_string();
                                                 ctx.request_repaint();
                                             }
+                                            // Set the timestamp for the status message
+                                            self.archive_status_timestamp = Some(std::time::Instant::now());
                                             let ctx = ctx.clone();
                                             let archive_status_clone = archive_status_clone.clone();
                                             // Move archive logic into a background thread for responsiveness
@@ -264,7 +276,6 @@ impl CaseModal {
 
                                                         // Ensure the archive directory exists
                                                         if let Err(e) = std::fs::create_dir_all("saved_output/archives") {
-                                                            println!("❌ Failed to create archive directory: {}", e);
                                                             {
                                                                 let mut status = archive_status_clone.lock().unwrap();
                                                                 *status = format!("❌ Failed to create archive directory: {}", e);
@@ -314,7 +325,6 @@ impl CaseModal {
                                                                         // Do not auto-close the archive modal; let user close manually
                                                                     }
                                                                     Err(e) => {
-                                                                        println!("❌ Failed to finalize archive: {}", e);
                                                                         {
                                                                             let mut status = archive_status_clone.lock().unwrap();
                                                                             *status = format!("❌ Failed to finalize archive: {}", e);
@@ -324,7 +334,6 @@ impl CaseModal {
                                                                 }
                                                             }
                                                             Err(e) => {
-                                                                println!("❌ Failed to create archive file: {}", e);
                                                                 {
                                                                     let mut status = archive_status_clone.lock().unwrap();
                                                                     *status = format!("❌ Failed to create archive file: {}", e);
@@ -333,7 +342,6 @@ impl CaseModal {
                                                             }
                                                         }
                                                     } else {
-                                                        println!("⚠️ No case selected for archiving.");
                                                         {
                                                             let mut status = archive_status_clone.lock().unwrap();
                                                             *status = "⚠️ No case selected for archiving.".to_string();
@@ -350,17 +358,19 @@ impl CaseModal {
                                         //     SHOW_ARCHIVE_MODAL = false;
                                         // }
                                     });
-                                    // Show status message only after Archive is clicked or while in progress,
-                                    // and always show the latest archive_status
-                                    {
-                                        let mut working = false;
-                                        ARCHIVE_IN_PROGRESS.with(|v| working = *v.borrow());
-                                        if let Ok(status) = archive_status.lock() {
-                                            if working || !status.is_empty() {
-                                                ui.add_space(8.0);
-                                                ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                                                    ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
-                                                });
+                                    // Show the archive_status if not empty, and clear after 5 seconds
+                                    if let Ok(mut status) = self.archive_status.lock() {
+                                        if !status.is_empty() {
+                                            ui.add_space(8.0);
+                                            ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+                                                ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
+                                            });
+
+                                            if let Some(start) = self.archive_status_timestamp {
+                                                if std::time::Instant::now().duration_since(start).as_secs() >= 3 {
+                                                    *status = String::new();
+                                                    self.archive_status_timestamp = None;
+                                                }
                                             }
                                         }
                                     }
@@ -379,16 +389,16 @@ impl CaseModal {
                         {
                             let file = match std::fs::File::open(&zip_path) {
                                 Ok(f) => f,
-                                Err(e) => {
-                                    println!("❌ Failed to open zip file: {}", e);
+                                Err(_e) => {
+                                    // println!("❌ Failed to open zip file: {}", e);
                                     return;
                                 }
                             };
 
                             let mut archive = match zip::ZipArchive::new(file) {
                                 Ok(a) => a,
-                                Err(e) => {
-                                    println!("❌ Failed to read zip archive: {}", e);
+                                Err(_e) => {
+                                    // println!("❌ Failed to read zip archive: {}", e);
                                     return;
                                 }
                             };
@@ -408,11 +418,25 @@ impl CaseModal {
                                 return;
                             }
 
+                            // Use just the base name (case name) for restore folder, not timestamped
                             let file_stem = zip_path.file_stem().and_then(|s| s.to_str()).unwrap_or("restored_case");
-                            let restore_path = std::path::Path::new("saved_output/cases").join(file_stem);
+                            let base_name = file_stem
+                                .split('_')
+                                .next()
+                                .unwrap_or(file_stem);
+                            let restore_path = std::path::Path::new("saved_output/cases").join(base_name);
 
-                            if let Err(e) = std::fs::create_dir_all(&restore_path) {
-                                println!("❌ Failed to create restore directory: {}", e);
+                            // If restore_path exists, remove it (overwrite)
+                            if restore_path.exists() {
+                                if let Err(e) = std::fs::remove_dir_all(&restore_path) {
+                                    // println!("❌ Failed to remove existing restore directory: {}", e);
+                                    self.status_message = Some(format!("❌ Failed to remove existing case directory: {}", e));
+                                    return;
+                                }
+                            }
+
+                            if let Err(_e) = std::fs::create_dir_all(&restore_path) {
+                                // println!("❌ Failed to create restore directory: {}", e);
                                 return;
                             }
 
@@ -442,6 +466,7 @@ impl CaseModal {
                                 app_state.workspace.load_case_metadata(case_json_path);
                                 app_state.workspace.is_visible = true;
                                 app_state.workspace.minimized = false;
+                                app_state.current_panel = crate::ActivePanel::Workspace;
                                 self.visible = false;
                             } else {
                                 self.status_message = Some("❌ Restored zip did not contain a valid case.json.".to_string());
@@ -537,12 +562,24 @@ impl CaseModal {
                         }
                     });
 
+                    // Adapt Browse button and dialog to input type
                     ui.horizontal(|ui| {
-                        if ui.button("Browse File").clicked() {
-                            if let Some(path) = rfd::FileDialog::new().pick_file() {
+                        let browse_label = if self.new_case_input_type == "folder" {
+                            "Browse Folder"
+                        } else {
+                            "Browse File"
+                        };
+                        if ui.button(browse_label).clicked() {
+                            let picked = if self.new_case_input_type == "folder" {
+                                rfd::FileDialog::new().pick_folder()
+                            } else {
+                                rfd::FileDialog::new().pick_file()
+                            };
+                            if let Some(path) = picked {
                                 self.new_case_input_path = Some(path);
                             }
                         }
+
                         if let Some(p) = &self.new_case_input_path {
                             let full_path = p.display().to_string();
                             let max_chars = 60;
@@ -558,11 +595,50 @@ impl CaseModal {
                     ui.horizontal(|ui| {
                         if ui.button("Start Case").clicked() {
                             if let Some(path) = &self.new_case_input_path {
-                                app_state.workspace.new_case(path.clone(), self.new_case_name.clone(), self.new_case_input_type.clone());
-                                self.visible = false;
+                                // Always resolve the correct case name to assign to app_state.case_name
+                                let case_name = self.new_case_name.clone();
+                                app_state.workspace.new_case(
+                                    path.clone(),
+                                    case_name.clone(),
+                                    self.new_case_input_type.clone(),
+                                );
+
+                                // Update app_state.case_name with the new case name
+                                app_state.case_name = Some(case_name.clone());
+
+                                if self.new_case_input_type == "folder" {
+                                    // The metadata field was removed; check for input_path instead if needed
+                                    if app_state.workspace.input_path.is_some() {
+                                        app_state.workspace.save_case_metadata();
+                                    }
+
+                                    app_state.current_panel = ActivePanel::FileMiner;
+                                    app_state.input_type = InputType::Folder;
+                                    app_state.workspace.is_visible = true;
+                                    app_state.workspace.minimized = true;
+
+                                    app_state.workspace.minimized = true;
+                                    app_state.fileminer_panel.visible = true;
+                                    app_state.fileminer_panel.input_dir = path.display().to_string();
+                                app_state.fileminer_panel.save_report = true;
+                                app_state.fileminer_panel.run_fileminer_scan_and_save(app_state.case_name.as_ref().unwrap());
+                                // Set last_scan_timestamp right after scan and save
+                                app_state.fileminer_panel.last_scan_timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                                    app_state.fileminer_panel.is_minimized = false;
+                                    app_state.case_modal.visible = false;
+                                } else {
+                                    app_state.workspace.minimized = false;
+                                    app_state.workspace.is_visible = true;
+                                    app_state.current_panel = ActivePanel::Workspace;
+                                    app_state.fileminer_panel.visible = true;
+                                    app_state.case_modal.visible = false;
+                                }
+
                                 self.new_case_visible = false;
+                                self.visible = false;
                             }
                         }
+
                         if ui.button("Cancel").clicked() {
                             self.new_case_visible = false;
                         }
@@ -572,7 +648,7 @@ impl CaseModal {
     }
 }
 
-use crate::AppState;
+// use crate::AppState;  // (Removed duplicate import)
 
 pub fn show_case_modal(ctx: &Context, app_state: &mut AppState) {
     let (case_modal_ptr, app_state_ptr): (*mut CaseModal, *mut AppState) = (

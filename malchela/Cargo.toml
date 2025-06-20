@@ -1,13 +1,13 @@
 [package]
 name = "malchela"
-version = "2.2.1"
+version = "3.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 prettytable-rs = "0.10.0" # Or the latest version
-colored = "2.0" # Or the latest version
+colored = "2.2" # Or the latest version
 dialoguer = "0.11"
 console = "0.15"
 serde = { version = "1.0", features = ["derive"] }

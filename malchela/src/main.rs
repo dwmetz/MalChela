@@ -5,9 +5,10 @@ use std::path::PathBuf;
 use std::fs;
 
 use colored::*;
-use dialoguer::Select;
 use rand::seq::SliceRandom;
 use serde::Deserialize;
+
+use crate::menu::{generate_tool_menu};
 
 #[derive(Debug, Deserialize)]
 struct Koans {
@@ -23,7 +24,6 @@ fn load_random_koan() -> String {
 }
 
 mod theme;
-use theme::NoPrefixTheme;
 mod menu;
 
 fn find_workspace_root() -> io::Result<PathBuf> {
@@ -122,14 +122,8 @@ fn print_banner() {
     println!("{}", crab_art.red());
     println!("        {}", "    https://bakerstreetforensics.com".truecolor(110, 130, 140));
     println!();
-    println!("        {}", "MalChela - YARA & Malware Analysis Toolkit".yellow());
+    println!("        {}", "     MalChela Analysis Toolkit v3.0".yellow());
     println!();
-}
-
-enum MenuAction {
-    Launch(Vec<String>),
-    Exit,
-    None,
 }
 
 fn main() {
@@ -141,81 +135,81 @@ fn main() {
 
     pause();
 
-    let groups: Vec<(String, Vec<(String, Vec<String>)>)> = menu::grouped_menu()
-        .into_iter()
-        .map(|(group, items)| {
-            (
-                group.to_string(),
-                items
-                    .into_iter()
-                    .map(|(label, args)| {
-                        (label.to_string(), args.into_iter().map(|s| s.to_string()).collect())
-                    })
-                    .collect(),
-            )
-        })
-        .collect();
-
-    let mut menu_labels = vec![];
-    let mut menu_actions = vec![];
-
-    for (group, tools) in &groups {
-        menu_labels.push(format!(
-            "{}  {}",
-            match group.as_str() {
-                "File Analysis" => "⚠",
-                "String Analysis" => "§",
-                "Hashing Tools" => "⌗",
-                "YARA Tools" => "☠",
-                "Threat Intel" => "☢",
-                "Utilities" => "⚙",
-                _ => "•",
-            },
-            group
-        ).green());
-        menu_actions.push(MenuAction::None);
-
-        for (label, command) in tools {
-            menu_labels.push(format!("• {}", label).cyan());
-            menu_actions.push(MenuAction::Launch(command.clone()));
-        }
-    }
-
-    menu_labels.push("⏻  Exit".green());
-    menu_actions.push(MenuAction::Exit);
-
-    let theme = NoPrefixTheme;
+    let tool_menu = generate_tool_menu();
 
     loop {
         clear_screen();
         print_banner();
 
-        let selection = Select::with_theme(&theme)
-            .with_prompt("    Choose a tool:")
-            .items(&menu_labels)
-            .default(0)
-            .interact_opt()
-            .unwrap();
+        println!("  {}", "Available Tools:".cyan());
+        let formatted_tools: Vec<String> = tool_menu
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| format!("  {}", format!("[{}] {} ({})", i + 1, entry.display_name, entry.shortcode).cyan()))
+            .collect();
 
-        if let Some(index) = selection {
-            match &menu_actions[index] {
-                MenuAction::Launch(command) => {
-                    println!("{}", format!("Launching: {}", command.join(" ")).cyan());
-                    let _ = Command::new("cargo")
-                        .args(command.iter())
-                        .spawn()
-                        .unwrap()
-                        .wait();
-                    pause();
-                }
-                MenuAction::Exit => {
-                    println!("{}", "Exiting...".yellow());
-                    break;
-                }
-                MenuAction::None => {}
+        let max_width = formatted_tools
+            .iter()
+            .take((formatted_tools.len() + 1) / 2)
+            .map(|s| s.len())
+            .max()
+            .unwrap_or(0) + 4;
+
+        let half = (formatted_tools.len() + 1) / 2;
+        for i in 0..half {
+            let left = &formatted_tools[i];
+            let right = formatted_tools.get(i + half);
+            match right {
+                Some(r) => println!("{:<width$}{}", left, r, width = max_width),
+                None => println!("{}", left),
+            }
+        }
+        println!("\n{}", "[0] Exit".cyan());
+
+        print!("\n{} ", "Select a tool by number or shortcode:".cyan());
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).is_err() {
+            println!("{}", "Failed to read input.".red());
+            continue;
+        }
+
+        let input = input.trim();
+
+        if input == "0" || input.eq_ignore_ascii_case("exit") {
+            println!("{}", "Exiting...".yellow());
+            break;
+        }
+
+        let selected = if let Ok(num) = input.parse::<usize>() {
+            if num == 0 || num > tool_menu.len() {
+                None
+            } else {
+                Some(&tool_menu[num - 1])
             }
         } else {
-            break;
+            tool_menu.iter().find(|entry| entry.shortcode.eq_ignore_ascii_case(input))
+        };
+
+        if let Some(entry) = selected {
+            println!("{}", format!("Launching: {}", entry.display_name).cyan());
+            let child = Command::new("cargo")
+                .args(&entry.command_args)
+                .spawn();
+
+            match child {
+                Ok(mut child_proc) => {
+                    let _ = child_proc.wait();
+                }
+                Err(e) => {
+                    eprintln!("{}", format!("Failed to launch command: {}", e).red());
+                }
+            }
+            pause();
+        } else {
+            println!("{}", "Invalid selection, please try again.".red());
+            pause();
         }
     }
 }

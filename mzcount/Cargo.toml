@@ -1,6 +1,6 @@
 [package]
 name = "mzcount"
-version = "2.2.1"
+version = "3.0.0"
 edition = "2021"
 
 [dependencies]
@@ -11,4 +11,4 @@ yara-sys = "0.29.0"
 colored = "2" #Or newer
 atty = "0.2.14"
 chrono = "0.4.41"
-clap = "4.5.39"
+clap = "4.5.40"

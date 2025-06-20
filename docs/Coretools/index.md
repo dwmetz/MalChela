@@ -1,11 +1,11 @@
 
 ![MalChela GUI](../images/malchela_screenshot.png)
 
-<p align="center"><strong>Figure 5:</strong> MalChela GUI</p>
+<p align="center"><strong>Figure 9:</strong> MalChela GUI</p>
 
 ![MalChela CLI](../images/malchela_cli_screenshot.png)
 
-<p align="center"><strong>Figure 6:</strong> MalChela CLI</p>
+<p align="center"><strong>Figure 10:</strong> MalChela CLI</p>
 
 <h2 style="text-align: center;">MalChela Core Tools</h2>
 <p style="text-align: center;">
@@ -23,9 +23,9 @@
     <tr><td>Combine YARA</td><td>Point it at a directory of YARA files and it will output one combined rule</td></tr>
     <tr><td>Extract Samples</td><td>Point it at a directory of password protected malware files to extract all</td></tr>
     <tr><td>File Analyzer</td><td>Get the hash, entropy, packing, PE info, YARA and VT match status for a file</td></tr>
+    <tr><td>File Miner</td><td>Scans a folder for file type mismatches and metadata, and provides suggested tools</td></tr>
     <tr><td>Hash Check</td><td>Check a hash against a .txt or .tsv lookup table</td></tr>
     <tr><td>Hash It</td><td>Point it to a file and get the MD5, SHA1 and SHA256 hash</td></tr>
-    <tr><td>Mismatch Miner</td><td>Hunts for exes disguised as other formats</td></tr>
     <tr><td>mStrings</td><td>Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex</td></tr>
     <tr><td>MZHash</td><td>Recurse a directory, for files with MZ header, create hash list and lookup table</td></tr>
     <tr><td>MZcount</td><td>Recurse a directory, uses YARA to count MZ, Zip, PDF, other</td></tr>

@@ -2,11 +2,11 @@ MZcount recursively scans a directory and counts the number of files that match 
 
 ![MZCount Table View](../images/mzcount_table.png)
 
-<p align="center"><strong>Figure 15:</strong> MZCount Table View</p>
+<p align="center"><strong>Figure 20:</strong> MZCount Table View</p>
 
 ![MZCount Detail View](../images/mzcount_detail.png)
 
-<p align="center"><strong>Figure 16:</strong> MZCount Detail View</p>
+<p align="center"><strong>Figure 21:</strong> MZCount Detail View</p>
 
 
 

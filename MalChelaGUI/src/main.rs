@@ -1,9 +1,11 @@
 mod tshark_panel;
 mod case_modal;
+mod fileminer;
 use case_modal::CaseModal;
 // use crate::case_modal::NewCaseModal;
 use crate::case_modal::show_case_modal;
 use tshark_panel::TsharkPanel;
+use fileminer::{FileMinerPanel};
 mod vol3_panel;
 use vol3_panel::{Vol3Panel, Vol3Plugin};
 use egui::TextureOptions;
@@ -11,20 +13,18 @@ use serde::Deserialize;
 mod workspace;
 use workspace::WorkspacePanel;
 use eframe::{
-    egui::{self, CentralPanel, Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Visuals},
+    egui::{self, CentralPanel, Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Visuals, Vec2},
     App,
 };
 
 use egui::viewport::IconData;
 fn load_icon() -> Option<IconData> {
     use std::path::PathBuf;
-    // Use production-proven icon path logic
     let icon_path: PathBuf = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("images")
         .join("icon.png");
     if !icon_path.exists() {
-        eprintln!("❌ Icon not found at: {:?}", icon_path);
         return None;
     }
     let image = image::open(icon_path).ok()?.into_rgba8();
@@ -76,7 +76,25 @@ struct ToolConfig {
     description: Option<String>,
 }
 
-struct AppState {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivePanel {
+    Workspace,
+    FileMiner,
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputType {
+    File,
+    Folder,
+    Unknown,
+    None,
+}
+
+#[derive(Clone)]
+pub struct AppState {
+    
+    pub update_status: Option<String>,
     malchela_logo: Option<egui::TextureHandle>,
     pub case_sha256: Option<String>,
     categorized_tools: BTreeMap<String, Vec<ToolConfig>>,
@@ -118,6 +136,10 @@ struct AppState {
     show_new_case_modal: bool,
     pub workspace: WorkspacePanel,
     case_modal: CaseModal,
+    fileminer_panel: FileMinerPanel,
+    pub current_panel: ActivePanel,
+    pub input_type: InputType,
+    pub fileminer_minimized: bool,
 }
 fn resolve_env_vars(s: &str) -> String {
     let replaced = if s.contains("${MALCHELA_ROOT}") {
@@ -145,6 +167,8 @@ impl Default for AppState {
     fn default() -> Self {
         AppState {
             malchela_logo: None,
+            update_status: None,
+            current_panel: ActivePanel::None,
             case_sha256: None,
             categorized_tools: BTreeMap::new(),
             selected_tool: None,
@@ -185,11 +209,45 @@ impl Default for AppState {
             show_new_case_modal: false,
             workspace: WorkspacePanel::default(),
             case_modal: CaseModal::default(),
+            fileminer_panel: FileMinerPanel::default(),
+            // Set a valid default input_type (File is common default, or Folder if preferred)
+            input_type: InputType::File,
+            fileminer_minimized: false,
         }
     }
 }
 
 impl AppState {
+    /// Reset all application state to defaults for a new case or workspace.
+    pub fn reset(&mut self) {
+        // Reset panels and relevant state
+        self.workspace.reset();
+        self.fileminer_panel.reset_panel();
+        // Add additional resets here if needed for other panels
+        self.selected_tool = None;
+        self.input_path = None;
+        self.case_name = None;
+        self.case_sha256 = None;
+        self.custom_args.clear();
+        self.save_report = (false, ".txt".to_string());
+        self.zip_password.clear();
+        self.scratchpad_path.clear();
+        self.string_source_path.clear();
+        self.selected_format = "file".to_string();
+        self.current_panel = ActivePanel::None;
+        self.input_type = InputType::File;
+        self.fileminer_minimized = false;
+        self.show_home = true;
+        self.banner_displayed = false;
+        self.show_new_case_modal = false;
+        self.case_modal.visible = false;
+        self.show_scratchpad = false;
+        self.rule_name.clear();
+        self.author_name.clear();
+        self.command_output.lock().unwrap().clear();
+        self.output_lines.lock().unwrap().clear();
+        // Add more resets as appropriate for your application
+    }
     
 
     pub fn load_existing_case(&mut self, path: &std::path::PathBuf) {
@@ -579,34 +637,23 @@ impl AppState {
                     }
                 }
                 args.extend(base_args);
-            // End "first"/"last" logic
-            if command.get(0).map(|s| s == "mzhash").unwrap_or(false) {
-                for algo in &selected_algorithms {
-                    args.push("-a".to_string());
-                    args.push(algo.to_string());
-                }
-                // Only pass overwrite flag if checkbox enabled in GUI
-                if allow_overwrite {
-                    args.push("-o".to_string());
-                }
-            } else if command.get(0).map(|s| s == "xmzhash").unwrap_or(false) {
-                for algo in &selected_algorithms {
-                    args.push("-a".to_string());
-                    args.push(algo.to_string());
-                }
-                if allow_overwrite {
-                    args.push("-o".to_string());
-                }
-            }
-                // PATCH: For mzhash/xmzhash, do NOT manually inject input_path here before gui_mode_args.
-
-                args.extend(gui_mode_args.clone());
-                // Consistent Save Report CLI argument logic for all tools:
-                if save_report.0 {
-                    // Only add -o for save_report if NOT mzhash/xmzhash
-                    if !command.get(0).map(|s| s == "mzhash" || s == "xmzhash").unwrap_or(false) {
-                        args.push("-o".to_string());
+                // ---- PATCH FOR FILEMINER CLI ARGS ----
+                // Update: Replace any "-m" with "--mismatch"
+                for arg in args.iter_mut() {
+                    if arg == "-m" {
+                        *arg = "--mismatch".to_string();
                     }
+                }
+                // Only add -o for save_report if tool supports output flag
+                // Use .contains("mzhash") to match mzhash/xmzhash and similar
+                let tool_id = command.get(0).cloned().unwrap_or_default();
+                if save_report.0
+                    && !tool_id.contains("mzhash")
+                    && tool_id != "strings_to_yara"
+                {
+                    args.push("-o".to_string());
+                }
+                if save_report.0 {
                     match save_report.1.as_str() {
                         ".txt" => args.push("-t".to_string()),
                         ".json" => args.push("-j".to_string()),
@@ -614,6 +661,37 @@ impl AppState {
                         _ => {}
                     }
                 }
+                // If the user has enabled "show mismatches" (for FileMiner), add "--mismatch"
+                // This requires you to have a config or field indicating show_mismatches.
+                // For demonstration, let's suppose it's in a variable called show_mismatches.
+                #[allow(unused_variables)]
+                {
+                    // You may need to wire this up to your actual config/UI state.
+                    let show_mismatches = false; // <-- replace with actual field if available
+                    if show_mismatches {
+                        args.push("--mismatch".to_string());
+                    }
+                }
+                // ---- END PATCH ----
+                if command.get(0).map(|s| s == "mzhash").unwrap_or(false) {
+                    for algo in &selected_algorithms {
+                        args.push("-a".to_string());
+                        args.push(algo.to_string());
+                    }
+                    // Only pass overwrite flag if checkbox enabled in GUI
+                    if allow_overwrite {
+                        args.push("--overwrite".to_string());
+                    }
+                } else if command.get(0).map(|s| s == "xmzhash").unwrap_or(false) {
+                    for algo in &selected_algorithms {
+                        args.push("-a".to_string());
+                        args.push(algo.to_string());
+                    }
+                    if allow_overwrite {
+                        args.push("--overwrite".to_string());
+                    }
+                }
+                args.extend(gui_mode_args.clone());
                 args.extend(tool_optional_args.clone());
                 if command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
                     for (key, value) in &env_vars {
@@ -631,7 +709,6 @@ impl AppState {
                 } else {
                     std::env::remove_var("MALCHELA_SAVE_OUTPUT");
                 }
-
 
                 let mut command_builder = {
                     let mut cmd = Command::new(&binary_path);
@@ -914,13 +991,28 @@ impl App for AppState {
 
         // --- BEGIN: Load malchela_logo and assign to self if not already loaded ---
         if self.malchela_logo.is_none() {
-            let logo_bytes = include_bytes!("../../images/malchela_steampunk.png");
+            let logo_bytes = include_bytes!("../../images/malchela.png");
             let logo_image = image::load_from_memory(logo_bytes).expect("Failed to load logo").to_rgba8();
             let logo_size = [logo_image.width() as usize, logo_image.height() as usize];
             let logo_pixels = logo_image.into_vec();
             let logo_color_image = egui::ColorImage::from_rgba_unmultiplied(logo_size, &logo_pixels);
             let malchela_logo = ctx.load_texture("malchela_logo", logo_color_image, TextureOptions::default());
             self.malchela_logo = Some(malchela_logo);
+        }
+
+        // --- Malchela logo rendering with dynamic aspect ratio ---
+        if let Some(ref malchela_logo) = self.malchela_logo {
+            let logo_texture = malchela_logo;
+            let logo_size = logo_texture.size();
+            let logo_aspect = logo_size[0] as f32 / logo_size[1] as f32;
+            let width = 150.0;
+            let height = width / logo_aspect;
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let image = egui::Image::from_texture(&*logo_texture)
+                    .shrink_to_fit()
+                    .max_size(Vec2::new(width, height));
+                ui.add(image);
+            });
         }
 
 
@@ -955,16 +1047,16 @@ impl App for AppState {
                         }
 
                         ui.label("Input Type:");
-                        let mut input_type = self.selected_format.clone();
-                        if input_type.is_empty() {
-                            input_type = "file".to_string();
+                        let mut input_type_str = self.selected_format.clone();
+                        if input_type_str.is_empty() {
+                            input_type_str = "file".to_string();
                         }
-                        if ui.radio_value(&mut input_type, "file".to_string(), "File").clicked() {
+                        if ui.radio_value(&mut input_type_str, "file".to_string(), "File").clicked() {
                             self.selected_format = "file".to_string();
                             self.input_path = None;
                             self.scratchpad_path.clear();
                         }
-                        if ui.radio_value(&mut input_type, "folder".to_string(), "Folder").clicked() {
+                        if ui.radio_value(&mut input_type_str, "folder".to_string(), "Folder").clicked() {
                             self.selected_format = "folder".to_string();
                             self.input_path = None;
                             self.scratchpad_path.clear();
@@ -1041,13 +1133,30 @@ impl App for AppState {
                             self.show_new_case_modal = false;
                             self.show_home = false;
                             self.banner_displayed = false;
-                            // Show the workspace and set active case name
-                            self.workspace.is_visible = true;
-                            self.workspace.minimized = false;
-                            self.workspace.active_case_name = self.case_name.clone();
-                            // Set workspace file/folder path and hash if available
-                            self.workspace.input_path = self.input_path.clone();
-                            self.workspace.file_hash = self.case_sha256.clone();
+                            self.case_modal.visible = false;
+                            // Set input_type enum based on selected_format
+                            self.input_type = match self.selected_format.as_str() {
+                                "folder" => InputType::Folder,
+                                "file" => InputType::File,
+                                _ => InputType::File, // fallback to File if unknown
+                            };
+                            match self.input_type {
+                                InputType::Folder => {
+                                    self.fileminer_panel.input_dir = self.input_path.clone().unwrap_or_default().to_string_lossy().to_string();
+                                    self.fileminer_panel.run_fileminer_scan_and_save(self.case_name.as_ref().unwrap());
+                                    self.current_panel = ActivePanel::FileMiner;
+                                    self.case_modal.visible = false;
+                                    self.show_new_case_modal = false;
+                                    self.fileminer_panel.visible = true;
+                                    ctx.request_repaint();
+                                },
+                                InputType::File => {
+                                    self.current_panel = ActivePanel::Workspace;
+                                    self.case_modal.visible = false;
+                                    self.show_new_case_modal = false;
+                                },
+                                InputType::None | InputType::Unknown => {}
+                            }
                         }
                         if ui.button("Cancel").clicked() {
                             self.show_new_case_modal = false;
@@ -1083,6 +1192,8 @@ impl App for AppState {
                 if ui.button(RichText::new("📁 Cases").color(STONE_BEIGE)).clicked() {
                     self.case_modal.visible = true;
                     self.workspace.minimized = true;
+                    self.fileminer_panel.is_minimized = true;
+                    self.current_panel = ActivePanel::None;
                 }
 
 
@@ -1128,13 +1239,37 @@ impl App for AppState {
                                         btn = btn.on_hover_text(desc);
                                     }
                                     if btn.clicked() {
-                                        self.selected_tool = Some(tool.clone());
-                                        if tool.input_type != "hash" {
-                                            self.input_path = None;
+                                        // Special handling for FileMiner tool selection
+                                        if tool.command.get(0).map(|s| s == "fileminer").unwrap_or(false) {
+                                            self.current_panel = ActivePanel::FileMiner;
+                                            self.selected_tool = None;
+                                            self.fileminer_panel.visible = true;
+                                            self.fileminer_panel.is_minimized = false;
+                                        } else {
+                                            self.selected_tool = Some(tool.clone());
+                                            self.custom_args.clear();
+                                            self.show_home = false;
+                                            self.workspace.minimize();
+                                            self.current_panel = ActivePanel::None;
+                                            self.fileminer_panel.visible = false;
                                         }
-                                        self.custom_args.clear();
-                                        self.show_home = false;
-                                        self.workspace.minimize();
+                                        // Reset all input paths and values based on input_type
+                                        match tool.input_type.as_str() {
+                                            "file" | "folder" => {
+                                                self.input_path = None;
+                                                self.scratchpad_path.clear();
+                                            }
+                                            "hash" => {
+                                                self.input_path = None;
+                                            }
+                                            _ => {}
+                                        }
+
+                                        // Clear fields that may carry over between tools
+                                        self.scratchpad_path.clear();
+                                        self.string_source_path.clear();
+                                        self.rule_name.clear();
+                                        self.author_name.clear();
                                     }
                                 }
                             }
@@ -1156,6 +1291,8 @@ impl App for AppState {
                         self.input_path = None;
                         self.workspace.minimize();
                         self.workspace_root = std::path::PathBuf::new();
+                        self.fileminer_panel.visible = false;
+                        self.current_panel = ActivePanel::None;
                     }
                     if ui.button(RichText::new("📄 About").color(STONE_BEIGE)).on_hover_text("About MalChela and included tools").clicked() {
                         {
@@ -1165,6 +1302,8 @@ impl App for AppState {
                             lines.clear();
                         }
                         self.workspace.minimize();
+                        self.fileminer_panel.visible = false;
+                        self.current_panel = ActivePanel::None;
                         let output = Arc::clone(&self.command_output);
                         let output_lines = Arc::clone(&self.output_lines);
                         thread::spawn(move || {
@@ -1253,9 +1392,12 @@ impl App for AppState {
 
                     if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
                         self.show_scratchpad = !self.show_scratchpad;
+                        self.fileminer_panel.visible = false;
+                        self.current_panel = ActivePanel::None;
                     }
 
                     if ui.button(RichText::new("📁 View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
+                        self.current_panel = ActivePanel::None;
                         if let Ok(mut exe_path) = std::env::current_exe() {
                             while let Some(parent) = exe_path.parent() {
                                 if parent.ends_with("MalChela") {
@@ -1282,7 +1424,10 @@ impl App for AppState {
 
 
 
-        CentralPanel::default().show(ctx, |ui| {
+use crate::workspace::render_update_check;
+CentralPanel::default().show(ctx, |ui| {
+            // Ensure update check banner renders at the top of CentralPanel
+            render_update_check(ui, self);
             // --- Show New Case Modal if requested ---
             if self.show_new_case_modal {
                 show_case_modal(ctx, self);
@@ -1306,15 +1451,25 @@ impl App for AppState {
             }
             // --- FULL TAKEOVER CASE WORKSPACE PANEL ---
             if self.workspace.is_visible && !self.workspace.minimized {
-                println!("🧪 Rendering workspace panel — visible: {}", self.workspace.is_visible);
                 self.workspace.show(ui);
                 return;
             }
+            // --- Render FileMiner panel if FileMiner is the current panel ---
+            if self.current_panel == ActivePanel::FileMiner {
+                let app_ptr = self as *const AppState;
+                let panel = &mut self.fileminer_panel;
+                // SAFETY: `app_ptr` is valid for the duration of this call
+                panel.ui(ui, ctx, unsafe { &*app_ptr });
+                return;
+            }
             // --- Show Case Modal ---
-            // Use a safe raw pointer workaround to avoid double mutable borrow:
-            let app_ptr: *mut AppState = self;
-            let case_modal = &mut self.case_modal;
-            case_modal.show(ctx, unsafe { &mut *app_ptr });
+            // Only show the case modal if it is marked visible.
+            if self.case_modal.visible && !matches!(self.current_panel, ActivePanel::FileMiner) {
+                // Use a safe raw pointer workaround to avoid double mutable borrow:
+                let app_ptr: *mut AppState = self;
+                let case_modal = &mut self.case_modal;
+                case_modal.show(ctx, unsafe { &mut *app_ptr });
+            }
             {
                 let scanned = *self.current_progress.lock().unwrap();
                 let total = *self.total_progress.lock().unwrap();
@@ -1325,7 +1480,65 @@ impl App for AppState {
             if self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
                 ui.label(egui::RichText::new("🏃  Running...").color(YELLOW).strong());
             }
+
+            // --- PATCH: Auto-run FileMiner scan if panel is visible, input_dir is set, and results are empty ---
+            let app_state_ptr = self as *mut AppState;
+            if unsafe { &mut *app_state_ptr }.fileminer_panel.visible
+                && !unsafe { &mut *app_state_ptr }.fileminer_panel.input_dir.is_empty()
+                && unsafe { &mut *app_state_ptr }.fileminer_panel.results.is_empty()
+            {
+                unsafe { &mut *app_state_ptr }.fileminer_panel.run_scan();
+            }
+
+            // --- Show FileMiner panel if visible and not minimized ---
+            {
+                let app_ptr = self as *const AppState;
+                let panel = &mut self.fileminer_panel;
+                if panel.visible && !panel.is_minimized {
+                    // SAFETY: `app_ptr` is valid for the duration of this call
+                    panel.ui(ui, ctx, unsafe { &*app_ptr });
+                }
+            }
+
             if let Some(tool) = &tool_clone {
+                // FileMiner panel: show if selected tool is fileminer
+                if self.selected_tool.as_ref().map(|t| &t.name) == Some(&tool.name) && tool.command.get(0).map(|s| s == "fileminer").unwrap_or(false) {
+                    // --- PATCH: Parse and load FileMiner output as JSON before showing panel ---
+                    if let Some(case_name) = &self.case_name {
+                        let json_path = format!(
+                            "saved_output/cases/{}/fileminer/fileminer_report_{}.json",
+                            case_name,
+                            self.fileminer_panel.last_scan_timestamp
+                        );
+
+                        match std::fs::read_to_string(&json_path) {
+                            Ok(content) => {
+                                let parsed = self.fileminer_panel.load_from_json(&content);
+                                if parsed.is_err() {
+                                    *self.command_output.lock().unwrap() = format!(
+                                        "❌ Failed to parse FileMiner output: {}\n",
+                                        parsed.unwrap_err()
+                                    );
+                                }
+                            }
+                            Err(_e) => {
+                                *self.command_output.lock().unwrap() = format!(
+                                    "❌ Failed to read FileMiner output file.\nPath: {}",
+                                    json_path
+                                );
+                            }
+                        }
+                    } else {
+                        *self.command_output.lock().unwrap() = "❌ No case name provided — cannot load FileMiner output.".to_string();
+                    }
+                    {
+                        let app_ptr = self as *const AppState;
+                        let panel = &mut self.fileminer_panel;
+                        // SAFETY: `app_ptr` is valid for the duration of this call
+                        panel.ui(ui, ctx, unsafe { &*app_ptr });
+                    }
+                    return;
+                }
                 // --- Begin fileminer config UI block ---
                 // mzhash/xmzhash config panel is now rendered only once in the CentralPanel.
                 if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
@@ -1336,32 +1549,42 @@ impl App for AppState {
                     self.command_output.lock().unwrap().clear();
                     self.output_lines.lock().unwrap().clear();
 
-                    // --- Vol3 command construction and preview: always update every frame ---
-                    let plugin_name = self.vol3_panel.get_selected_plugin();
-                    let mem_path = self.vol3_panel.get_memory_image_path().unwrap_or_default();
-                    // Only generate preview here; actual writing is done on Run button click.
-                    let preview_output_path = if self.vol3_panel.save_to_case {
-                        None
-                    } else {
-                        self.vol3_panel.arg_values.iter()
-                            .filter(|(_, v)| !v.trim().is_empty())
-                            .find(|(k, _)| k.contains("output") || k.contains("dump") || k.contains("path"))
-                            .map(|(_, v)| v.as_str())
-                    };
-                    let preview_custom_args = self.vol3_panel.arg_values.iter()
-                        .filter(|(k, _)| !k.contains("output") && !k.contains("dump") && !k.contains("path"))
-                        .map(|(k, v)| format!("--{} \"{}\"", k, v))
-                        .collect::<Vec<String>>()
-                        .join(" ");
+                    // --- Handle malhash and nsrlquery preview command ---
+                    if tool.command.get(0).map(|s| s.contains("malhash") || s.contains("nsrlquery")).unwrap_or(false) {
+                        if let Some(p) = &self.input_path {
+                            let hash_val = p.to_string_lossy();
+                            let cmd_str = format!("cargo run -p {} {}", tool.command[0], hash_val);
+                            self.vol3_panel.launch_command = Some(cmd_str);
+                        }
+                    }
 
-                    let full_command_str = self.vol3_panel.build_vol3_command(
-                        &mem_path,
-                        &plugin_name,
-                        &preview_custom_args,
-                        preview_output_path,
-                    );
-                    println!("📄 Final command string before write: {}", full_command_str);
-                    self.vol3_panel.launch_command = Some(full_command_str.clone());
+                    // --- Vol3 command construction and preview: always update every frame ---
+                    if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
+                        let plugin_name = self.vol3_panel.get_selected_plugin();
+                        let mem_path = self.vol3_panel.get_memory_image_path().unwrap_or_default();
+                        // Only generate preview here; actual writing is done on Run button click.
+                        let preview_output_path = if self.vol3_panel.save_to_case {
+                            None
+                        } else {
+                            self.vol3_panel.arg_values.iter()
+                                .filter(|(_, v)| !v.trim().is_empty())
+                                .find(|(k, _)| k.contains("output") || k.contains("dump") || k.contains("path"))
+                                .map(|(_, v)| v.as_str())
+                        };
+                        let preview_custom_args = self.vol3_panel.arg_values.iter()
+                            .filter(|(k, _)| !k.contains("output") && !k.contains("dump") && !k.contains("path"))
+                            .map(|(k, v)| format!("--{} \"{}\"", k, v))
+                            .collect::<Vec<String>>()
+                            .join(" ");
+
+                        let full_command_str = self.vol3_panel.build_vol3_command(
+                            &mem_path,
+                            &plugin_name,
+                            &preview_custom_args,
+                            preview_output_path,
+                        );
+                        self.vol3_panel.launch_command = Some(full_command_str.clone());
+                    }
 
                     self.vol3_panel.ui(ui, &self.vol3_plugins, &mut self.input_path, &mut self.custom_args, &mut self.save_report);
 
@@ -1391,6 +1614,8 @@ impl App for AppState {
                             println!("🔍 Output path being passed to build_vol3_command: {:?}", output_path);
                             // Ensure output directory is created before writing launch script
                             self.vol3_panel.ensure_vol3_case_output_dir();
+                            // Fix: define plugin_name before use
+                            let plugin_name = self.vol3_panel.get_selected_plugin();
                             // Write launch_vol3.command only when Run is clicked, using the exact command string
                             let full_command_str = self.vol3_panel.build_vol3_command(
                                 &mem_path_str,
@@ -1398,7 +1623,6 @@ impl App for AppState {
                                 &custom_args,
                                 output_path,
                             );
-                            println!("📄 Final command string before write: {}", full_command_str);
                             write_launch_script("launch_vol3.command", &full_command_str);
 
                             // --- Restored launch logic for Vol3 (exactly as in production) ---
@@ -1438,11 +1662,12 @@ impl App for AppState {
                     egui::ScrollArea::vertical()
                         .stick_to_bottom(true)
                         .show(ui, |ui| {
-                            let output_lines = self.output_lines.lock().unwrap();
-                            let lines = output_lines.clone();
-                            for line in lines.iter() {
-                                ui.label(line);
+                            if let Ok(output_lines) = self.output_lines.lock() {
+                                for line in output_lines.iter() {
+                                    ui.label(line);
+                                }
                             }
+                            ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
                         });
                     return;
                 }
@@ -1459,6 +1684,14 @@ impl App for AppState {
                 }
                 // Only show the standard input config and command line preview if NOT mzhash or xmzhash
                 if tool.command.get(0).map(|s| s != "mzhash" && s != "xmzhash").unwrap_or(true) {
+                    use std::fmt::Write as _;
+                    // Determine exec_type
+                    #[derive(PartialEq)]
+                    enum ExecType { Cargo, Binary }
+                    let exec_type = match tool.exec_type.as_deref() {
+                        Some("binary") | Some("Binary") => ExecType::Binary,
+                        _ => ExecType::Cargo,
+                    };
                     if tool.command.get(0).map(|s| s == "strings_to_yara").unwrap_or(false) {
                         let mut preview = format!(
                             "cargo run -p strings_to_yara -- \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"",
@@ -1474,8 +1707,27 @@ impl App for AppState {
                         }
                         ui.label(RichText::new(preview).color(GREEN).strong());
                     } else if let Some(ref p) = self.input_path {
+                        let input_path_str = p.display().to_string();
                         let command_line = if tool.command.get(0).map(|s| s == "hashcheck").unwrap_or(false) {
-                            format!("cargo run -p hashcheck -- {} {}", p.display(), self.custom_args.trim())
+                            match exec_type {
+                                ExecType::Binary => {
+                                    let mut s = String::new();
+                                    write!(
+                                        &mut s,
+                                        "{} {}",
+                                        tool.command.join(" "),
+                                        input_path_str
+                                    ).unwrap();
+                                    if !self.custom_args.trim().is_empty() {
+                                        s.push(' ');
+                                        s.push_str(self.custom_args.trim());
+                                    }
+                                    s
+                                }
+                                ExecType::Cargo => {
+                                    format!("cargo run -p hashcheck -- {} {}", input_path_str, self.custom_args.trim())
+                                }
+                            }
                         } else if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
                             let case_name = self.case_name.clone().unwrap_or_else(|| "unnamed_case".to_string());
                             let _output_dir = format!("saved_output/cases/{}/vol3", case_name);
@@ -1491,20 +1743,56 @@ impl App for AppState {
                             );
                             command_string
                         } else {
-                            let mut base = format!("cargo run -p {} --", tool.command[0]);
-                            if tool.command.len() > 1 {
-                                base.push(' ');
-                                base.push_str(&tool.command[1..].join(" "));
+                            match exec_type {
+                                ExecType::Binary => {
+                                    // Determine file position for input_path_str
+                                    let mut cmd_vec = tool.command.clone();
+                                    let mut file_pos = None;
+                                    if let Some(idx) = cmd_vec.iter().position(|s| s == "first") {
+                                        file_pos = Some(idx - 1);
+                                        cmd_vec.retain(|s| s != "first" && s != "last");
+                                    } else if let Some(_) = cmd_vec.iter().position(|s| s == "last") {
+                                        file_pos = Some(cmd_vec.len());
+                                        cmd_vec.retain(|s| s != "first" && s != "last");
+                                    } else if tool.input_type != "hash" {
+                                        file_pos = Some(1);
+                                    }
+                                    let mut arg_vec = cmd_vec.clone();
+                                    if let Some(idx) = file_pos {
+                                        if idx <= arg_vec.len() {
+                                            arg_vec.insert(idx, input_path_str.clone());
+                                        }
+                                    }
+                                    let mut s = arg_vec.join(" ");
+                                    if !self.custom_args.trim().is_empty() {
+                                        s.push(' ');
+                                        s.push_str(self.custom_args.trim());
+                                    }
+                                    s
+                                }
+                                ExecType::Cargo => {
+                                    let mut base = format!("cargo run -p {}", tool.command[0]);
+                                    if tool.command.len() > 1 {
+                                        base.push(' ');
+                                        base.push_str(&tool.command[1..].join(" "));
+                                    }
+
+                                    // Skip -- if input_type is hash
+                                    if tool.input_type != "hash" {
+                                        base.push_str(" --");
+                                        base.push(' ');
+                                        base.push_str(&input_path_str);
+                                    } else {
+                                        base.push(' ');
+                                        base.push_str(&input_path_str);
+                                    }
+                                    if !self.custom_args.trim().is_empty() {
+                                        base.push(' ');
+                                        base.push_str(&self.custom_args.trim());
+                                    }
+                                    base
+                                }
                             }
-                            if tool.input_type != "hash" {
-                                base.push(' ');
-                                base.push_str(&p.display().to_string());
-                            }
-                            if !self.custom_args.trim().is_empty() {
-                                base.push(' ');
-                                base.push_str(&self.custom_args.trim());
-                            }
-                            base
                         };
                         ui.label(RichText::new(command_line).color(GREEN).strong());
                     }
@@ -1957,6 +2245,19 @@ impl App for AppState {
                                     self.custom_args = args.join(" ");
                                 }
                             }
+                            // --- PATCH: Restore FileMiner panel if FileMiner tool is selected ---
+                            if let Some(selected) = &self.selected_tool {
+                                if selected.name == tool.name {
+                                    if tool.name.to_lowercase().contains("fileminer") {
+                                        self.fileminer_panel.visible = true;
+                                        self.fileminer_panel.is_minimized = false;
+                                        // Minimize all other panels
+                                        self.workspace.minimized = true;
+
+                                    }
+                                    // continue with other logic (if any)
+                                }
+                            }
                         }
                         if tool.exec_type.as_deref() == Some("script") || tool.exec_type.as_deref() == Some("binary") {
                             ui.horizontal(|ui| {
@@ -2364,6 +2665,11 @@ fn main() {
     .unwrap_or_default();
 
     let app = AppState {
+        update_status: None,
+        fileminer_minimized: false,
+        input_type: InputType::None,  
+        current_panel: ActivePanel::None,
+        fileminer_panel: FileMinerPanel::default(),
         malchela_logo: None,
         categorized_tools,
         selected_tool: None,
@@ -2410,11 +2716,29 @@ fn main() {
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1460.0, 900.0])
+            .with_inner_size([1550.0, 900.0])
             .with_icon(icon.unwrap_or_else(|| std::sync::Arc::new(IconData { rgba: vec![0; 4], width: 1, height: 1 }))),
         ..Default::default()
     };
-    eframe::run_native("MalChela", native_options, Box::new(|_cc| Box::new(app))).unwrap();
+
+    // --- Set up FiraCode font definitions ---
+    use egui::{FontDefinitions, FontData, FontFamily};
+    let mut font_defs = FontDefinitions::default();
+    font_defs.font_data.insert(
+        "fira_code".to_owned(),
+        FontData::from_static(include_bytes!("../assets/fonts/FiraCode-Regular.ttf")),
+    );
+    font_defs.families.entry(FontFamily::Proportional).or_default().insert(0, "fira_code".to_owned());
+    font_defs.families.entry(FontFamily::Monospace).or_default().insert(0, "fira_code".to_owned());
+
+    eframe::run_native(
+        "MalChela",
+        native_options,
+        Box::new(|cc| {
+            cc.egui_ctx.set_fonts(font_defs);
+            Box::new(app)
+        }),
+    ).unwrap();
 }
 
 

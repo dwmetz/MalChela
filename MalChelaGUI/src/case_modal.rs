@@ -1,17 +1,15 @@
-fn find_7z_binary() -> Option<String> {
-    for candidate in ["7z", "7zz", "7zr"] {
-        if which::which(candidate).is_ok() {
-            return Some(candidate.to_string());
-        }
-    }
-    None
-}
-
 use eframe::egui::{Context, Ui, Window, Grid, RichText, Align2, ScrollArea, Button, Color32, Vec2, TextEdit};
 use std::sync::{Arc, Mutex};
 
+use crate::AppState;
+use crate::ActivePanel;
+use crate::InputType;
 
+
+
+#[derive(Clone)]
 pub struct CaseModal {
+    pub show_modal: bool,
     pub visible: bool,
     pub search_query: String,
     pub search_results: Vec<std::path::PathBuf>,
@@ -20,11 +18,16 @@ pub struct CaseModal {
     pub new_case_name: String,
     pub new_case_input_type: String,
     pub new_case_input_path: Option<std::path::PathBuf>,
+    pub selected_case_name: Arc<Mutex<Option<String>>>,
+    pub status_message: Option<String>,
+    pub archive_status_timestamp: Option<std::time::Instant>,
+    pub archive_status: Arc<Mutex<String>>,
 }
 
 impl Default for CaseModal {
     fn default() -> Self {
         Self {
+            show_modal: false,
             visible: false,
             search_query: String::new(),
             search_results: vec![],
@@ -33,6 +36,10 @@ impl Default for CaseModal {
             new_case_name: String::new(),
             new_case_input_type: "file".to_string(),
             new_case_input_path: None,
+            selected_case_name: Arc::new(Mutex::new(None)),
+            status_message: None,
+            archive_status_timestamp: None,
+            archive_status: Arc::new(Mutex::new(String::new())),
         }
     }
 }
@@ -48,7 +55,12 @@ impl CaseModal {
         let mut temp_is_open = visible_clone;
         let this = self as *mut Self;
 
-        Window::new("")
+        Window::new(
+            RichText::new("📁 Case Management")
+                .color(crate::RUST_ORANGE)
+                .strong()
+        )
+            .title_bar(true)
             .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
             .collapsible(false)
             .resizable(false)
@@ -68,10 +80,7 @@ impl CaseModal {
     }
 
     fn render_contents(&mut self, ui: &mut Ui, app_state: &mut crate::AppState, ctx: &Context, preview_path: Option<std::path::PathBuf>) {
-        ui.horizontal(|ui| {
-            ui.heading(RichText::new("📁 Case Management").color(crate::RUST_ORANGE));
-        });
-        ui.separator();
+        // Removed redundant header row and separator.
 
         ui.horizontal_top(|ui| {
             // Left: Logo
@@ -187,71 +196,74 @@ impl CaseModal {
                     ui.end_row();
 
                     ui.label(RichText::new("📦 Archive Case").color(crate::LIGHT_CYAN));
-                    static mut SHOW_ARCHIVE_MODAL: bool = false;
-                    static mut ARCHIVE_IN_PROGRESS: bool = false;
+                    // Use thread-local for modal and progress flags
+                    thread_local! {
+                        static SHOW_ARCHIVE_MODAL: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
+                        static ARCHIVE_IN_PROGRESS: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
+                    }
                     // Use Arc<Mutex<String>> for status
-                    // Declare it outside the unsafe so it's only created once per function call
-                    let archive_status = Arc::new(Mutex::new(String::new()));
+                    // Use the struct field for archive_status
+                    let archive_status = self.archive_status.clone();
 
                     if ui.add(Button::new(RichText::new("Browse").color(Color32::BLACK)).fill(crate::RUST_ORANGE)).clicked() {
-                        unsafe { SHOW_ARCHIVE_MODAL = true; }
+                        SHOW_ARCHIVE_MODAL.with(|v| *v.borrow_mut() = true);
                     }
                     ui.end_row();
 
-                    unsafe {
-                        if SHOW_ARCHIVE_MODAL {
+                    let mut show_modal = false;
+                    SHOW_ARCHIVE_MODAL.with(|v| show_modal = *v.borrow());
+                    if show_modal {
                             // Use Arc<Mutex<String>> for status message
                             let archive_status_clone = archive_status.clone();
-                            // SAFER: use addr_of_mut and cast to *mut bool, then use unsafe block to get mutable ref
-                            let modal_open_ptr = std::ptr::addr_of_mut!(SHOW_ARCHIVE_MODAL) as *mut bool;
-                            Window::new("📦 Archive a Case")
+                            // Use split declaration for open_flag to avoid borrow conflicts
+                            let mut open_flag = true;
+                            SHOW_ARCHIVE_MODAL.with(|v| open_flag = *v.borrow());
+                            Window::new(RichText::new("📦 Archive a Case").color(crate::RUST_ORANGE))
                                 .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
                                 .collapsible(false)
                                 .title_bar(true)
                                 .resizable(false)
                                 .default_width(420.0)
-                                .open(&mut *modal_open_ptr)
+                                .open(&mut open_flag)
                                 .show(ctx, |ui| {
-                                    ui.label(RichText::new("Select a Case to Archive").color(crate::RUST_ORANGE));
+                                    // Title bar already has close button; remove redundant close button.
+                                    ui.separator();
 
-                                    static mut SELECTED_CASE_NAME: Option<String> = None;
+                                    let selected_case_name = self.selected_case_name.clone();
                                     if let Ok(entries) = std::fs::read_dir("saved_output/cases") {
                                         for entry in entries.flatten() {
                                             if entry.path().is_dir() {
                                                 if let Some(name) = entry.file_name().to_str() {
-                                                    let is_selected = SELECTED_CASE_NAME.as_deref() == Some(name);
+                                                    let is_selected = selected_case_name.lock().unwrap().as_deref() == Some(name);
                                                     if ui.radio(is_selected, name).clicked() {
-                                                        SELECTED_CASE_NAME = Some(name.to_string());
+                                                        *selected_case_name.lock().unwrap() = Some(name.to_string());
                                                     }
                                                 }
                                             }
                                         }
                                     }
 
-                                    static mut PASSWORD: String = String::new();
                                     ui.separator();
-                                    ui.label("Optional Password (not yet applied):");
-                                    let password_ref = &mut *std::ptr::addr_of_mut!(PASSWORD);
-                                    ui.text_edit_singleline(password_ref);
 
                                     ui.horizontal(|ui| {
                                         if ui.button("Archive").clicked() {
                                             // Set archive-in-progress flag
-                                            ARCHIVE_IN_PROGRESS = true;
+                                            ARCHIVE_IN_PROGRESS.with(|v| *v.borrow_mut() = true);
                                             // Immediately update GUI status for feedback (on main thread)
                                             {
                                                 let mut status = archive_status_clone.lock().unwrap();
                                                 *status = "⏳ Preparing to archive...".to_string();
                                                 ctx.request_repaint();
                                             }
+                                            // Set the timestamp for the status message
+                                            self.archive_status_timestamp = Some(std::time::Instant::now());
                                             let ctx = ctx.clone();
                                             let archive_status_clone = archive_status_clone.clone();
                                             // Move archive logic into a background thread for responsiveness
                                             std::thread::spawn({
                                                 let ctx = ctx.clone();
                                                 let archive_status_clone = archive_status_clone.clone();
-                                                let case_name = SELECTED_CASE_NAME.clone();
-                                                let password = PASSWORD.trim().to_string();
+                                                let case_name = self.selected_case_name.lock().unwrap().clone();
                                                 move || {
                                                     if let Some(case_name) = case_name.clone() {
                                                         use chrono::Local;
@@ -264,137 +276,72 @@ impl CaseModal {
 
                                                         // Ensure the archive directory exists
                                                         if let Err(e) = std::fs::create_dir_all("saved_output/archives") {
-                                                            println!("❌ Failed to create archive directory: {}", e);
                                                             {
                                                                 let mut status = archive_status_clone.lock().unwrap();
                                                                 *status = format!("❌ Failed to create archive directory: {}", e);
                                                                 ctx.request_repaint();
                                                             }
-                                                            ARCHIVE_IN_PROGRESS = false;
+                                                            ARCHIVE_IN_PROGRESS.with(|v| *v.borrow_mut() = false);
                                                             return;
                                                         }
 
-                                                        if !password.is_empty() {
-                                                            println!("🔐 Creating password-protected archive with 7z-compatible binary");
-                                                            // Show status update for password-protected archive
-                                                            {
-                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                *status = format!("📦 Archiving: {}", case_dir.display());
-                                                                ctx.request_repaint();
-                                                            }
-                                                            // Small delay to allow GUI to update the status before heavy work
-                                                            std::thread::sleep(std::time::Duration::from_millis(300));
-                                                            if let Some(bin) = find_7z_binary() {
-                                                                let output = std::process::Command::new(bin)
-                                                                    .arg("a")
-                                                                    .arg("-tzip")
-                                                                    .arg("-y")
-                                                                    .arg(format!("-p{}", password))
-                                                                    .arg(archive_path.to_string_lossy().to_string())
-                                                                    .arg(case_dir.to_string_lossy().to_string())
-                                                                    .output();
+                                                        {
+                                                            let mut status = archive_status_clone.lock().unwrap();
+                                                            *status = format!("📦 Archiving case: {}", case_name);
+                                                            ctx.request_repaint();
+                                                        }
 
-                                                                match output {
-                                                                    Ok(output) if output.status.success() => {
-                                                                        let stdout = String::from_utf8_lossy(&output.stdout);
-                                                                        println!("{}", stdout);
+                                                        match std::fs::File::create(&archive_path) {
+                                                            Ok(file) => {
+                                                                let mut zip = zip::ZipWriter::new(file);
+                                                                let options: zip::write::FileOptions<'_, ()> =
+                                                                    zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+                                                                for entry in walkdir::WalkDir::new(&case_dir).into_iter().filter_map(Result::ok) {
+                                                                    let path = entry.path();
+                                                                    if path.is_file() {
+                                                                        // Update status for each file being archived
                                                                         {
                                                                             let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = format!("{}\n✅ Created password-protected archive: {}", stdout, archive_path.display());
+                                                                            *status = format!("📦 Archiving: {}", path.display());
+                                                                            ctx.request_repaint();
+                                                                        }
+                                                                        if let Ok(mut f) = std::fs::File::open(path) {
+                                                                            if let Ok(rel_path) = path.strip_prefix(&case_dir) {
+                                                                                zip.start_file(rel_path.to_string_lossy(), options).expect("Failed to add file to zip");
+                                                                                std::io::copy(&mut f, &mut zip).expect("Failed to write file contents");
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                                match zip.finish() {
+                                                                    Ok(_) => {
+                                                                        {
+                                                                            let mut status = archive_status_clone.lock().unwrap();
+                                                                            *status = format!("✅ Archived to {}", archive_path.display());
                                                                             ctx.request_repaint();
                                                                         }
                                                                         // Do not auto-close the archive modal; let user close manually
                                                                     }
-                                                                    Ok(output) => {
-                                                                        let stderr = String::from_utf8_lossy(&output.stderr);
-                                                                        println!("❌ 7z failed:\n{}", stderr);
-                                                                        {
-                                                                            let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = format!("❌ 7z failed:\n{}", stderr);
-                                                                            ctx.request_repaint();
-                                                                        }
-                                                                    }
                                                                     Err(e) => {
-                                                                        println!("❌ Failed to run 7z: {}", e);
                                                                         {
                                                                             let mut status = archive_status_clone.lock().unwrap();
-                                                                            *status = format!("❌ Failed to run 7z: {}", e);
+                                                                            *status = format!("❌ Failed to finalize archive: {}", e);
                                                                             ctx.request_repaint();
                                                                         }
                                                                     }
                                                                 }
-                                                            } else {
-                                                                println!("❌ No 7-Zip compatible binary found (7z, 7zz, or 7zr).");
+                                                            }
+                                                            Err(e) => {
                                                                 {
                                                                     let mut status = archive_status_clone.lock().unwrap();
-                                                                    *status = "❌ No 7-Zip binary found on system.".to_string();
+                                                                    *status = format!("❌ Failed to create archive file: {}", e);
                                                                     ctx.request_repaint();
-                                                                }
-                                                            }
-                                                        } else {
-                                                            println!("📦 Archiving case without password: {}", case_name);
-                                                            {
-                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                *status = format!("📦 Archiving case without password: {}", case_name);
-                                                                ctx.request_repaint();
-                                                            }
-
-                                                            match std::fs::File::create(&archive_path) {
-                                                                Ok(file) => {
-                                                                    let mut zip = zip::ZipWriter::new(file);
-                                                                    let options: zip::write::FileOptions<'_, ()> =
-                                                                        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-                                                                    for entry in walkdir::WalkDir::new(&case_dir).into_iter().filter_map(Result::ok) {
-                                                                        let path = entry.path();
-                                                                        if path.is_file() {
-                                                                            // Update status for each file being archived
-                                                                            {
-                                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                                *status = format!("📦 Archiving: {}", path.display());
-                                                                                ctx.request_repaint();
-                                                                            }
-                                                                            if let Ok(mut f) = std::fs::File::open(path) {
-                                                                                if let Ok(rel_path) = path.strip_prefix(&case_dir) {
-                                                                                    zip.start_file(rel_path.to_string_lossy(), options).expect("Failed to add file to zip");
-                                                                                    std::io::copy(&mut f, &mut zip).expect("Failed to write file contents");
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    }
-
-                                                                    match zip.finish() {
-                                                                        Ok(_) => {
-                                                                            println!("✅ Archived to {}", archive_path.display());
-                                                                            {
-                                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                                *status = format!("✅ Archived to {}", archive_path.display());
-                                                                                ctx.request_repaint();
-                                                                            }
-                                                                            // Do not auto-close the archive modal; let user close manually
-                                                                        }
-                                                                        Err(e) => {
-                                                                            println!("❌ Failed to finalize archive: {}", e);
-                                                                            {
-                                                                                let mut status = archive_status_clone.lock().unwrap();
-                                                                                *status = format!("❌ Failed to finalize archive: {}", e);
-                                                                                ctx.request_repaint();
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                                Err(e) => {
-                                                                    println!("❌ Failed to create archive file: {}", e);
-                                                                    {
-                                                                        let mut status = archive_status_clone.lock().unwrap();
-                                                                        *status = format!("❌ Failed to create archive file: {}", e);
-                                                                        ctx.request_repaint();
-                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     } else {
-                                                        println!("⚠️ No case selected for archiving.");
                                                         {
                                                             let mut status = archive_status_clone.lock().unwrap();
                                                             *status = "⚠️ No case selected for archiving.".to_string();
@@ -402,41 +349,129 @@ impl CaseModal {
                                                         }
                                                     }
                                                     // Reset archive-in-progress flag when done (in all arms)
-                                                    ARCHIVE_IN_PROGRESS = false;
+                                                    ARCHIVE_IN_PROGRESS.with(|v| *v.borrow_mut() = false);
                                                 }
                                             });
                                         }
-                                        if ui.button("Cancel").clicked() {
-                                            SHOW_ARCHIVE_MODAL = false;
-                                        }
+                                        // Remove/cancel button below, as close "X" is now at the top
+                                        // if ui.button("Cancel").clicked() {
+                                        //     SHOW_ARCHIVE_MODAL = false;
+                                        // }
                                     });
-                                    // Show status message, scrollable and always updates (even if empty)
-                                    {
-                                        let working = ARCHIVE_IN_PROGRESS;
-                                        if let Ok(status) = archive_status.lock() {
+                                    // Show the archive_status if not empty, and clear after 5 seconds
+                                    if let Ok(mut status) = self.archive_status.lock() {
+                                        if !status.is_empty() {
                                             ui.add_space(8.0);
                                             ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                                                if working {
-                                                    ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
-                                                } else {
-                                                    // Always show final message after completion
-                                                    if !status.is_empty() {
-                                                        ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
-                                                    } else {
-                                                        ui.label(RichText::new("⏳ Ready.").color(crate::LIGHT_CYAN));
-                                                    }
-                                                }
+                                                ui.label(RichText::new(status.clone()).color(crate::LIGHT_CYAN));
                                             });
-                                            ctx.request_repaint(); // Continuous updates
+
+                                            if let Some(start) = self.archive_status_timestamp {
+                                                if std::time::Instant::now().duration_since(start).as_secs() >= 3 {
+                                                    *status = String::new();
+                                                    self.archive_status_timestamp = None;
+                                                }
+                                            }
                                         }
                                     }
                                 });
+                            if !open_flag {
+                                SHOW_ARCHIVE_MODAL.with(|v| *v.borrow_mut() = false);
+                            }
                         }
-                    }
 
                     ui.label(RichText::new("🔄 Restore Case").color(crate::LIGHT_CYAN));
                     if ui.add(Button::new(RichText::new("Browse").color(Color32::BLACK)).fill(crate::RUST_ORANGE)).clicked() {
-                        // restore logic
+                        if let Some(zip_path) = rfd::FileDialog::new()
+                            .add_filter("Zip Archive", &["zip"])
+                            .set_directory("saved_output/archives")
+                            .pick_file()
+                        {
+                            let file = match std::fs::File::open(&zip_path) {
+                                Ok(f) => f,
+                                Err(_e) => {
+                                    // println!("❌ Failed to open zip file: {}", e);
+                                    return;
+                                }
+                            };
+
+                            let mut archive = match zip::ZipArchive::new(file) {
+                                Ok(a) => a,
+                                Err(_e) => {
+                                    // println!("❌ Failed to read zip archive: {}", e);
+                                    return;
+                                }
+                            };
+
+                            let mut contains_case_json = false;
+                            for i in 0..archive.len() {
+                                if let Ok(file) = archive.by_index(i) {
+                                    if file.name().ends_with("case.json") {
+                                        contains_case_json = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if !contains_case_json {
+                                self.status_message = Some("❌ Not a valid case archive.".to_string());
+                                return;
+                            }
+
+                            // Use just the base name (case name) for restore folder, not timestamped
+                            let file_stem = zip_path.file_stem().and_then(|s| s.to_str()).unwrap_or("restored_case");
+                            let base_name = file_stem
+                                .split('_')
+                                .next()
+                                .unwrap_or(file_stem);
+                            let restore_path = std::path::Path::new("saved_output/cases").join(base_name);
+
+                            // If restore_path exists, remove it (overwrite)
+                            if restore_path.exists() {
+                                if let Err(e) = std::fs::remove_dir_all(&restore_path) {
+                                    // println!("❌ Failed to remove existing restore directory: {}", e);
+                                    self.status_message = Some(format!("❌ Failed to remove existing case directory: {}", e));
+                                    return;
+                                }
+                            }
+
+                            if let Err(_e) = std::fs::create_dir_all(&restore_path) {
+                                // println!("❌ Failed to create restore directory: {}", e);
+                                return;
+                            }
+
+                            let file = std::fs::File::open(&zip_path).expect("Failed to reopen zip file");
+                            let mut archive = zip::ZipArchive::new(file).expect("Failed to reopen archive");
+                            for i in 0..archive.len() {
+                                let mut file = archive.by_index(i).unwrap();
+                                let outpath = restore_path.join(file.name());
+
+                                if (&*file.name()).ends_with('/') {
+                                    std::fs::create_dir_all(&outpath).unwrap();
+                                } else {
+                                    if let Some(p) = outpath.parent() {
+                                        if !p.exists() {
+                                            std::fs::create_dir_all(&p).unwrap();
+                                        }
+                                    }
+                                    let mut outfile = std::fs::File::create(&outpath).unwrap();
+                                    std::io::copy(&mut file, &mut outfile).unwrap();
+                                }
+                            }
+
+                            let case_json_path = restore_path.join("case.json");
+                            if case_json_path.exists() {
+                                app_state.workspace.reset();
+                                app_state.load_existing_case(&case_json_path);
+                                app_state.workspace.load_case_metadata(case_json_path);
+                                app_state.workspace.is_visible = true;
+                                app_state.workspace.minimized = false;
+                                app_state.current_panel = crate::ActivePanel::Workspace;
+                                self.visible = false;
+                            } else {
+                                self.status_message = Some("❌ Restored zip did not contain a valid case.json.".to_string());
+                            }
+                        }
                     }
                     ui.end_row();
                 });
@@ -466,6 +501,7 @@ impl CaseModal {
         } else {
             self.render_case_list(ui, app_state);
         }
+
 
         if let Some(path) = &preview_path {
             if let Ok(raw) = std::fs::read(path) {
@@ -526,12 +562,24 @@ impl CaseModal {
                         }
                     });
 
+                    // Adapt Browse button and dialog to input type
                     ui.horizontal(|ui| {
-                        if ui.button("Browse File").clicked() {
-                            if let Some(path) = rfd::FileDialog::new().pick_file() {
+                        let browse_label = if self.new_case_input_type == "folder" {
+                            "Browse Folder"
+                        } else {
+                            "Browse File"
+                        };
+                        if ui.button(browse_label).clicked() {
+                            let picked = if self.new_case_input_type == "folder" {
+                                rfd::FileDialog::new().pick_folder()
+                            } else {
+                                rfd::FileDialog::new().pick_file()
+                            };
+                            if let Some(path) = picked {
                                 self.new_case_input_path = Some(path);
                             }
                         }
+
                         if let Some(p) = &self.new_case_input_path {
                             let full_path = p.display().to_string();
                             let max_chars = 60;
@@ -547,11 +595,50 @@ impl CaseModal {
                     ui.horizontal(|ui| {
                         if ui.button("Start Case").clicked() {
                             if let Some(path) = &self.new_case_input_path {
-                                app_state.workspace.new_case(path.clone(), self.new_case_name.clone(), self.new_case_input_type.clone());
-                                self.visible = false;
+                                // Always resolve the correct case name to assign to app_state.case_name
+                                let case_name = self.new_case_name.clone();
+                                app_state.workspace.new_case(
+                                    path.clone(),
+                                    case_name.clone(),
+                                    self.new_case_input_type.clone(),
+                                );
+
+                                // Update app_state.case_name with the new case name
+                                app_state.case_name = Some(case_name.clone());
+
+                                if self.new_case_input_type == "folder" {
+                                    // The metadata field was removed; check for input_path instead if needed
+                                    if app_state.workspace.input_path.is_some() {
+                                        app_state.workspace.save_case_metadata();
+                                    }
+
+                                    app_state.current_panel = ActivePanel::FileMiner;
+                                    app_state.input_type = InputType::Folder;
+                                    app_state.workspace.is_visible = true;
+                                    app_state.workspace.minimized = true;
+
+                                    app_state.workspace.minimized = true;
+                                    app_state.fileminer_panel.visible = true;
+                                    app_state.fileminer_panel.input_dir = path.display().to_string();
+                                app_state.fileminer_panel.save_report = true;
+                                app_state.fileminer_panel.run_fileminer_scan_and_save(app_state.case_name.as_ref().unwrap());
+                                // Set last_scan_timestamp right after scan and save
+                                app_state.fileminer_panel.last_scan_timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                                    app_state.fileminer_panel.is_minimized = false;
+                                    app_state.case_modal.visible = false;
+                                } else {
+                                    app_state.workspace.minimized = false;
+                                    app_state.workspace.is_visible = true;
+                                    app_state.current_panel = ActivePanel::Workspace;
+                                    app_state.fileminer_panel.visible = true;
+                                    app_state.case_modal.visible = false;
+                                }
+
                                 self.new_case_visible = false;
+                                self.visible = false;
                             }
                         }
+
                         if ui.button("Cancel").clicked() {
                             self.new_case_visible = false;
                         }
@@ -561,7 +648,7 @@ impl CaseModal {
     }
 }
 
-use crate::AppState;
+// use crate::AppState;  // (Removed duplicate import)
 
 pub fn show_case_modal(ctx: &Context, app_state: &mut AppState) {
     let (case_modal_ptr, app_state_ptr): (*mut CaseModal, *mut AppState) = (

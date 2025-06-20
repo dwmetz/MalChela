@@ -136,6 +136,14 @@ fn main() {
         }
     }
 
+    // Add support for --output-file argument
+    let mut output_file_arg: Option<String> = None;
+    for i in 1..args.len() {
+        if args[i] == "--output-file" && i + 1 < args.len() {
+            output_file_arg = Some(args[i + 1].clone());
+        }
+    }
+
     let is_gui = args.len() > 1;
 
     let vt_api_key = read_api_key("vt-api.txt");
@@ -189,9 +197,14 @@ fn main() {
     let (mut report_file, report_path): (Box<dyn Write>, Option<(PathBuf, String)>) = if save_output && !in_gui {
         // Determine output directory, supporting --case
         let output_dir = if let Some(case) = &case_name {
-            let path = std::path::Path::new("saved_output").join("cases").join(case).join("malhash");
-            std::fs::create_dir_all(&path).expect("Failed to create case output directory");
-            path
+            // For GUI mode, assume caller already set correct case directory
+            if is_gui_mode() {
+                PathBuf::from(case)
+            } else {
+                let path = std::path::Path::new("saved_output").join("cases").join(case).join("malhash");
+                std::fs::create_dir_all(&path).expect("Failed to create case output directory");
+                path
+            }
         } else {
             let path = get_output_dir("malhash");
             std::fs::create_dir_all(&path).expect("Failed to create default output directory");
@@ -211,7 +224,11 @@ fn main() {
             return;
         };
 
-        let report_path = output_dir.join(format!("report_{}.{}", timestamp, format));
+        let report_path = if let Some(name) = &output_file_arg {
+            output_dir.join(name)
+        } else {
+            output_dir.join(format!("report_{}.{}", timestamp, format))
+        };
         if let Some(parent) = report_path.parent() {
             fs::create_dir_all(parent).expect("Failed to create output directory");
         }
@@ -223,7 +240,7 @@ fn main() {
             (Box::new(file), Some((report_path, format.to_string())))
         }
     } else {
-        (Box::new(OpenOptions::new().write(true).open("/dev/null").unwrap()), None)
+        (Box::new(std::io::sink()), None)
     };
 
     write_both(&mut report_file, &mut stdout, &format!("HASH: {}", hash));

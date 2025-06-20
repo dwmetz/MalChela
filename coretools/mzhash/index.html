@@ -268,6 +268,25 @@
   
   
   
+  
+    <li class="md-tabs__item">
+      <a href="../../cases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Case Management
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
     
   
   
@@ -553,6 +572,28 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Case Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -572,10 +613,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -588,8 +629,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
           </label>
@@ -717,6 +758,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../fileminer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FileMiner
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashcheck/" class="md-nav__link">
         
   
@@ -769,29 +833,6 @@
   
   <span class="md-ellipsis">
     MalHash
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../mismatchminer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MismatchMiner
     
   </span>
   
@@ -1012,10 +1053,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1028,8 +1069,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1111,12 +1152,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/floss/" class="md-nav__link">
+      <a href="../../tools/tshark/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    FLOSS
+    TShark
     
   </span>
   
@@ -1134,12 +1175,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/tshark/" class="md-nav__link">
+      <a href="../../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    TShark
+    PCAP to CSV
     
   </span>
   
@@ -1333,19 +1374,28 @@
 <p>By default, hashes are saved to <code>saved_output/mzhash/</code>. If the file already exists, the user will be prompted before overwriting.</p>
 <p>These hash sets (.tsv preferred) can be used with <a href="../hashcheck/">HashCheck</a>.</p>
 <p><img alt="MZHash" src="../../images/mzhash.png" /></p>
-<p align="center"><strong>Figure 17:</strong> MZHash</p>
+<p align="center"><strong>Figure 22:</strong> MZHash</p>
 
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
-<pre><code class="language-bash">cargo run -p mzhash /path_to_directory/
+<pre><code class="language-bash"># Example 1: Generate default SHA256 hashes
+cargo run -p mzhash -- /path_to_directory/
+
+# Example 2: Generate all three hash types (MD5, SHA1, SHA256)
+cargo run -p mzhash -- /path_to_directory/ -a MD5 -a SHA1 -a SHA256
+
+# Example 3: Generate SHA1 and SHA256 only
+cargo run -p mzhash -- /path_to_directory/ -a SHA1 -a SHA256
+
+# Example 4: Save output to a case folder
+cargo run -p mzhash -- /path_to_directory/ -a SHA256 --case CaseName
 </code></pre>
-<p><em>Generates SHA256 hashes (default).</em></p>
-<pre><code class="language-bash">cargo run -p mzhash /path_to_directory/ -- -a MD5 -a SHA1 -a SHA256
+<p>If <code>--case</code> is specified, output will be saved to:</p>
+<pre><code>saved_output/cases/CaseName/mzhash/
 </code></pre>
-<p><em>Generates all three hash types.</em></p>
-<pre><code class="language-bash">cargo run -p mzhash /path_to_directory/ -- -a SHA1 -a SHA256
+<p>Otherwise, hashes are saved to:</p>
+<pre><code>saved_output/mzhash/
 </code></pre>
-<p><em>Generates SHA1 and SHA256 only.</em></p>
 <p>You can combine multiple <code>-a</code> flags in any order.</p>
 
 

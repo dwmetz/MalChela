@@ -269,6 +269,25 @@
   
   
   
+    <li class="md-tabs__item">
+      <a href="../../cases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Case Management
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
     
     
       <li class="md-tabs__item">
@@ -555,6 +574,28 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Case Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -567,10 +608,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -583,8 +624,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
           </label>
@@ -712,6 +753,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../../coretools/fileminer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FileMiner
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../coretools/hashcheck/" class="md-nav__link">
         
   
@@ -764,29 +828,6 @@
   
   <span class="md-ellipsis">
     MalHash
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../coretools/mismatchminer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MismatchMiner
     
   </span>
   
@@ -965,10 +1006,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -981,8 +1022,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1064,12 +1105,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../floss/" class="md-nav__link">
+      <a href="../tshark/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    FLOSS
+    TShark
     
   </span>
   
@@ -1087,12 +1128,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../tshark/" class="md-nav__link">
+      <a href="../pcap_to_csv/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    TShark
+    PCAP to CSV
     
   </span>
   
@@ -1384,7 +1425,7 @@
 
 <h1 id="installing-and-configuring-yara-x">Installing and Configuring YARA-X</h1>
 <p><img alt="YARA-X" src="../../images/yara-x.png" /></p>
-<p align="center"><strong>Figure 26:</strong> YARA-X </p>
+<p align="center"><strong>Figure 31:</strong> YARA-X </p>
 
 <hr />
 <p>YARA-X is an extended version of YARA with enhanced performance and features. To integrate YARA-X with MalChela, follow these steps:</p>
@@ -1392,18 +1433,18 @@
 <ul>
 <li>
 <p><strong>Download the latest release:</strong><br />
-   Visit the official YARA-X GitHub releases page at <a href="https://github.com/Yara-Rules/yara-x/releases">https://github.com/Yara-Rules/yara-x/releases</a> and download the appropriate binary for your platform.</p>
+   Visit the official YARA-X GitHub releases page at <a href="https://github.com/VirusTotal/yara-x/releases">https://github.com/VirusTotal/yara-x/releases</a> and download the appropriate binary for your platform.</p>
 </li>
 <li>
 <p><strong>Extract and install:</strong><br />
-   Extract the downloaded archive and place the <code>yara-x</code> binary in a directory included in your system’s <code>$PATH</code>, or note its absolute path for configuration.</p>
+   Extract the downloaded archive and place the <code>yara-x</code> binary (<code>yr</code>) in a directory included in your system’s <code>$PATH</code>, or note its absolute path for configuration.</p>
 </li>
 <li>
 <p><strong>Verify installation:</strong><br />
    Run the following command to confirm YARA-X is installed correctly:</p>
 </li>
 </ul>
-<pre><code class="language-bash">yara-x —version
+<pre><code class="language-bash">yr —version
 </code></pre>
 <h2 id="configuration-in-malchela">Configuration in MalChela</h2>
 <p>To use YARA-X within MalChela tools, update your <code>tools.yaml</code> with the following example entry:</p>

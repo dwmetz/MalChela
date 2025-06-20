@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../fileanalyzer/">
+        <link rel="prev" href="../fileminer/">
       
       
         <link rel="next" href="../hashit/">
@@ -261,6 +261,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../cases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Case Management
+
+      </a>
+    </li>
   
 
       
@@ -553,6 +572,28 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Case Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -572,10 +613,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -588,8 +629,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
           </label>
@@ -714,6 +755,29 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../fileminer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FileMiner
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -769,21 +833,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="🔧 CLI Syntax">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#optional-output-formats" class="md-nav__link">
-    <span class="md-ellipsis">
-      Optional Output Formats
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -831,29 +880,6 @@
   
   <span class="md-ellipsis">
     MalHash
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../mismatchminer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MismatchMiner
     
   </span>
   
@@ -1027,10 +1053,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1043,8 +1069,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1126,12 +1152,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/floss/" class="md-nav__link">
+      <a href="../../tools/tshark/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    FLOSS
+    TShark
     
   </span>
   
@@ -1149,12 +1175,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/tshark/" class="md-nav__link">
+      <a href="../../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    TShark
+    PCAP to CSV
     
   </span>
   
@@ -1316,21 +1342,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="🔧 CLI Syntax">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#optional-output-formats" class="md-nav__link">
-    <span class="md-ellipsis">
-      Optional Output Formats
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -1357,26 +1368,28 @@
 <p><strong>HashCheck</strong> lets you quickly verify whether a given set of files (or hash values) match any entry in one or more known-good or known-bad hash lists. It’s designed to help analysts triage large collections of files by comparing against reference datasets — for example, malware repositories, NSRL exports, or your own curated lists.</p>
 <p>Hash lists should be in <code>.tsv</code> format (tab-separated values) for best compatibility, though <code>.txt</code> files are also accepted.</p>
 <p><img alt="HashCheck" src="../../images/hashcheck.png" /></p>
-<p align="center"><strong>Figure 10:</strong> Hash Check</p>
+<p align="center"><strong>Figure 16:</strong> Hash Check</p>
 
 <p>You can generate .tsv lookup files using <a href="../mzhash/">MZHash</a> or <a href="../xmzhash/">XMZHash</a>.</p>
 <p>HashCheck supports <strong>MD5</strong>, <strong>SHA1</strong>, and <strong>SHA256</strong> formats.</p>
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
-<pre><code class="language-bash">cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f
+<pre><code class="language-bash"># Example 1: Basic usage
+cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f
+
+# Example 2: Save output as .txt
+cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -t
+
+# Example 3: Save output to case folder
+cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -t --case CaseName
 </code></pre>
-<p><em>Searches for the hash in the provided TSV or TXT file. Prompts interactively if not supplied.</em></p>
-<h4 id="optional-output-formats">Optional Output Formats</h4>
-<p>Use <code>-o</code> to save results, along with one of the following:</p>
-<pre><code class="language-bash">cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -t
+<p><em>HashCheck accepts a hash and a lookup file (TSV or TXT). If not provided, you’ll be prompted interactively.</em></p>
+<p>When <code>--case</code> is used, output will be saved under:</p>
+<pre><code>saved_output/cases/CaseName/hashcheck/
 </code></pre>
-<p><em>Saves the result as a <code>.txt</code> file.</em></p>
-<pre><code class="language-bash">cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -j
+<p>Without <code>--case</code>, reports are saved to the default:</p>
+<pre><code>saved_output/hashcheck/
 </code></pre>
-<p><em>Saves the result as a <code>.json</code> file.</em></p>
-<pre><code class="language-bash">cargo run -p hashcheck ./hashes.tsv 44d88612fea8a8f36de82e1278abb02f -- -o -m
-</code></pre>
-<p><em>Saves the result as a <code>.md</code> (Markdown) file.</em></p>
 
 
 

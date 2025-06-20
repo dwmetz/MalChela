@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../configuration/api-configuration/">
+        <link rel="prev" href="../cases/">
       
       
         <link rel="next" href="usage/">
@@ -256,6 +256,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Case Management
+
+      </a>
+    </li>
   
 
       
@@ -548,6 +567,28 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Case Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -567,10 +608,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -583,8 +624,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
           </label>
@@ -720,6 +761,29 @@
   
   
     <li class="md-nav__item">
+      <a href="fileminer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FileMiner
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="hashcheck/" class="md-nav__link">
         
   
@@ -772,29 +836,6 @@
   
   <span class="md-ellipsis">
     MalHash
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="mismatchminer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MismatchMiner
     
   </span>
   
@@ -968,10 +1009,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -984,8 +1025,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1067,12 +1108,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../tools/floss/" class="md-nav__link">
+      <a href="../tools/tshark/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    FLOSS
+    TShark
     
   </span>
   
@@ -1090,12 +1131,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../tools/tshark/" class="md-nav__link">
+      <a href="../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    TShark
+    PCAP to CSV
     
   </span>
   
@@ -1264,10 +1305,10 @@
   <h1>Overview</h1>
 
 <p><img alt="MalChela GUI" src="../images/malchela_screenshot.png" /></p>
-<p align="center"><strong>Figure 5:</strong> MalChela GUI</p>
+<p align="center"><strong>Figure 9:</strong> MalChela GUI</p>
 
 <p><img alt="MalChela CLI" src="../images/malchela_cli_screenshot.png" /></p>
-<p align="center"><strong>Figure 6:</strong> MalChela CLI</p>
+<p align="center"><strong>Figure 10:</strong> MalChela CLI</p>
 
 <h2 style="text-align: center;">MalChela Core Tools</h2>
 <p style="text-align: center;">
@@ -1285,9 +1326,9 @@
     <tr><td>Combine YARA</td><td>Point it at a directory of YARA files and it will output one combined rule</td></tr>
     <tr><td>Extract Samples</td><td>Point it at a directory of password protected malware files to extract all</td></tr>
     <tr><td>File Analyzer</td><td>Get the hash, entropy, packing, PE info, YARA and VT match status for a file</td></tr>
+    <tr><td>File Miner</td><td>Scans a folder for file type mismatches and metadata, and provides suggested tools</td></tr>
     <tr><td>Hash Check</td><td>Check a hash against a .txt or .tsv lookup table</td></tr>
     <tr><td>Hash It</td><td>Point it to a file and get the MD5, SHA1 and SHA256 hash</td></tr>
-    <tr><td>Mismatch Miner</td><td>Hunts for exes disguised as other formats</td></tr>
     <tr><td>mStrings</td><td>Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex</td></tr>
     <tr><td>MZHash</td><td>Recurse a directory, for files with MZ header, create hash list and lookup table</td></tr>
     <tr><td>MZcount</td><td>Recurse a directory, uses YARA to count MZ, Zip, PDF, other</td></tr>

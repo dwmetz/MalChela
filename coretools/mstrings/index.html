@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../mismatchminer/">
+        <link rel="prev" href="../malhash/">
       
       
         <link rel="next" href="../mzcount/">
@@ -261,6 +261,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../cases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Case Management
+
+      </a>
+    </li>
   
 
       
@@ -553,6 +572,28 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Case Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -572,10 +613,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -588,8 +629,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
           </label>
@@ -717,6 +758,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../fileminer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FileMiner
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashcheck/" class="md-nav__link">
         
   
@@ -769,29 +833,6 @@
   
   <span class="md-ellipsis">
     MalHash
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../mismatchminer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MismatchMiner
     
   </span>
   
@@ -1012,10 +1053,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1028,8 +1069,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1111,12 +1152,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/floss/" class="md-nav__link">
+      <a href="../../tools/tshark/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    FLOSS
+    TShark
     
   </span>
   
@@ -1134,12 +1175,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/tshark/" class="md-nav__link">
+      <a href="../../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    TShark
+    PCAP to CSV
     
   </span>
   
@@ -1326,22 +1367,29 @@
 
 <p>mStrings extracts strings from files and classifies them using regular expressions, YARA rules, and MITRE ATT&amp;CK mappings. It highlights potential indicators of compromise and suspicious behavior, grouping matches by tactic and technique. Ideal for quickly surfacing malicious capabilities in binaries, scripts, and documents.</p>
 <p><img alt="MStrings" src="../../images/mstrings.png" /></p>
-<p align="center"><strong>Figure 14:</strong> MStrings</p>
+<p align="center"><strong>Figure 19:</strong> MStrings</p>
 
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
-<pre><code class="language-bash">cargo run -p mstrings -- /path_to_file/
+<pre><code class="language-bash"># Example 1: Scan a file
+cargo run -p mstrings -- /path_to_file/
+
+# Example 2: Save output as .txt
+cargo run -p mstrings -- /path_to_file/ -o -t
+
+# Example 3: Save output to a case folder
+cargo run -p mstrings -- /path_to_file/ -o -t --case CaseXYZ
 </code></pre>
-<p>Scans the specified file and prints results in the terminal.</p>
-<pre><code class="language-bash">cargo run -p mstrings -- /path_to_file/ -o -t
-</code></pre>
-<p>Saves the results as a <code>.txt</code> file.</p>
 <p>Use <code>-o</code> to save output and include one of the following format flags:
 - <code>-t</code> → Save as <code>.txt</code>
 - <code>-j</code> → Save as <code>.json</code>
 - <code>-m</code> → Save as <code>.md</code></p>
 <p>If no file is provided, the tool will prompt you to enter the path interactively.</p>
-<pre><code class="language-bash">Enter the file path:
+<p>When <code>--case</code> is used, output is saved to:</p>
+<pre><code>saved_output/cases/CaseXYZ/mstrings/
+</code></pre>
+<p>Otherwise, results are saved to:</p>
+<pre><code>saved_output/mstrings/
 </code></pre>
 
 

@@ -268,6 +268,25 @@
   
   
   
+  
+    <li class="md-tabs__item">
+      <a href="../../cases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Case Management
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
     
   
   
@@ -553,6 +572,28 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Case Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -572,10 +613,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -588,8 +629,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
           </label>
@@ -839,6 +880,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../fileminer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FileMiner
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashcheck/" class="md-nav__link">
         
   
@@ -891,29 +955,6 @@
   
   <span class="md-ellipsis">
     MalHash
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../mismatchminer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MismatchMiner
     
   </span>
   
@@ -1087,10 +1128,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1103,8 +1144,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1186,12 +1227,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/floss/" class="md-nav__link">
+      <a href="../../tools/tshark/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    FLOSS
+    TShark
     
   </span>
   
@@ -1209,12 +1250,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/tshark/" class="md-nav__link">
+      <a href="../../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    TShark
+    PCAP to CSV
     
   </span>
   
@@ -1497,6 +1538,8 @@
   <code>bash
   cargo run -p fileanalyzer — /path/to/file -o</code></li>
 </ul>
+<p>Most tools now support a <code>--case &lt;name&gt;</code> argument to redirect saved output to a specific case folder under <code>saved_output/cases/</code>. Cases must be initiated with either a file or folder as the input. Hash-only workflows can be added to an existing case but cannot start one.</p>
+<p>Note: Some tools (e.g., <code>mstrings</code>, <code>fileanalyzer</code>, <code>malhash</code>) require the <code>-o</code> flag to trigger output saving—even when <code>--case</code> is specified. Others (like <code>strings_to_yara</code> or <code>mzcount</code>) save automatically when a case is provided. Refer to the Tool Behavior Reference below for details.</p>
 <h3 id="output-formats">Output Formats</h3>
 <p>All tools that support saving reports use the following scheme:
 <code>saved_output/&lt;tool&gt;/report_&lt;timestamp&gt;.&lt;ext&gt;</code></p>
@@ -1508,6 +1551,8 @@
 <ul>
 <li><code>-o</code> enables saving (CLI output is not saved by default)</li>
 </ul>
+<p>If a <code>--case</code> argument is supplied, the report will be saved to:
+<code>saved_output/cases/&lt;case_name&gt;/&lt;tool&gt;/report_&lt;timestamp&gt;.&lt;ext&gt;</code></p>
 <p>Example:</p>
 <pre><code class="language-bash">cargo run -p mstrings — path/to/file — -o -j
 </code></pre>
@@ -1524,7 +1569,12 @@
 <li>Status bar displays CLI-equivalent command</li>
 <li>Alphabetical sorting of tools within categories</li>
 <li>Tool descriptions are now shown alongside tool names</li>
-<li>Saved reports are cleaned of internal formatting tags like [green], [reset], etc.</li>
+<li>
+<p>Saved reports are cleaned of internal formatting tags like [green], [reset], etc.</p>
+</li>
+<li>
+<p>Cases must be created from a file or folder. Hashes can be used later but do not initiate new cases.</p>
+</li>
 </ul>
 <h3 id="gui-walkthrough">GUI Walkthrough</h3>
 <p>Layout</p>
@@ -1615,7 +1665,7 @@
 <td>Uses vt-cli + bazaar-cli</td>
 </tr>
 <tr>
-<td>mismatchminer</td>
+<td>fileminer</td>
 <td>folder</td>
 <td>✅</td>
 <td>✅</td>
@@ -1645,16 +1695,16 @@
 <tr>
 <td>strings_to_yara</td>
 <td>text file and metadata</td>
-<td>❌</td>
+<td>Case Only</td>
 <td>✅</td>
-<td>Generates YARA rules</td>
+<td>Saves to case folder if <code>--case</code> is provided</td>
 </tr>
 <tr>
 <td>mzcount</td>
 <td>folder</td>
 <td>❌</td>
 <td>✅</td>
-<td>Tallies file types</td>
+<td>Will save to case folder if <code>--case</code> is provided</td>
 </tr>
 <tr>
 <td>xmzhash</td>

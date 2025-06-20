@@ -268,6 +268,25 @@
   
   
   
+  
+    <li class="md-tabs__item">
+      <a href="../../cases/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Case Management
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
     
   
   
@@ -553,6 +572,28 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Case Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -572,10 +613,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -588,8 +629,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
           </label>
@@ -717,6 +758,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../fileminer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FileMiner
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hashcheck/" class="md-nav__link">
         
   
@@ -769,29 +833,6 @@
   
   <span class="md-ellipsis">
     MalHash
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../mismatchminer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MismatchMiner
     
   </span>
   
@@ -1012,10 +1053,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1028,8 +1069,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1111,12 +1152,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/floss/" class="md-nav__link">
+      <a href="../../tools/tshark/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    FLOSS
+    TShark
     
   </span>
   
@@ -1134,12 +1175,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tools/tshark/" class="md-nav__link">
+      <a href="../../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    TShark
+    PCAP to CSV
     
   </span>
   
@@ -1327,11 +1368,11 @@
 <p>Strings to YARA helps you rapidly build custom YARA rules by prompting for a rule name, optional metadata, and a list of string indicators. It integrates with the MalChela scratchpad, allowing you to paste or collect candidate strings interactively.</p>
 <p>Lines beginning with hash: are deliberately ignored during rule generation — this lets you use the scratchpad to track hashes alongside strings without polluting your YARA rule content.</p>
 <p><img alt="Strings to YARA" src="../../images/strings_to_yara.png" /></p>
-<p align="center"><strong>Figure 19:</strong> Strings to YARA</p>
+<p align="center"><strong>Figure 24:</strong> Strings to YARA</p>
 
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
-<pre><code class="language-bash">cargo run -p strings_to_yara -- RuleName Author Description Hash /path/to/strings.txt
+<pre><code class="language-bash">cargo run -p strings_to_yara -- RuleName Author Description Hash /path/to/strings.txt --case CaseName
 </code></pre>
 <p>You can supply up to five positional arguments. If any are omitted, the tool will prompt you interactively.</p>
 <pre><code class="language-bash">Enter rule name:
@@ -1340,6 +1381,7 @@ Enter description:
 Enter hash (optional):
 Enter path to string list file:
 </code></pre>
+<p>If the <code>--case</code> flag is supplied, the resulting YARA rule will be saved in the corresponding <code>saved_output/cases/CaseName/</code> directory.</p>
 <p>Lines in the string file that begin with <code>hash:</code> are ignored and will not be included in the generated rule.</p>
 
 

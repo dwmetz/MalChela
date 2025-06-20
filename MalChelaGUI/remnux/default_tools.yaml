@@ -26,12 +26,6 @@
 edition: " "
 
 tools:
-- name: Mismatch Miner
-  description: "Identifies mismatched file extensions and types"
-  command: ["mismatchminer"]
-  input_type: folder
-  category: "File Analysis"
-  exec_type: cargo
 
 - name: "mStrings"
   description: "Extracts strings with IOC and MITRE mapping"
@@ -41,7 +35,7 @@ tools:
   exec_type: cargo
 
 - name: Malware Hash Lookup
-  description: "Checks hash against VT and MalwareBazaar"
+  description: "Checks hash against VirusTotal and MalwareBazaar"
   command: ["malhash"]
   input_type: hash
   category: "Threat Intel"
@@ -61,6 +55,13 @@ tools:
   category: "Utilities"
   exec_type: cargo
 
+- name: Hash Check
+  description: "Check a hash value against a lookup file"
+  command: ["hashcheck"]
+  input_type: file
+  category: "Hashing Tools"
+  exec_type: cargo
+
 - name: File Analyzer
   description: "Parses file metadata and checks YARA rules"
   command: ["fileanalyzer"]
@@ -75,21 +76,14 @@ tools:
   category: "Hashing Tools"
   exec_type: cargo
 
-- name: Hash Check
-  description: "Check a hash value against a lookup file"
-  command: ["hashcheck"]
-  input_type: file
-  category: "Hashing Tools"
-  exec_type: cargo
-
 - name: MZHash
-  description: "Generates hashes for folder contents"
+  description: "Generates hash set and lookup table for folder contents with MZ headers"
   command: ["mzhash"]
   input_type: folder
   category: "Hashing Tools"
   exec_type: cargo
 
-- name: MZCount
+- name: MZcount
   description: "Counts file types within a directory"
   command: ["mzcount"]
   input_type: folder
@@ -106,22 +100,72 @@ tools:
 - name: Strings to YARA
   description: "Converts string sets into YARA rules"
   command: ["strings_to_yara"]
-  input_type: hash
+  input_type: file
   category: "YARA Tools"
   exec_type: cargo
 
 - name: XMZHash
-  description: "Generates MD5 hashes with extended output"
+  description: "Generates hash set and lookup table for folder contents with non-MZ headers"
   command: ["xmzhash"]
   input_type: folder
   category: "Hashing Tools"
   exec_type: cargo
 
+- name: "File Miner"
+  description: "Scans a folder for file type mismatches and metadata"
+  command: ["fileminer"]
+  input_type: folder
+  category: "File Analysis"
+  exec_type: cargo
+
+# -------------------------------------
+# Example script in workspace integration:
+# This script is included in MalChela (requires Tshark)
+# - name: PCAP to CSV (.zip)
+#   description: "Converts PCAP for processing in Magnet Axiom"
+#   command: ["python3"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "Utilities"
+#   optional_args: ["scripts/tshark_to_csv.py"]
+#   exec_type: script
+# 
+# -------------------------------------
+# Special Tools Integrations:
+# If you have YARA-X, Tshark, or Volatility3 installed and in your path,
+# Uncomment the entries below to enable special panels in MalChela
+# 
+# - name: YARA-X
+#   description: "Run YARA-X with custom rule and target file"
+#   command: ["yr"]
+#   input_type: file
+#   file_position: "last"
+#   category: "YARA Tools"
+#   optional_args: []
+#   exec_type: binary
+#   cargo: false
+# 
+# - name: TShark
+#   description: "Analyze network traffic"
+#   command: ["tshark"]
+#   input_type: file
+#   accepted_extensions: ["pcap", "pcapng"]
+#   file_position: "last"
+#   category: "Network Analysis"
+#   optional_args: []
+#   exec_type: binary
+# 
+# - name: Volatility 3
+#   description: "Memory analysis using Volatility 3"
+#   command: ["/Users/dmetz/.local/bin/vol3"]
+#   input_type: "file"
+#   file_position: "first"
+#   category: "Memory Forensics"
+#   gui_mode_args: []
+#   exec_type: binary
+# 
 # -------------------------------------
 # Example 3rd party integrations:
-# Below is a disabled example for capa
-# Uncomment to enable if capa is in your PATH
-# 
 # - name: capa
 #   description: "Detects capabilities in binaries via rules"
 #   command: ["capa"]
@@ -150,4 +194,3 @@ tools:
 #   exec_type: script
 # 
 #  ** Note: See User Guide for Python requirements
-

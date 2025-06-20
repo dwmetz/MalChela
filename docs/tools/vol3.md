@@ -14,14 +14,16 @@ Volatility 3 is available in MalChela as an enhanced third-party tool. The GUI p
 - Plugin-specific argument helpers
 - Color-coded output for easier review
 - Output saving and file dump options
+- Output can be saved to the default location or to a specific case directory.
+
 
 ![Volatility](../images/volatility.png)
 
-<p align="center"><strong>Figure 24:</strong> Volatility (launches in separate terminal)</p>
+<p align="center"><strong>Figure 29:</strong> Volatility (launches in separate terminal)</p>
 
 ![Volatility Plugin Reference](../images/volatility_panel.png)
 
-<p align="left"><strong>Figure 25:</strong> Volatility Plugin Reference</p>
+<p align="left"><strong>Figure 30:</strong> Volatility Plugin Reference</p>
 
 ---
 

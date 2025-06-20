@@ -1,7 +1,15 @@
-
 **Note:** `FileMiner` replaces the deprecated `MismatchMiner`.
 
 **FileMiner** is a command-line tool that recursively scans a directory to analyze files by magic bytes and hash, identifying mismatches between file extensions and true types. It is useful for forensic triage, anomaly detection, and preparing follow-up analysis using other tools in the MalChela suite.
+
+![File Analyzer](../images/fileanalyzer.png)
+
+<p align="center"><strong>Figure 14:</strong> File Analyzer</p>
+
+![File Analyzer with Subtool Output](../images/fileanalyzer_with_subtool_output.png)
+
+<p align="center"><strong>Figure 15:</strong> File Analyzer with Subtool Output</p>
+
 
 ## Function Overview
 
@@ -11,6 +19,9 @@
 - Suggests relevant analysis tools (e.g., FileAnalyzer, mStrings, malhash)
 - Outputs results in a styled table or optional JSON format
 - Integrates with case management via the `--case` flag
+- Automatically launches in GUI when a folder-based case is created or restored
+- Results populate an interactive table in the GUI
+- Users can launch suggested tools on a per-file basis directly from the GUI
 
 ## CLI Usage
 
@@ -23,7 +34,8 @@ cargo run -p fileminer -- [OPTIONS] [DIR]
 | Option                      | Description                                                                 |
 |----------------------------|-----------------------------------------------------------------------------|
 | `DIR`                      | Directory to analyze. Optional — will prompt if not supplied.             |
-| `--json`                   | Save results to `fileminer_output.json` in `saved_output` directory.       |
+| `--json`                   | Save results to JSON. Defaults to `fileminer_output.json` unless `--output` is used. |
+| `--output <filename>`      | Overrides the default output file name. Used internally by the GUI.       |
 | `--case <case-name>`       | Saves output under `saved_output/<case-name>/fileminer/`. Also passes case name to downstream tools. |
 | `-m`, `--mismatches-only`  | Only display entries with extension mismatches.                            |
 
@@ -45,3 +57,10 @@ cargo run -p fileminer -- /path/to/files -m
 # Combine all
 cargo run -p fileminer -- /path/to/files --case suspicious_usb -m
 ```
+
+## GUI Usage Notes
+
+- When a new case is created or restored using a folder, FileMiner runs automatically in the GUI.
+- Results are saved under `saved_output/cases/<case-name>/fileminer/`.
+- FileMiner displays an interactive table of results with suggested tools per file.
+- Suggested tools can be launched directly from within the GUI results panel.

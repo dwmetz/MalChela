@@ -2,7 +2,7 @@
 
 ![YARA-X](../images/yara-x.png)
 
-<p align="center"><strong>Figure 26:</strong> YARA-X </p>
+<p align="center"><strong>Figure 31:</strong> YARA-X </p>
 
 ---
 
@@ -11,16 +11,16 @@ YARA-X is an extended version of YARA with enhanced performance and features. To
 ## Installation
 
 - **Download the latest release:**  
-   Visit the official YARA-X GitHub releases page at [https://github.com/Yara-Rules/yara-x/releases](https://github.com/Yara-Rules/yara-x/releases) and download the appropriate binary for your platform.
+   Visit the official YARA-X GitHub releases page at [https://github.com/VirusTotal/yara-x/releases](https://github.com/VirusTotal/yara-x/releases) and download the appropriate binary for your platform.
 
 - **Extract and install:**  
-   Extract the downloaded archive and place the `yara-x` binary in a directory included in your system’s `$PATH`, or note its absolute path for configuration.
+   Extract the downloaded archive and place the `yara-x` binary (`yr`) in a directory included in your system’s `$PATH`, or note its absolute path for configuration.
 
 - **Verify installation:**  
    Run the following command to confirm YARA-X is installed correctly:
 
 ```bash
-yara-x —version
+yr —version
 ```
 
 ## Configuration in MalChela

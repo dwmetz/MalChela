@@ -1,6 +1,6 @@
 [package]
 name = "MalChelaGUI"
-version = "2.2.1"
+version = "3.0.0"
 edition = "2021"
 
 [dependencies]
@@ -8,12 +8,12 @@ eframe = { version = "0.27", features = ["glow"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 rfd = "0.13"  
-colored = "2.1"
+colored = "2.2"
 ansi-parser = "0.9"
 image = "0.25.6"
 once_cell = "1.21.3"
 regex = "1.11.1"
-chrono = "0.4.40"
+chrono = "0.4.41"
 strip-ansi-escapes = "0.2.1"
 serde_json = "1.0.140"
 jsonxf = "1.1"
@@ -30,6 +30,11 @@ walkdir = "2.5.0"
 common_config = { path = "../common_config" }
 zip = "4.0.0"
 dispatch = "0.2.0"
+opener = "0.8.2"
+lazy_static = "1.5.0"
+
+
+
 
 [package.metadata.bundle]
 name = "MalChela"

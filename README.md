@@ -1,8 +1,8 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela_steampunk.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela.png"/>
  <p>
  <h1>
-  Malchela v2.2.1
+  Malchela v3.0
  </h1>
   <h4>
       A YARA & Malware Analysis Toolkit written in Rust.
@@ -86,6 +86,16 @@ or
 cargo run -p MalChelaGUI
 
 ```
+
+### Case Management (v3.0)
+
+MalChela v3.0 introduces a full-featured case system:
+
+- Track files, tools run, and notes under a unified `case.yaml`
+- Auto-save tool output under `saved_output/cases/<case-name>/`
+- Integrated tagging, search, and scratchpad with VS Code support
+- Seamless case loading and archiving in GUI mode
+
 <h3>🔧 Adding Custom Tools:</h3>
 
 You can extend MalChela by editing the `tools.yaml` file to add third-party or custom tools to the GUI. This flexible configuration supports binaries, Python scripts, and Rust-based programs.

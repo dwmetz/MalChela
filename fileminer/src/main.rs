@@ -43,14 +43,26 @@ struct Cli {
     #[arg(value_name = "DIR", help = "Directory to analyze")]
     path: Option<String>,
 
-    #[arg(long, help = "Save results to JSON file")]
-    json: bool,
-
     #[arg(long, help = "Optional case name to save output under")]
     case: Option<String>,
 
-    #[arg(short = 'm', long, help = "Only display entries with extension mismatches")]
+    #[arg(short, long, help = "Save output to file", default_value_t = false)]
+    output: bool,
+
+    #[arg(short = 't', long, help = "Save as TXT format", default_value_t = false)]
+    text: bool,
+
+    #[arg(short = 'j', long, help = "Save as JSON format", default_value_t = false)]
+    json: bool,
+
+    #[arg(short = 'm', long, help = "Save as Markdown format", default_value_t = false)]
+    markdown: bool,
+
+    #[arg(long = "mismatch", help = "Only display entries with extension mismatches", default_value_t = false)]
     mismatches_only: bool,
+
+    #[arg(long, help = "Disable interactive prompt (GUI mode)", default_value_t = false)]
+    no_prompt: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -60,6 +72,8 @@ struct ScanResult {
     filetype: String,
     size: u64,
     sha256: String,
+    sha1: String,
+    md5: String,
     suggested_tools: Vec<(String, String)>,
     extension_label: String,
     extension_mismatch: bool,
@@ -128,8 +142,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(results) => {
             use std::collections::HashMap;
 
-            println!("Analysis complete.\n");
-
             let display_results: Vec<_> = if cli.mismatches_only {
                 results.iter().filter(|r| r.extension_mismatch).collect()
             } else {
@@ -141,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 grouped.entry(res.sha256.clone()).or_default().push(res);
             }
 
-            if is_gui {
+            if is_gui || cli.no_prompt {
                 #[derive(Serialize)]
                 struct FileMinerOutput {
                     tool: &'static str,
@@ -149,115 +161,143 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     results: Vec<ScanResult>,
                 }
 
-                let _output = FileMinerOutput {
+                let output = FileMinerOutput {
                     tool: "fileminer",
                     total: display_results.len(),
                     results: display_results.clone().into_iter().cloned().collect(),
                 };
+
+                let serialized = serde_json::to_string_pretty(&output)?;
+                println!("{}", serialized);
+                return Ok(());
             }
 
-            use tabled::builder::Builder;
-            use tabled::settings::{Style, Modify, object::{Columns}, Alignment, Width};
+            if !is_gui && !cli.no_prompt {
+                println!("Analysis complete.\n");
+                loop {
+                    use tabled::builder::Builder;
+                    use tabled::settings::{Style, Modify, object::{Columns}, Alignment, Width};
 
-            let mut builder = Builder::default();
-            builder.push_record([
-                "#", "Filename", "Path", "Type", "Size", "SHA256", "Ext", "Inferred", "Mismatch", "Suggested"
-            ]);
+                    let mut builder = Builder::default();
+                    builder.push_record([
+                        "#", "Filename", "Path", "Type", "Size", "SHA256", "Ext", "Inferred", "Mismatch", "Suggested"
+                    ]);
 
-            for (i, r) in display_results.iter().enumerate() {
-                builder.push_record([
-                    i.to_string(),
-                    r.filename.clone(),
-                    r.filepath.clone(),
-                    simplify_mime(&r.actual_type).to_string(),
-                    format_size(r.size),
-                    r.sha256.clone(),
-                    r.extension_label.clone(),
-                    r.extension_inferred.clone(),
-                    r.extension_mismatch.to_string(),
-                    join_suggested_tools(&r.suggested_tools),
-                ]);
-            }
-
-            let mismatch_column = Columns::single(9);
-            let mut built = builder.build();
-            let table = built
-                .with(Style::modern())
-                .with(Modify::new(Columns::single(1)).with(Width::wrap(25).keep_words(true)))
-                .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
-                .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)))
-                .with(Modify::new(Columns::single(2)).with(Width::wrap(30).keep_words(true)))
-                .with(Modify::new(Columns::single(5)).with(Width::wrap(30).keep_words(true)))
-                .with(Modify::new(mismatch_column).with(Width::wrap(24).keep_words(true)));
-
-            println!("{}", table);
-
-            if !is_gui {
-                println!("\nSelect a file to process:");
-                let mut input = String::new();
-                io::stdin().read_line(&mut input).unwrap();
-                let sel_index: usize = match input.trim().parse::<usize>() {
-                    Ok(num) if num < results.len() => num,
-                    _ => {
-                        eprintln!("Invalid selection.");
-                        return Ok(());
+                    for (i, r) in display_results.iter().enumerate() {
+                        builder.push_record([
+                            i.to_string(),
+                            r.filename.clone(),
+                            r.filepath.clone(),
+                            simplify_mime(&r.actual_type).to_string(),
+                            format_size(r.size),
+                            r.sha256.clone(),
+                            r.extension_label.clone(),
+                            r.extension_inferred.clone(),
+                            r.extension_mismatch.to_string(),
+                            join_suggested_tools(&r.suggested_tools),
+                        ]);
                     }
-                };
-                let selected_file = &results[sel_index];
 
-                // Map filetype to MIME type category for tool selection prompt
-                let mime_category = if selected_file.filetype.contains("portable-executable") {
-                    "portable-executable"
-                } else if selected_file.filetype == "Unknown" {
-                    "unknown"
-                } else if selected_file.filetype.starts_with("application/") {
-                    "application"
-                } else if selected_file.filetype.starts_with("text/") {
-                    "text"
-                } else {
-                    "other"
-                };
+                    let mismatch_column = Columns::single(9);
+                    let mut built = builder.build();
+                    let table = built
+                        .with(Style::modern())
+                        .with(Modify::new(Columns::single(1)).with(Width::wrap(25).keep_words(true)))
+                        .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
+                        .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)))
+                        .with(Modify::new(Columns::single(2)).with(Width::wrap(30).keep_words(true)))
+                        .with(Modify::new(Columns::single(5)).with(Width::wrap(30).keep_words(true)))
+                        .with(Modify::new(mismatch_column).with(Width::wrap(24).keep_words(true)));
 
-                println!("\nAvailable tools for {}:", mime_category);
-                for (i, (label, _)) in selected_file.suggested_tools.iter().enumerate() {
-                    println!("- [{}] {}", i + 1, label);
-                }
-                println!("Select tool:");
-                input.clear();
-                io::stdin().read_line(&mut input).unwrap();
-                let tool_index: usize = match input.trim().parse::<usize>() {
-                    Ok(i) if i > 0 && i <= selected_file.suggested_tools.len() => i - 1,
-                    _ => {
-                        eprintln!("Invalid tool selection.");
-                        return Ok(());
+                    println!("{}", table);
+
+                    println!("\nSelect a file to process (or press 'x' to exit):");
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input).unwrap();
+                    let trimmed = input.trim();
+                    if trimmed.eq_ignore_ascii_case("x") {
+                        break;
                     }
-                };
+                    let sel_index: usize = match trimmed.parse::<usize>() {
+                        Ok(num) if num < results.len() => num,
+                        _ => {
+                            eprintln!("Invalid selection.");
+                            continue;
+                        }
+                    };
+                    let selected_file = &results[sel_index];
 
-                let (_, tool_name) = &selected_file.suggested_tools[tool_index];
+                    let mime_category = if selected_file.filetype.contains("portable-executable") {
+                        "portable-executable"
+                    } else if selected_file.filetype == "Unknown" {
+                        "unknown"
+                    } else if selected_file.filetype.starts_with("application/") {
+                        "application"
+                    } else if selected_file.filetype.starts_with("text/") {
+                        "text"
+                    } else {
+                        "other"
+                    };
 
-                println!("Running {} on {}...", tool_name, selected_file.filename);
+                    println!("\nAvailable tools for {}:", mime_category);
+                    for (i, (label, _)) in selected_file.suggested_tools.iter().enumerate() {
+                        println!("- [{}] {}", i + 1, label);
+                    }
+                    println!("Select tool:");
+                    input.clear();
+                    io::stdin().read_line(&mut input).unwrap();
+                    let tool_index: usize = match input.trim().parse::<usize>() {
+                        Ok(i) if i > 0 && i <= selected_file.suggested_tools.len() => i - 1,
+                        _ => {
+                            eprintln!("Invalid tool selection.");
+                            continue;
+                        }
+                    };
 
-                // Actually run the selected tool using cargo run
-                let mut args = vec!["run", "-p", tool_name, "--"];
+                    let (_, tool_name) = &selected_file.suggested_tools[tool_index];
 
-                if tool_name == "malhash" {
-                    args.push(&selected_file.sha256);
-                } else {
-                    args.push(&selected_file.filepath);
-                }
+                    println!("Running {} on {}...", tool_name, selected_file.filename);
 
-                if let Some(case) = case_name {
-                    args.push("--case");
-                    args.push(case);
-                }
+                    let mut args = vec!["run", "-p", tool_name, "--"];
+                    if tool_name == "malhash" {
+                        args.push(&selected_file.sha256);
+                    } else if tool_name == "nsrlquery" {
+                        args.push(&selected_file.md5);
+                    } else {
+                        args.push(&selected_file.filepath);
+                    }
+                    if cli.output {
+                        args.push("-o");
+                    }
+                    if cli.text {
+                        args.push("-t");
+                    }
+                    if cli.json {
+                        args.push("-j");
+                    }
+                    if cli.markdown {
+                        args.push("-m");
+                    }
+                    if let Some(case) = case_name {
+                        args.push("--case");
+                        args.push(case);
+                    }
 
-                let status = Command::new("cargo")
-                    .args(args)
-                    .status()
-                    .expect("Failed to run tool");
+                    let status = Command::new("cargo")
+                        .args(args)
+                        .status()
+                        .expect("Failed to run tool");
 
-                if !status.success() {
-                    eprintln!("{} failed to execute properly.", tool_name);
+                    if !status.success() {
+                        eprintln!("{} failed to execute properly.", tool_name);
+                    }
+
+                    println!("\nPress Enter to continue, or type 'x' to exit.");
+                    input.clear();
+                    io::stdin().read_line(&mut input).unwrap();
+                    if input.trim().eq_ignore_ascii_case("x") {
+                        break;
+                    }
                 }
             }
         }
@@ -281,7 +321,9 @@ fn analyze_directory(
             let actual_type = file_type.clone();
             let metadata = fs::metadata(&path)?;
             let file_size = metadata.len();
-            let hash = calculate_sha256(&path)?;
+            let sha256 = calculate_sha256(&path)?;
+            let md5 = calculate_md5(&path)?;
+            let sha1 = calculate_sha1(&path)?;
 
             let extension = path
                 .extension()
@@ -320,9 +362,11 @@ fn analyze_directory(
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("malhash".into(), "malhash".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type == "Unknown" && file_size > 10_000 {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("malhash".into(), "malhash".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             }
 
 
@@ -336,7 +380,9 @@ fn analyze_directory(
                 filepath: path.to_string_lossy().to_string(),
                 filetype: file_type,
                 size: file_size,
-                sha256: hash,
+                sha256,
+                sha1,
+                md5,
                 suggested_tools,
                 extension_label: extension,
                 extension_mismatch: ext_mismatch,
@@ -346,12 +392,9 @@ fn analyze_directory(
         }
     }
 
-    if save_json {
-        let output_dir = if let Some(case) = case {
-            Path::new("saved_output").join(case).join("fileminer")
-        } else {
-            Path::new("saved_output").join("fileminer")
-        };
+    let is_gui = std::env::var("MALCHELA_GUI_MODE").is_ok();
+    if save_json && !is_gui && case.is_none() {
+        let output_dir = Path::new("saved_output").join("fileminer");
         fs::create_dir_all(&output_dir)?;
         let out_path = output_dir.join("fileminer_output.json");
         let file = File::create(&out_path)?;
@@ -384,8 +427,32 @@ fn calculate_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         if bytes_read == 0 {
             break;
         }
-        hasher.update(&buffer[..bytes_read]);
+        hasher.update(&buffer[..bytes_read]);  // ✅ semicolon here
     }
 
+    Ok(format!("{:x}", hasher.finalize()))  // ✅ this should be outside the loop
+}
+
+fn calculate_md5(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let mut file = File::open(path)?;
+    let mut hasher = md5::Context::new();
+    let mut buffer = [0u8; 4096];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 { break; }
+        hasher.consume(&buffer[..n]);
+    }
+    Ok(format!("{:x}", hasher.compute()))
+}
+
+fn calculate_sha1(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let mut file = File::open(path)?;
+    let mut hasher = sha1::Sha1::new();
+    let mut buffer = [0u8; 4096];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 { break; }
+        hasher.update(&buffer[..n]);
+    }
     Ok(format!("{:x}", hasher.finalize()))
 }

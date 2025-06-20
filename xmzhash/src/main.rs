@@ -340,7 +340,7 @@ fn main() {
                     i += 1;
                 }
             }
-            "-o" => {
+            "--overwrite" => {
                 allow_overwrite = true;
             }
             "-p" => {

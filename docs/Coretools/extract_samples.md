@@ -2,7 +2,7 @@ Extract Samples recursively unpacks password-protected archives commonly used in
 
 ![Extract Samples](../images/extractsamples.png)
 
-<p align="center"><strong>Figure 8:</strong> Extract Samples</p>
+<p align="center"><strong>Figure 12:</strong> Extract Samples</p>
 
 ---
 

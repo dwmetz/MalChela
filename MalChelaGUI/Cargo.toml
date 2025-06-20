@@ -1,6 +1,6 @@
 [package]
 name = "MalChelaGUI"
-version = "2.2.1"
+version = "3.0.0"
 edition = "2021"
 
 [dependencies]
@@ -30,6 +30,9 @@ walkdir = "2.5.0"
 common_config = { path = "../common_config" }
 zip = "4.0.0"
 dispatch = "0.2.0"
+opener = "0.8.2"
+lazy_static = "1.5.0"
+
 
 
 

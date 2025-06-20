@@ -34,6 +34,9 @@ struct Args {
 
     #[arg(long, help = "Optional case name for routing output")]
     case: Option<String>,
+
+    #[arg(long, help = "Specify output file name")]
+    output_file: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -50,7 +53,6 @@ struct FileAnalysisReport {
     uncommon_sections: Vec<String>,
     suspicious_imports: Vec<String>,
     suspicious_compile_time: bool,
-    fuzzy_hash: Option<String>,
     imphash: Option<String>,
 }
 #[allow(dead_code)]
@@ -64,7 +66,6 @@ mod packed;
 mod vt_scan;
 mod filetype;
 mod signing;
-mod fuzzy;
 mod imphash;
 
 use std::fs;
@@ -119,36 +120,6 @@ async fn main() {
     let line = styled_line("stone", &format!("SHA-256 Hash: {:?}", hash));
     println!("{}", line);
     writeln!(temp_file, "{}", plain_text(&line)).ok();
-
-    let fuzzy_hash = match std::fs::metadata(&file_path) {
-        Ok(meta) if meta.len() < 512 => {
-            let msg = "Fuzzy Hash: (unable to compute – File too small for fuzzy hashing.)";
-            let line = styled_line("yellow", msg);
-            println!("{}", line);
-            writeln!(temp_file, "{}", plain_text(&line)).ok();
-            None
-        }
-        Ok(_) => match fuzzy::calculate_fuzzy_hash(&file_path) {
-            Ok(fh) => {
-                let line = styled_line("stone", &format!("Fuzzy Hash (ssdeep): {}", fh));
-                println!("{}", line);
-                writeln!(temp_file, "{}", plain_text(&line)).ok();
-                Some(fh)
-            }
-            Err(e) => {
-                let line = styled_line("yellow", &format!("Fuzzy Hash: (unable to compute – {})", e));
-                println!("{}", line);
-                writeln!(temp_file, "{}", plain_text(&line)).ok();
-                None
-            }
-        },
-        Err(e) => {
-            let line = styled_line("yellow", &format!("Fuzzy Hash: (unable to compute – {})", e));
-            println!("{}", line);
-            writeln!(temp_file, "{}", plain_text(&line)).ok();
-            None
-        }
-    };
 
     let vt_result = match vt_scan::check_virustotal(&hash).await {
         Ok(true) => {
@@ -569,31 +540,54 @@ async fn main() {
             uncommon_sections: bad_sections.clone(),
             suspicious_imports: suspicious_imports.clone(),
             suspicious_compile_time,
-            fuzzy_hash: fuzzy_hash.clone(),
             imphash: imphash.clone(),
         };
+
+        // Determine output file path based on --output-file if provided
+        let output_file_path = if let Some(ref file_name) = args.output_file {
+            // If output_file is absolute, use as is, else join with output_dir
+            let p = std::path::Path::new(file_name);
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                output_dir.join(p)
+            }
+        } else {
+            match format {
+                "txt" => output_dir.join(format!("report_{}.txt", timestamp)),
+                "md" => output_dir.join(format!("report_{}.md", timestamp)),
+                "json" => output_dir.join(format!("report_{}.json", timestamp)),
+                _ => output_dir.join(format!("report_{}.txt", timestamp)), // fallback
+            }
+        };
+
+        // Ensure parent directories exist before creating the file
+        if let Some(parent) = output_file_path.parent() {
+            std::fs::create_dir_all(parent).expect("Failed to create output directories");
+        }
 
         match format {
             "txt" => {
                 use std::io::Write;
                 temp_file.flush().expect("Failed to flush temp file before saving report");
-                let text_path = output_dir.join(format!("report_{}.txt", timestamp));
-                fs::copy(&temp_path, &text_path).expect("Failed to save text report");
-                println!("\n{}", styled_line("green", &format!("Text report saved to: {}", text_path.display())));
+                fs::copy(&temp_path, &output_file_path).expect("Failed to save text report");
+                println!("\n{}", styled_line("green", &format!("Text report saved to: {}", output_file_path.display())));
             }
             "md" => {
                 use std::io::Write;
                 temp_file.flush().expect("Failed to flush temp file before saving report");
-                let md_path = output_dir.join(format!("report_{}.md", timestamp));
-                fs::copy(&temp_path, &md_path).expect("Failed to save markdown report");
-                println!("\n{}", styled_line("green", &format!("Markdown report saved to: {}", md_path.display())));
+                fs::copy(&temp_path, &output_file_path).expect("Failed to save markdown report");
+                println!("\n{}", styled_line("green", &format!("Markdown report saved to: {}", output_file_path.display())));
             }
             _ => {
-                let json_path = output_dir.join(format!("report_{}.json", timestamp));
-                let mut file = File::create(&json_path).expect("Failed to create report file");
+                // Ensure parent directories exist before creating the file
+                if let Some(parent) = output_file_path.parent() {
+                    std::fs::create_dir_all(parent).expect("Failed to create output directories");
+                }
+                let mut file = File::create(&output_file_path).expect("Failed to create report file");
                 let json = serde_json::to_string_pretty(&report).expect("Failed to serialize report");
                 file.write_all(json.as_bytes()).expect("Failed to write report");
-                println!("\n{}", styled_line("green", &format!("JSON report saved to: {}", json_path.display())));
+                println!("\n{}", styled_line("green", &format!("JSON report saved to: {}", output_file_path.display())));
             }
         }
     } else {

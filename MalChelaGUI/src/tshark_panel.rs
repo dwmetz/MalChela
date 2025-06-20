@@ -1,6 +1,7 @@
 use eframe::egui::{self, RichText};
 use chrono::Local;
 
+#[derive(Clone)]
 pub struct TsharkPanel {
     input_path: String,
     output: String,

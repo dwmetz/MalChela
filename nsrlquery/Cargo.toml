@@ -1,6 +1,6 @@
 [package]
 name = "nsrlquery"
-version = "2.2.1"
+version = "3.0.0"
 edition = "2021"
 
 [dependencies]
@@ -11,3 +11,4 @@ tokio = { version = "1.45.1", features = ["full"] }
 common_ui = { path = "../common_ui" }
 clap = { version = "4", features = ["derive"] }
 common_config = { path = "../common_config" }
+chrono = "0.4.41"

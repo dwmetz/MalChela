@@ -1,8 +1,8 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="350" width="450" src="images/malchela_steampunk.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela.png"/>
  <p>
  <h1>
-  Malchela v2.2.1
+  Malchela v3.0
  </h1>
   <h4>
       A YARA & Malware Analysis Toolkit written in Rust.

@@ -28,7 +28,7 @@ MalChela supports three main workflows:
   ```
   
 
-Most tools now support a `--case <name>` argument to redirect saved output to a specific case folder under `saved_output/cases/`.
+Most tools now support a `--case <name>` argument to redirect saved output to a specific case folder under `saved_output/cases/`. Cases must be initiated with either a file or folder as the input. Hash-only workflows can be added to an existing case but cannot start one.
 
 Note: Some tools (e.g., `mstrings`, `fileanalyzer`, `malhash`) require the `-o` flag to trigger output saving—even when `--case` is specified. Others (like `strings_to_yara` or `mzcount`) save automatically when a case is provided. Refer to the Tool Behavior Reference below for details.
 
@@ -74,6 +74,8 @@ cargo run -p mstrings — path/to/file — -o -j
 - Tool descriptions are now shown alongside tool names
 - Saved reports are cleaned of internal formatting tags like [green], [reset], etc.
 
+- Cases must be created from a file or folder. Hashes can be used later but do not initiate new cases.
+
 ### GUI Walkthrough
 
 Layout
@@ -117,7 +119,7 @@ Save Report
 | hashit          | file                   | ✅            | ✅                 | Generates hashes                  |
 | hashcheck       | hash and lookup file    | ❌            | ✅                 | Checks files against known hashes |
 | malhash         | hash                   | ✅            | ✅                 | Uses vt-cli + bazaar-cli          |
-| mismatchminer   | folder                 | ✅            | ✅                 | Identifies mismatches             |
+| fileminer   | folder                 | ✅            | ✅                 | Identifies mismatches             |
 | mstrings        | file                   | ✅            | ✅                 | Maps strings to MITRE             |
 | mzhash          | folder                 | ✅            | ✅                 | Hashes files with MZ header       |
 | nsrlquery       | file                   | ✅            | ✅                 | Queries CIRCL                     |

@@ -1,5 +1,3 @@
-## Tool Configuration
-
 MalChela uses a central `tools.yaml` file to define which tools appear in the GUI, along with their launch method, input types, categories, and optional arguments. This YAML-driven approach allows full control without editing source code.
 
 ### Key Fields in Each Tool Entry

@@ -1,3 +1,12 @@
+
+`hashit` is a flexible hashing utility that supports calculating multiple hash types for one or more files. It can be used to verify file integrity, generate forensic reports, or build hash sets for analysis. Output can be saved in text, JSON, or Markdown format, and optionally redirected into a case folder.
+
+![HashCheck](../images/hashit.png)
+
+<p align="center"><strong>Figure 17:</strong> Hash It</p>
+
+The tool supports batch operations on directories and automatically recurses through subfolders. It's especially useful during triage to generate hash inventories or validate file integrity against known datasets.
+
 ### 🔧 CLI Syntax
 
 ```bash

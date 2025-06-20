@@ -2,7 +2,7 @@ mStrings extracts strings from files and classifies them using regular expressio
 
 ![MStrings](../images/mstrings.png)
 
-<p align="center"><strong>Figure 14:</strong> MStrings</p>
+<p align="center"><strong>Figure 19:</strong> MStrings</p>
 
 ---
 

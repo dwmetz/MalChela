@@ -1,4 +1,4 @@
-## 🦀 Support & Contribution
+## Support & Contribution
 
 The MalChela project is open source and actively maintained. Contributions, feedback, and bug reports are always welcome. You can find the project on [GitHub](https://github.com/dwmetz/MalChela), where issues and pull requests are encouraged.
 

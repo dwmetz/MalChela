@@ -57,7 +57,7 @@ rule zip_header {
 }
 
 fn display_table(counts: &Counts) {
-    println!("RESULTS");
+    println!("\nTotal Counts:");
     println!("\n+----------------------+---------+");
 
     println!(
@@ -197,7 +197,11 @@ fn main() {
     match compile_yara_rules() {
         Ok(rules) => {
             if use_table_display {
-                clearscreen::clear().expect("Failed to clear screen");
+                if std::env::var("MALCHELA_GUI_MODE").is_err() {
+                    clearscreen::clear().expect("Failed to clear screen");
+                } else {
+                    println!(); // Print a blank line instead of clearing screen
+                }
             }
 
             let mut counts = Counts {
@@ -208,14 +212,20 @@ fn main() {
                 neither_header: 0,
             };
 
-            // DEBUG line removed as requested.
             scan_and_count_files(&directory_path, &rules, use_table_display, &mut counts);
 
+
             if use_table_display {
-                clearscreen::clear().expect("Failed to clear screen");
-                display_table(&counts);
+                // Avoid terminal escape sequences in GUI mode
+                if std::env::var("MALCHELA_GUI_MODE").is_err() {
+                    clearscreen::clear().expect("Failed to clear screen");
+                    display_table(&counts);
+                } else {
+                    // Skip clearing in GUI mode, just show the table
+                    println!(); // spacing instead
+                    display_table(&counts);
+                }
             } else {
-                println!("\nFinal Results:");
                 display_table(&counts);
             }
 

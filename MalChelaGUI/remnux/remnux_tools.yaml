@@ -26,9 +26,10 @@
 edition: "REMnux Edition"
 
 tools:
-- name: Mismatch Miner
-  description: "Identifies mismatched file extensions and types"
-  command: ["mismatchminer"]
+
+- name: "File Miner"
+  description: "Scans a folder for file type mismatches and metadata"
+  command: ["fileminer"]
   input_type: folder
   category: "File Analysis"
   exec_type: cargo
@@ -75,14 +76,14 @@ tools:
   category: "Hashing Tools"
   exec_type: cargo
 
-- name: MZMD5
-  description: "Generates MD5 hashes for folder contents"
-  command: ["mzmd5"]
+- name: MZHash
+  description: "Generates hash set and lookup table for folder contents with MZ headers"
+  command: ["mzhash"]
   input_type: folder
   category: "Hashing Tools"
   exec_type: cargo
 
-- name: MZCount
+- name: MZcount
   description: "Counts file types within a directory"
   command: ["mzcount"]
   input_type: folder
@@ -103,13 +104,35 @@ tools:
   category: "YARA Tools"
   exec_type: cargo
 
-- name: XMZMD5
-  description: "Generates MD5 hashes with extended output"
-  command: ["xmzmd5"]
+- name: XMZHash
+  description: "Generates hash set and lookup table for folder contents with non-MZ headers"
+  command: ["xmzhash"]
   input_type: folder
   category: "Hashing Tools"
   exec_type: cargo
 
+# - name: PCAP to CSV (.zip)
+#   description: "Converts PCAP for processing in Magnet Axiom"
+#   command: ["python3"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "Utilities"
+#   optional_args: ["scripts/tshark_to_csv.py"]
+#   exec_type: script
+# 
+
+# -------------------------------------
+# Example script in workspace integration:
+# This script is included in MalChela (requires Tshark)
+# - name: PCAP to CSV (.zip)
+#   description: "Converts PCAP for processing in Magnet Axiom"
+#   command: ["python3"]
+#   input_type: "file"
+#   file_position: "last"
+#   category: "Utilities"
+#   optional_args: ["scripts/tshark_to_csv.py"]
+#   exec_type: script
+# 
 # -------------------------------------
 # 3rd party integrations:
 #

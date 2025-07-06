@@ -170,7 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg(
             Arg::new("file")
                 .help("File to scan")
-                .required(true)
+                .required(false)
                 .index(1)
                 .num_args(1),
         )

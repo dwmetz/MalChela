@@ -1616,9 +1616,9 @@
 </code></pre>
 <h2 id="cli-usage-notes">CLI Usage Notes</h2>
 <ul>
-<li>Tools that accept paths (files or folders) can be run with <code>—</code> after the <code>cargo run</code> command to specify inputs and save output:
+<li>Tools that accept paths (files or folders) should be run from the <code>target/release</code> directory after building with <code>release.sh</code>:
   <code>bash
-  cargo run -p fileanalyzer — /path/to/file -o</code></li>
+  ./target/release/fileanalyzer /path/to/file -o</code></li>
 </ul>
 <p>Most tools now support a <code>--case &lt;name&gt;</code> argument to redirect saved output to a specific case folder under <code>saved_output/cases/</code>. Cases must be initiated with either a file or folder as the input. Hash-only workflows can be added to an existing case but cannot start one.</p>
 <p>Note: Some tools (e.g., <code>mstrings</code>, <code>fileanalyzer</code>, <code>malhash</code>) require the <code>-o</code> flag to trigger output saving—even when <code>--case</code> is specified. Others (like <code>strings_to_yara</code> or <code>mzcount</code>) save automatically when a case is provided. Refer to the Tool Behavior Reference below for details.</p>

@@ -1521,17 +1521,19 @@
 <li><strong>Direct Tool Execution (CLI):</strong></li>
 </ul>
 <p><code>bash
-   cargo run -p toolname — [input] [flags]</code></p>
+   chmod +x release.sh
+   ./release.sh
+   ./target/release/toolname [input] [flags]</code></p>
 <ul>
 <li><strong>MalChela CLI Launcher Menu:</strong></li>
 </ul>
 <p><code>bash
-   cargo run -p malchela</code></p>
+   ./target/release/malchela</code></p>
 <ul>
 <li><strong>MalChela GUI Launcher:</strong></li>
 </ul>
 <p><code>bash
-   cargo run -p MalChelaGUI</code></p>
+   ./target/release/MalChelaGUI</code></p>
 <h2 id="cli-usage-notes">CLI Usage Notes</h2>
 <ul>
 <li>Tools that accept paths (files or folders) can be run with <code>—</code> after the <code>cargo run</code> command to specify inputs and save output:

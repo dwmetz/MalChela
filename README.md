@@ -69,7 +69,8 @@ Install Rust - https://rustup.rs/</p>
 ```
 git clone https://github.com/dwmetz/MalChela.git
 cd MalChela
-cargo build
+chmod +x release.sh
+./release.sh
 ```
 
 <h3>
@@ -77,9 +78,9 @@ Run:
 </h3>
 
 ```
-cargo run -p malchela
-
+./target/release/malchela
 ```
+
 or 
 
 ```
@@ -154,4 +155,4 @@ MalChela v2.2.0 includes improved integration with the following third-party too
 These enhancements make working with memory images, PCAPs, and YARA rules more streamlined for forensic workflows.
 
 #### Caveat Emptor:
-Successfully tested on MacOS on Silicon and Ubuntu. Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. Works on Windows in WSL! Testers (and contributors) appreciated.
+Successfully tested on MacOS on Silicon, Ubuntu, and RaspberryPi. Yara version 4.2 or greater is required.Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. MalChela (CLI) works on Windows in WSL! Testers (and contributors) appreciated.

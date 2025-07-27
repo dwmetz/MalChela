@@ -122,7 +122,7 @@ fn print_banner() {
     println!("{}", crab_art.red());
     println!("        {}", "    https://bakerstreetforensics.com".truecolor(110, 130, 140));
     println!();
-    println!("        {}", "     MalChela Analysis Toolkit v3.0".yellow());
+    println!("        {}", "     MalChela Analysis Toolkit v3.0.1".yellow());
     println!();
 }
 
@@ -194,18 +194,28 @@ fn main() {
 
         if let Some(entry) = selected {
             println!("{}", format!("Launching: {}", entry.display_name).cyan());
-            let child = Command::new("cargo")
-                .args(&entry.command_args)
-                .spawn();
+            let binary_path = std::path::Path::new(&entry.binary_path);
 
-            match child {
-                Ok(mut child_proc) => {
-                    let _ = child_proc.wait();
+            if !binary_path.exists() {
+                eprintln!("❌ Binary not found at: {}", binary_path.display());
+                eprintln!("🏃‍♂️ Run release.sh in workspace root")
+            } else if let Ok(workspace_root) = find_workspace_root() {
+                let child = Command::new(binary_path)
+                    .current_dir(&workspace_root)
+                    .spawn();
+
+                match child {
+                    Ok(mut child_proc) => {
+                        let _ = child_proc.wait();
+                    }
+                    Err(e) => {
+                        eprintln!("{}", format!("❌ Failed to launch command: {}", e).red());
+                    }
                 }
-                Err(e) => {
-                    eprintln!("{}", format!("Failed to launch command: {}", e).red());
-                }
+            } else {
+                eprintln!("{}", "❌ Failed to locate workspace root.".red());
             }
+
             pause();
         } else {
             println!("{}", "Invalid selection, please try again.".red());

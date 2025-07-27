@@ -718,6 +718,48 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Getting Started">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#building-the-releases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Building the Releases
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-tool-execution-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      Direct Tool Execution (CLI)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#malchela-cli-launcher-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      MalChela CLI Launcher Menu
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#malchela-gui-launcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      MalChela GUI Launcher
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1417,6 +1459,48 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Getting Started">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#building-the-releases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Building the Releases
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-tool-execution-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      Direct Tool Execution (CLI)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#malchela-cli-launcher-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      MalChela CLI Launcher Menu
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#malchela-gui-launcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      MalChela GUI Launcher
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1516,25 +1600,20 @@
   <h1>Usage</h1>
 
 <h2 id="getting-started">Getting Started</h2>
+<h3 id="building-the-releases">Building the Releases</h3>
+<pre><code class="language-bash">chmod +x release.sh
+./release.sh
+</code></pre>
 <p>MalChela supports three main workflows:</p>
-<ul>
-<li><strong>Direct Tool Execution (CLI):</strong></li>
-</ul>
-<p>```bash
-   chmod +x release.sh</p>
-<p>./release.sh</p>
-<p>./target/release/toolname [input] [flags]</p>
-<p>```</p>
-<ul>
-<li><strong>MalChela CLI Launcher Menu:</strong></li>
-</ul>
-<p><code>bash
-   ./target/release/malchela</code></p>
-<ul>
-<li><strong>MalChela GUI Launcher:</strong></li>
-</ul>
-<p><code>bash
-   ./target/release/MalChelaGUI</code></p>
+<h3 id="direct-tool-execution-cli">Direct Tool Execution (CLI)</h3>
+<pre><code class="language-bash">./target/release/toolname [input] [flags]
+</code></pre>
+<h3 id="malchela-cli-launcher-menu">MalChela CLI Launcher Menu</h3>
+<pre><code class="language-bash">./target/release/malchela
+</code></pre>
+<h3 id="malchela-gui-launcher">MalChela GUI Launcher</h3>
+<pre><code class="language-bash">./target/release/MalChelaGUI
+</code></pre>
 <h2 id="cli-usage-notes">CLI Usage Notes</h2>
 <ul>
 <li>Tools that accept paths (files or folders) can be run with <code>—</code> after the <code>cargo run</code> command to specify inputs and save output:

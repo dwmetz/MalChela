@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 use infer;
 use std::process::Command;
 use tabled::Tabled;
-
+use std::env;
 
 
 fn join_suggested_tools(tools: &Vec<(String, String)>) -> String {
@@ -258,33 +258,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     println!("Running {} on {}...", tool_name, selected_file.filename);
 
-                    let mut args = vec!["run", "-p", tool_name, "--"];
+
+
+
+                    let exe_root = env::current_exe()?.parent().unwrap().to_path_buf();
+                    let binary_path = exe_root.join(tool_name);
+                    let workspace_root = exe_root.parent().and_then(|p| p.parent()).unwrap(); // goes up two levels to workspace root
+                    if !binary_path.exists() {
+                        eprintln!("Error: Tool binary not found at {}", binary_path.display());
+                        std::process::exit(1);
+                    }
+                    let mut args: Vec<String> = vec![];
                     if tool_name == "malhash" {
-                        args.push(&selected_file.sha256);
+                        args.push(selected_file.sha256.clone());
                     } else if tool_name == "nsrlquery" {
-                        args.push(&selected_file.md5);
+                        args.push(selected_file.md5.clone());
                     } else {
-                        args.push(&selected_file.filepath);
+                        args.push(selected_file.filepath.clone());
                     }
                     if cli.output {
-                        args.push("-o");
+                        args.push("-o".to_string());
                     }
                     if cli.text {
-                        args.push("-t");
+                        args.push("-t".to_string());
                     }
                     if cli.json {
-                        args.push("-j");
+                        args.push("-j".to_string());
                     }
                     if cli.markdown {
-                        args.push("-m");
+                        args.push("-m".to_string());
                     }
                     if let Some(case) = case_name {
-                        args.push("--case");
-                        args.push(case);
+                        args.push("--case".to_string());
+                        args.push(case.to_string());
                     }
 
-                    let status = Command::new("cargo")
-                        .args(args)
+                    println!("→ CWD: {}", env::current_dir()?.display());
+                    println!("→ Launching: {}", binary_path.display());
+                    println!("→ Args: {:?}", args);
+
+                    let status = Command::new(&binary_path)
+                        .args(&args)
+                        .current_dir(workspace_root)
+                        .envs(env::vars())
                         .status()
                         .expect("Failed to run tool");
 

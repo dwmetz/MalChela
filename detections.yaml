@@ -607,27 +607,75 @@ MaliciousPowerShellFunctions:
       technique_name: "Command and Scripting Interpreter: PowerShell"
       tactics: ["Execution"]
 
-SuspiciousExecutableExtension:
-  title: "Suspicious Executable File Extension with Filename"
-  id: "123e4567-e89b-12d3-a456-426614174000"
+
+SuspiciousExeFilename:
+  title: "Suspicious Executable Filename (.exe)"
+  id: "suspicious-exe-filename-001"
   status: "experimental"
-  description: "Detects file paths ending with suspicious executable extensions (.bat, .exe, .dll) and captures the preceding filename."
+  description: "Detects .exe filenames in strings — useful when analyzing binaries or payload references."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "[a-zA-Z0-9_\\-\\.]+\\.(bat|exe|dll)$"
+      - "[a-zA-Z0-9_\\-\\.]+\\.exe$"
+  tags:
+    - attack.T1204.002
+  level: low
+  mitre:
+    - technique_id: "T1204.002"
+      technique_name: "User Execution: Malicious File"
+      tactics: ["Execution"]
+
+SuspiciousBatFilename:
+  title: "Suspicious Script Filename (.bat)"
+  id: "suspicious-bat-filename-001"
+  status: "experimental"
+  description: "Detects .bat script filenames, often used for malicious scripting or execution chains."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "[a-zA-Z0-9_\\-\\.]+\\.bat$"
   tags:
     - attack.T1059.003
-  level: high
+  level: low
   mitre:
     - technique_id: "T1059.003"
       technique_name: "Command and Scripting Interpreter: Windows Command Shell"
       tactics: ["Execution"]
-    - technique_id: "T1218"
-      technique_name: "Signed Binary Proxy Execution"
-      tactics: ["Defense Evasion", "Execution"]
+
+SuspiciousDllApiHooks:
+  title: "Suspicious Windows API Calls for Injection or Discovery"
+  id: "dllhook-api-discovery-002"
+  status: "experimental"
+  description: "Detects use of DLL exports and API calls often leveraged for injection or process discovery."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "LoadLibraryA"
+      - "GetProcAddress"
+      - "SetWindowsHookEx"
+      - "CreateToolhelp32Snapshot"
+      - "EnumProcesses"
+  tags:
+    - attack.T1055
+    - attack.T1106
+    - attack.T1082
+  level: high
+  mitre:
+    - technique_id: "T1055"
+      technique_name: "Process Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+    - technique_id: "T1106"
+      technique_name: "Native API"
+      tactics: ["Execution"]
+    - technique_id: "T1082"
+      technique_name: "System Information Discovery"
+      tactics: ["Discovery"]
 
 
 SuspiciousURLGeneric:
@@ -653,28 +701,24 @@ SuspiciousURLGeneric:
       technique_name: "Phishing: Spearphishing Link"
       tactics: ["Initial Access"]
       
-SuspiciousExecutableFilename:
-  title: "Suspicious Executable Filename Detection"
-  id: "67d278de-0fc6-4c9b-9e2d-7c3ebde59dcf" 
+UnusualDllFilenamePattern:
+  title: "Unusual DLL Filename Pattern"
+  id: "dll-filename-anomaly-001"
   status: "experimental"
-  description: "Detects file paths containing suspicious executable extensions (.exe, .bat, .dll) and captures the full filename."
+  description: "Detects suspicious DLL names that appear randomized or auto-generated (e.g., 4usfliof.dll, abcd1234.dll)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "[a-zA-Z0-9_\\-\\.]+\\.(exe|bat|dll)$"
+      - "\\b(?!(user32|kernel32|advapi32|ole32|shell32|comdlg32|shlwapi|gdiplus|gdi32|oleaut32|comctl32|ntdll))([a-z]*[0-9]+[a-z0-9]*)\\.dll\\b"
   tags:
-    - attack.T1059.003
-    - attack.T1218
-  level: high
+    - attack.T1055
+  level: medium
   mitre:
-    - technique_id: "T1059.003"
-      technique_name: "Command and Scripting Interpreter: Windows Command Shell"
-      tactics: ["Execution"]
-    - technique_id: "T1218"
-      technique_name: "Signed Binary Proxy Execution"
-      tactics: ["Defense Evasion", "Execution"]
+    - technique_id: "T1055"
+      technique_name: "Process Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
 
 SuspiciousWindowsAPIDiscovery:
   title: "Suspicious Windows API Calls for System Discovery"
@@ -941,7 +985,7 @@ PDB_File_Detection:
   title: "Suspicious PDB file detection (Malware IOC)"
   id: "abc12345-def6-7890-ghij-klmn98765432"
   status: "experimental"
-  description: "Detects suspicious .pdb files, commonly associated with the build process of malware, which may indicate a malware development or debugging process."
+  description: "Detects embedded PDB file references that may indicate malware compiled with debug symbols, revealing the developer’s tooling or project structure."
   logsource:
     category: "file_event"
     product: "windows"
@@ -949,21 +993,113 @@ PDB_File_Detection:
     strings:
       - "\\.pdb$"  # Look for .pdb file extensions
   tags:
-    - attack.T1105      # Ingress Tool Transfer
-    - attack.T1071.001  # Application Layer Protocol: Web Protocols
-    - attack.T1543.003  # Create or Modify System Process: Windows Service
-    - attack.T1086      # PowerShell
+    - attack.T1587.001
   level: high
   mitre:
-    - technique_id: "T1105"
-      technique_name: "Ingress Tool Transfer"
-      tactics: ["Command and Control"]
-    - technique_id: "T1071.001"
-      technique_name: "Application Layer Protocol: Web Protocols"
-      tactics: ["Command and Control"]
-    - technique_id: "T1543.003"
-      technique_name: "Create or Modify System Process: Windows Service"
-      tactics: ["Persistence"]
-    - technique_id: "T1086"
-      technique_name: "PowerShell"
+    - technique_id: "T1587.001"
+      technique_name: "Develop Capabilities: Malware"
+      tactics: ["Resource Development"]
+CreateRemoteThreadInjection:
+  title: "CreateRemoteThread Injection"
+  id: "injection-createremotethread"
+  status: "experimental"
+  description: "Common in process injection chains, especially post VirtualAllocEx and WriteProcessMemory."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "CreateRemoteThread"
+  tags:
+    - attack.T1055
+  level: high
+  mitre:
+    - technique_id: "T1055"
+      technique_name: "Process Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+
+SleepDelayEvasion:
+  title: "Extended Sleep or Delay (evasion)"
+  id: "sleep-delay-evade"
+  status: "experimental"
+  description: "Delays >30 seconds may indicate sandbox evasion."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "sleep\\(30000\\)"
+      - "Sleep\\(30000\\)"
+  tags:
+    - attack.T1497.003
+  level: medium
+  mitre:
+    - technique_id: "T1497.003"
+      technique_name: "Virtualization/Sandbox Evasion: Time Based Evasion"
+      tactics: ["Defense Evasion"]
+
+LsassCredDump:
+  title: "Credential Dumping Indicators (LSASS Access)"
+  id: "lsass-creddump-access"
+  status: "experimental"
+  description: "Detects string references indicating LSASS access or Minidump routines."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "lsass.exe"
+      - "SeDebugPrivilege"
+      - "MiniDumpWriteDump"
+  tags:
+    - attack.T1003.001
+  level: high
+  mitre:
+    - technique_id: "T1003.001"
+      technique_name: "Credential Dumping: LSASS Memory"
+      tactics: ["Credential Access"]
+
+PackedOrStubExecutable:
+  title: "Packed Executable or Stub Artifact"
+  id: "packer-stub-hint"
+  status: "experimental"
+  description: "Hints that the binary is packed or a stub loader (e.g., UPX or DOS headers only)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - ".UPX!"
+      - "This program cannot be run in DOS mode"
+  tags:
+    - attack.T1027
+  level: medium
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+PowerShellMemoryExecution:
+  title: "PowerShell In-Memory Payload Hint"
+  id: "ps-memory-bypass"
+  status: "experimental"
+  description: "Detects common PowerShell techniques for decoding and executing payloads in memory."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "FromBase64String"
+      - "Invoke-Expression"
+      - "System.Reflection.Assembly::Load"
+  tags:
+    - attack.T1059.001
+    - attack.T1027
+  level: high
+  mitre:
+    - technique_id: "T1059.001"
+      technique_name: "Command and Scripting Interpreter: PowerShell"
       tactics: ["Execution"]
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]

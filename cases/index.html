@@ -1505,7 +1505,7 @@
 <h1 id="416-case-management">4.16 Case Management</h1>
 <p>The Cases feature in MalChela v3.0 introduces a structured way to manage analysis sessions, organize tool results, and preserve analyst notes for long-term reference. Each case acts as a container for a specific file or folder input, and captures relevant metadata, tool output, and custom annotations.</p>
 <p><img alt="Case Management" src="../images/case_management.png" /></p>
-<p align="center"><strong>Figure 3.1:</strong> Case Management</p>
+<p align="center"><strong>Figure 4.1:</strong> Case Management</p>
 
 <h2 id="creating-a-case">Creating a Case</h2>
 <p>A case can be created by providing:</p>
@@ -1514,7 +1514,7 @@
 <li>A folder (directory of unknown files e.g. Tshark export http objects)</li>
 </ul>
 <p><img alt="New Case" src="../images/new_case.png" /></p>
-<p align="center"><strong>Figure 3.2:</strong> New Case</p>
+<p align="center"><strong>Figure 4.2:</strong> New Case</p>
 
 <p>After choosing the input, assign a descriptive case name. The GUI will automatically create a new folder under:</p>
 <pre><code>saved_output/cases/&lt;case_name&gt;/
@@ -1545,7 +1545,7 @@
 <li>Tags (by prefixing with <code>#</code>)</li>
 </ul>
 <p><img alt="Searching Cases" src="../images/case_search.png" /></p>
-<p align="center"><strong>Figure 3.3:</strong> Searching Cases</p>
+<p align="center"><strong>Figure 4.3:</strong> Searching Cases</p>
 
 <h2 id="archiving-restoring-cases">Archiving &amp; Restoring Cases</h2>
 <p>Cases can be archived into a <code>.zip</code> file using the GUI's <strong>Archive Case</strong> feature. This creates a portable snapshot that includes all metadata, notes, and tool outputs.</p>
@@ -1559,7 +1559,7 @@
 <h2 id="case-aware-tool-tracking">Case-Aware Tool Tracking</h2>
 <p>Tools launched from the workspace automatically write output into the active case's subfolder and register a tracking file to avoid redundant execution.</p>
 <p><img alt="Example Case" src="../images/case_example.png" /></p>
-<p align="center"><strong>Figure 3.4:</strong> Example Case</p>
+<p align="center"><strong>Figure 4.4:</strong> Example Case</p>
 
 <h2 id="summary">Summary</h2>
 <p>Cases enable consistent, organized forensic workflows across sessions and machines. Whether you're triaging suspicious files, running multi-tool pipelines, or collaborating across systems, the Cases feature ensures nothing is lost.</p>

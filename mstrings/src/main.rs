@@ -17,7 +17,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use colored::*;
 use tabled::{Table as TabledTable, Tabled};
-use tabled::settings::{Style, Modify, Alignment, object::Columns, Width};
+use tabled::settings::{Style, Modify, Alignment, Width};
 
 
 
@@ -48,6 +48,7 @@ struct Match {
     rule_name: Option<String>,
     tactic: Option<String>,
     technique: Option<String>,
+    technique_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -102,6 +103,7 @@ impl Mstrings {
                 rule_name: None,
                 tactic: None,
                 technique: None,
+                technique_id: None,
             });
         }
     }
@@ -111,22 +113,30 @@ impl Mstrings {
         let raw_rules: HashMap<String, Detection> = serde_yaml::from_str(&yaml_content)?;
 
         let mut compiled_rules = Vec::new();
-        for (_key, det) in raw_rules {
-            for pattern in det.detection.strings {
-                if let Ok(regex) = Regex::new(&pattern) {
+        for (_key, det) in &raw_rules {
+            for pattern in &det.detection.strings {
+                if let Ok(regex) = Regex::new(pattern) {
                     for mitre in &det.mitre {
-                        compiled_rules.push((regex.clone(), det.title.clone(), mitre.tactics.join(", "), format!("{} ({})", mitre.technique_name, mitre.technique_id)));
+                        compiled_rules.push((
+                            regex.clone(),
+                            det.title.clone(),
+                            mitre.tactics.join(", "),
+                            mitre.technique_name.clone(),
+                            mitre.technique_id.clone(),
+                        ));
                     }
                 }
             }
         }
 
         for m in &mut self.matches {
-            for (regex, rule_name, tactic, technique) in &compiled_rules {
+            for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
                 if regex.is_match(&m.matched_str) {
                     m.rule_name = Some(rule_name.clone());
                     m.tactic = Some(tactic.clone());
                     m.technique = Some(technique.clone());
+                    // Only store the T-number, not a URL
+                    m.technique_id = Some(technique_id.clone());
                     break;
                 }
             }
@@ -150,8 +160,12 @@ struct DisplayMatch {
     #[tabled(rename = "Tactic")]
     tactic: String,
     #[tabled(rename = "Technique")]
-    technique: String,
+    technique: String, // now treated as Markdown in GUI
+    #[tabled(rename = "ID")]
+    technique_id: String, // e.g., "T1027"
 }
+
+// (No methods needed for DisplayMatch at this time)
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::collections::BTreeSet;
@@ -272,6 +286,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     rule_name: rule.clone(),
                     tactic: m.tactic.clone().unwrap_or_default(),
                     technique: m.technique.clone().unwrap_or_default(),
+                    technique_id: m.technique_id.clone().unwrap_or_default(),
                 })
             } else {
                 None
@@ -290,12 +305,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create the table using the `display_matches`
-    let mut table = TabledTable::new(display_matches);
+    let mut table = TabledTable::new(&display_matches);
 
-    // Apply the styles
+    // Apply the styles, with Tactic column (index 4) using 20-width wrap, others 40
+    use tabled::settings::object::Columns;
     table
         .with(Style::modern())
         .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
+        .with(Modify::new(Columns::single(4)).with(Width::wrap(20).keep_words(true)))
         .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)));
 
     // Ensure the table is printed
@@ -319,6 +336,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         // For GUI mode, print the table directly
         println!("{table}");
+        // Handle clicking on "Open TXXXX" buttons (pseudo-code for illustration)
+        // In actual GUI, you would have event/callback handling here.
+        // For demonstration, if this were a GUI event loop, you might do:
+        /*
+        use open;
+        // Suppose 'row_clicked' is the index of the clicked row
+        if let Some(row_clicked) = get_clicked_row_index() {
+            if let Some(dm) = display_matches.get(row_clicked) {
+                if dm.mitre_button.starts_with("Open ") {
+                    if let Some(url) = dm.mitre_url() {
+                        let _ = open::that(url);
+                    }
+                }
+            }
+        }
+        */
     }
 
     for m in &mstrings.matches {
@@ -411,6 +444,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         rule_name: rule.clone(),
                         tactic: m.tactic.clone().unwrap_or_default(),
                         technique: m.technique.clone().unwrap_or_default(),
+                        technique_id: m.technique_id.clone().unwrap_or_default(),
                     })
                 } else {
                     None
@@ -418,10 +452,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect();
 
-        let mut table = TabledTable::new(display_matches);
+        let mut table = TabledTable::new(&display_matches);
         table
             .with(Style::modern())
             .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
+            .with(Modify::new(Columns::single(4)).with(Width::wrap(20).keep_words(true)))
             .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)));
 
         report_buffer.push_str(&format!("{}\n\n", table.to_string()));
@@ -484,5 +519,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     // End: Output saving logic
+    // Optional CLI footer: MITRE reference note
+    if !is_gui_mode() {
+        println!("Note: MITRE Tactic IDs can be referenced at https://attack.mitre.org/techniques/");
+    }
     Ok(())
 }

@@ -1,32 +1,38 @@
 ## Getting Started
 
+Before runnning MalChela for the first time, you need to build the release binaries. There is a script provided in the workspace root.
+
+### Building the Releases
+
+```bash
+chmod +x release.sh
+./release.sh
+```
+
+## Execution
+
 MalChela supports three main workflows:
 
-- **Direct Tool Execution (CLI):**
+### Direct Tool Execution (CLI)
+```bash
+./target/release/toolname [input] [flags]
+```
 
-   ```bash
-   chmod +x release.sh
-   ./release.sh
-   ./target/release/toolname [input] [flags]
-   ```
+### MalChela CLI Launcher Menu
+```bash
+./target/release/malchela
+```
 
-- **MalChela CLI Launcher Menu:**
-
-   ```bash
-   ./target/release/malchela
-   ```
-
-- **MalChela GUI Launcher:**
-
-   ```bash
-   ./target/release/MalChelaGUI
-   ```
+### MalChela GUI Launcher
+```bash
+./target/release/MalChelaGUI
+```
 
 ## CLI Usage Notes
 
-- Tools that accept paths (files or folders) can be run with `—` after the `cargo run` command to specify inputs and save output:
+- Tools that accept paths (files or folders) should be run from the `target/release` directory after building with `release.sh`:
   ```bash
-  cargo run -p fileanalyzer — /path/to/file -o
+  ./target/release/fileanalyzer /path/to/file -o
   ```
   
 

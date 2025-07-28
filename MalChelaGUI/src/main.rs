@@ -16,7 +16,7 @@ use eframe::{
     egui::{self, CentralPanel, Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Visuals, Vec2},
     App,
 };
-
+use open;
 use egui::viewport::IconData;
 fn load_icon() -> Option<IconData> {
     use std::path::PathBuf;
@@ -93,7 +93,6 @@ pub enum InputType {
 
 #[derive(Clone)]
 pub struct AppState {
-    
     pub update_status: Option<String>,
     malchela_logo: Option<egui::TextureHandle>,
     pub case_sha256: Option<String>,
@@ -140,6 +139,8 @@ pub struct AppState {
     pub current_panel: ActivePanel,
     pub input_type: InputType,
     pub fileminer_minimized: bool,
+    // --- MITRE Technique Lookup field ---
+    pub mitre_lookup_id: String,
 }
 fn resolve_env_vars(s: &str) -> String {
     let replaced = if s.contains("${MALCHELA_ROOT}") {
@@ -213,6 +214,8 @@ impl Default for AppState {
             // Set a valid default input_type (File is common default, or Folder if preferred)
             input_type: InputType::File,
             fileminer_minimized: false,
+            // --- MITRE Technique Lookup field ---
+            mitre_lookup_id: String::new(),
         }
     }
 }
@@ -511,24 +514,42 @@ impl AppState {
                 let _ = std::fs::create_dir_all(&output_dir);
 
                 // Step 1: Build the binary (if not external)
-                if !is_external {
-                    let build_status = Command::new("cargo")
-                        .arg("build")
-                        .arg("-p")
-                        .arg(&command[0])
-                        .current_dir(&workspace_root)
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .status();
+if !is_external {
+    let binary_name = if cfg!(windows) {
+        format!("{}.exe", command[0])
+    } else {
+        command[0].clone()
+    };
+    let binary_path = workspace_root.join("target").join("release").join(&binary_name);
 
-                    if !matches!(build_status, Ok(status) if status.success()) {
-                        let mut out = output.lock().unwrap();
-                        out.clear();
-                        out.push_str("Failed to build the tool.\n");
-                        is_running.store(false, std::sync::atomic::Ordering::Relaxed);
-                        return;
-                    }
-                }
+    if !binary_path.exists() {
+        {
+            let mut out = output.lock().unwrap();
+            let mut lines = output_lines.lock().unwrap();
+            let build_msg = format!("[yellow]Building release binary for tool: {}\n", command[0]);
+            out.push_str(&build_msg);
+            lines.push(build_msg.trim_end().to_string());
+        }
+
+        let build_status = Command::new("cargo")
+            .arg("build")
+            .arg("--release")
+            .arg("-p")
+            .arg(&command[0])
+            .current_dir(&workspace_root)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+
+        if !matches!(build_status, Ok(status) if status.success()) {
+            let mut out = output.lock().unwrap();
+            out.clear();
+            out.push_str("Failed to build the tool.\n");
+            is_running.store(false, std::sync::atomic::Ordering::Relaxed);
+            return;
+        }
+    }
+}
 
                 // Step 2: Construct path to binary
                 let binary_name = if cfg!(windows) {
@@ -553,9 +574,20 @@ impl AppState {
                 } else {
                     workspace_root
                         .join("target")
-                        .join("debug")
+                        .join("release")
                         .join(&binary_name)
                 };
+
+                if !binary_path.exists() {
+                    let mut out = output.lock().unwrap();
+                    out.clear();
+                    out.push_str(&format!(
+                        "[red]❌ Binary not found at: {}\n[red]🏃‍♂️ Run `release.sh` in the workspace root to build all tools.\n",
+                        binary_path.display()
+                    ));
+                    is_running.store(false, std::sync::atomic::Ordering::Relaxed);
+                    return;
+                }
 
                 // Step 3: Parse and filter custom_args for env vars and CLI args
                 let mut env_vars: Vec<(String, String)> = Vec::new();
@@ -1426,148 +1458,170 @@ impl App for AppState {
 
 use crate::workspace::render_update_check;
 CentralPanel::default().show(ctx, |ui| {
-            // Ensure update check banner renders at the top of CentralPanel
-            render_update_check(ui, self);
-            // --- Show New Case Modal if requested ---
-            if self.show_new_case_modal {
-                show_case_modal(ctx, self);
+    // Ensure update check banner renders at the top of CentralPanel
+    render_update_check(ui, self);
+    // --- Show New Case Modal if requested ---
+    if self.show_new_case_modal {
+        show_case_modal(ctx, self);
+    }
+    // --- Show minimized workspace bar as floating panel in top-right ---
+    if self.workspace.is_visible && self.workspace.minimized {
+        egui::Window::new("Workspace Minimized")
+            .anchor(egui::Align2::RIGHT_TOP, [-10.0, 10.0])
+            .resizable(false)
+            .collapsible(false)
+            .title_bar(false)
+            .frame(egui::Frame::popup(&ctx.style()).fill(Color32::DARK_GRAY))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("🔬 Workspace minimized").color(LIGHT_CYAN));
+                    if ui.button("Restore").clicked() {
+                        self.workspace.minimized = false;
+                    }
+                });
+            });
+    }
+    // --- FULL TAKEOVER CASE WORKSPACE PANEL ---
+    if self.workspace.is_visible && !self.workspace.minimized {
+        self.workspace.show(ui);
+        return;
+    }
+    // --- Render FileMiner panel if FileMiner is the current panel ---
+    if self.current_panel == ActivePanel::FileMiner {
+        let app_ptr = self as *const AppState;
+        let panel = &mut self.fileminer_panel;
+        // SAFETY: `app_ptr` is valid for the duration of this call
+        panel.ui(ui, ctx, unsafe { &*app_ptr });
+        return;
+    }
+    // --- Show Case Modal ---
+    // Only show the case modal if it is marked visible.
+    if self.case_modal.visible && !matches!(self.current_panel, ActivePanel::FileMiner) {
+        // Use a safe raw pointer workaround to avoid double mutable borrow:
+        let app_ptr: *mut AppState = self;
+        let case_modal = &mut self.case_modal;
+        case_modal.show(ctx, unsafe { &mut *app_ptr });
+    }
+    {
+        let scanned = *self.current_progress.lock().unwrap();
+        let total = *self.total_progress.lock().unwrap();
+        if total > 0 {
+            ui.label(RichText::new(format!("Scanned: {} / {}", scanned, total)).color(LIGHT_GREEN).strong());
+        }
+    }
+    if self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
+        ui.label(egui::RichText::new("🏃  Running...").color(YELLOW).strong());
+    }
+
+    // --- PATCH: Auto-run FileMiner scan if panel is visible, input_dir is set, and results are empty ---
+    let app_state_ptr = self as *mut AppState;
+    if unsafe { &mut *app_state_ptr }.fileminer_panel.visible
+        && !unsafe { &mut *app_state_ptr }.fileminer_panel.input_dir.is_empty()
+        && unsafe { &mut *app_state_ptr }.fileminer_panel.results.is_empty()
+    {
+        unsafe { &mut *app_state_ptr }.fileminer_panel.run_scan();
+    }
+
+    // --- Show FileMiner panel if visible and not minimized ---
+    {
+        let app_ptr = self as *const AppState;
+        let panel = &mut self.fileminer_panel;
+        if panel.visible && !panel.is_minimized {
+            // SAFETY: `app_ptr` is valid for the duration of this call
+            panel.ui(ui, ctx, unsafe { &*app_ptr });
+        }
+    }
+
+    // --- MITRE Technique Lookup bar (above output display) ---
+    if let Some(tool) = &self.selected_tool {
+        if tool.command.iter().any(|arg| arg.contains("mstrings")) {
+            ui.horizontal(|ui| {
+                ui.label("MITRE Technique ID:");
+                let mut lookup_id = self.mitre_lookup_id.clone();
+                if ui.text_edit_singleline(&mut lookup_id).changed() {
+                    self.mitre_lookup_id = lookup_id.clone();
+                }
+                if ui.button("Lookup").clicked() {
+                    let url = if let Some((base, sub)) = lookup_id.split_once('.') {
+                        format!("https://attack.mitre.org/techniques/{}/{}/", base, sub)
+                    } else {
+                        format!("https://attack.mitre.org/techniques/{}/", lookup_id)
+                    };
+                    let _ = open::that(url);
+                }
+            });
+            ui.add(egui::Separator::default().spacing(12.0));
+        }
+    }
+
+    if let Some(tool) = &tool_clone {
+        // FileMiner panel: show if selected tool is fileminer
+        if self.selected_tool.as_ref().map(|t| &t.name) == Some(&tool.name) && tool.command.get(0).map(|s| s == "fileminer").unwrap_or(false) {
+            // --- PATCH: Parse and load FileMiner output as JSON before showing panel ---
+            if let Some(case_name) = &self.case_name {
+                let json_path = format!(
+                    "saved_output/cases/{}/fileminer/fileminer_report_{}.json",
+                    case_name,
+                    self.fileminer_panel.last_scan_timestamp
+                );
+
+                match std::fs::read_to_string(&json_path) {
+                    Ok(content) => {
+                        let parsed = self.fileminer_panel.load_from_json(&content);
+                        if parsed.is_err() {
+                            *self.command_output.lock().unwrap() = format!(
+                                "❌ Failed to parse FileMiner output: {}\n",
+                                parsed.unwrap_err()
+                            );
+                        }
+                    }
+                    Err(_e) => {
+                        *self.command_output.lock().unwrap() = format!(
+                            "❌ Failed to read FileMiner output file.\nPath: {}",
+                            json_path
+                        );
+                    }
+                }
+            } else {
+                *self.command_output.lock().unwrap() = "❌ No case name provided — cannot load FileMiner output.".to_string();
             }
-            // --- Show minimized workspace bar as floating panel in top-right ---
-            if self.workspace.is_visible && self.workspace.minimized {
-                egui::Window::new("Workspace Minimized")
-                    .anchor(egui::Align2::RIGHT_TOP, [-10.0, 10.0])
-                    .resizable(false)
-                    .collapsible(false)
-                    .title_bar(false)
-                    .frame(egui::Frame::popup(&ctx.style()).fill(Color32::DARK_GRAY))
-                    .show(ctx, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("🔬 Workspace minimized").color(LIGHT_CYAN));
-                            if ui.button("Restore").clicked() {
-                                self.workspace.minimized = false;
-                            }
-                        });
-                    });
-            }
-            // --- FULL TAKEOVER CASE WORKSPACE PANEL ---
-            if self.workspace.is_visible && !self.workspace.minimized {
-                self.workspace.show(ui);
-                return;
-            }
-            // --- Render FileMiner panel if FileMiner is the current panel ---
-            if self.current_panel == ActivePanel::FileMiner {
+            {
                 let app_ptr = self as *const AppState;
                 let panel = &mut self.fileminer_panel;
                 // SAFETY: `app_ptr` is valid for the duration of this call
                 panel.ui(ui, ctx, unsafe { &*app_ptr });
-                return;
             }
-            // --- Show Case Modal ---
-            // Only show the case modal if it is marked visible.
-            if self.case_modal.visible && !matches!(self.current_panel, ActivePanel::FileMiner) {
-                // Use a safe raw pointer workaround to avoid double mutable borrow:
-                let app_ptr: *mut AppState = self;
-                let case_modal = &mut self.case_modal;
-                case_modal.show(ctx, unsafe { &mut *app_ptr });
-            }
-            {
-                let scanned = *self.current_progress.lock().unwrap();
-                let total = *self.total_progress.lock().unwrap();
-                if total > 0 {
-                    ui.label(RichText::new(format!("Scanned: {} / {}", scanned, total)).color(LIGHT_GREEN).strong());
-                }
-            }
-            if self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
-                ui.label(egui::RichText::new("🏃  Running...").color(YELLOW).strong());
-            }
+            return;
+        }
+        // --- Begin fileminer config UI block ---
+        // mzhash/xmzhash config panel is now rendered only once in the CentralPanel.
+        if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
+            self.tshark_panel.ui(ui);
+            return;
+        } else if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
+            // Clear console output when selecting Vol3
+            self.command_output.lock().unwrap().clear();
+            self.output_lines.lock().unwrap().clear();
 
-            // --- PATCH: Auto-run FileMiner scan if panel is visible, input_dir is set, and results are empty ---
-            let app_state_ptr = self as *mut AppState;
-            if unsafe { &mut *app_state_ptr }.fileminer_panel.visible
-                && !unsafe { &mut *app_state_ptr }.fileminer_panel.input_dir.is_empty()
-                && unsafe { &mut *app_state_ptr }.fileminer_panel.results.is_empty()
-            {
-                unsafe { &mut *app_state_ptr }.fileminer_panel.run_scan();
-            }
-
-            // --- Show FileMiner panel if visible and not minimized ---
-            {
-                let app_ptr = self as *const AppState;
-                let panel = &mut self.fileminer_panel;
-                if panel.visible && !panel.is_minimized {
-                    // SAFETY: `app_ptr` is valid for the duration of this call
-                    panel.ui(ui, ctx, unsafe { &*app_ptr });
+            // --- Handle malhash and nsrlquery preview command ---
+            if tool.command.get(0).map(|s| s.contains("malhash") || s.contains("nsrlquery") || s.contains("hashit")).unwrap_or(false) {
+                if let Some(p) = &self.input_path {
+                    let hash_val = p.to_string_lossy();
+                    let cmd_str = format!("./target/release/{} -- {}", tool.command[0], hash_val);
+                    self.vol3_panel.launch_command = Some(cmd_str);
                 }
             }
 
-            if let Some(tool) = &tool_clone {
-                // FileMiner panel: show if selected tool is fileminer
-                if self.selected_tool.as_ref().map(|t| &t.name) == Some(&tool.name) && tool.command.get(0).map(|s| s == "fileminer").unwrap_or(false) {
-                    // --- PATCH: Parse and load FileMiner output as JSON before showing panel ---
-                    if let Some(case_name) = &self.case_name {
-                        let json_path = format!(
-                            "saved_output/cases/{}/fileminer/fileminer_report_{}.json",
-                            case_name,
-                            self.fileminer_panel.last_scan_timestamp
-                        );
-
-                        match std::fs::read_to_string(&json_path) {
-                            Ok(content) => {
-                                let parsed = self.fileminer_panel.load_from_json(&content);
-                                if parsed.is_err() {
-                                    *self.command_output.lock().unwrap() = format!(
-                                        "❌ Failed to parse FileMiner output: {}\n",
-                                        parsed.unwrap_err()
-                                    );
-                                }
-                            }
-                            Err(_e) => {
-                                *self.command_output.lock().unwrap() = format!(
-                                    "❌ Failed to read FileMiner output file.\nPath: {}",
-                                    json_path
-                                );
-                            }
-                        }
-                    } else {
-                        *self.command_output.lock().unwrap() = "❌ No case name provided — cannot load FileMiner output.".to_string();
-                    }
-                    {
-                        let app_ptr = self as *const AppState;
-                        let panel = &mut self.fileminer_panel;
-                        // SAFETY: `app_ptr` is valid for the duration of this call
-                        panel.ui(ui, ctx, unsafe { &*app_ptr });
-                    }
-                    return;
-                }
-                // --- Begin fileminer config UI block ---
-                // mzhash/xmzhash config panel is now rendered only once in the CentralPanel.
-                if tool.command.get(0).map(|s| s == "tshark").unwrap_or(false) {
-                    self.tshark_panel.ui(ui);
-                    return;
-                } else if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
-                    // Clear console output when selecting Vol3
-                    self.command_output.lock().unwrap().clear();
-                    self.output_lines.lock().unwrap().clear();
-
-                    // --- Handle malhash and nsrlquery preview command ---
-                    if tool.command.get(0).map(|s| s.contains("malhash") || s.contains("nsrlquery")).unwrap_or(false) {
-                        if let Some(p) = &self.input_path {
-                            let hash_val = p.to_string_lossy();
-                            let cmd_str = format!("cargo run -p {} {}", tool.command[0], hash_val);
-                            self.vol3_panel.launch_command = Some(cmd_str);
-                        }
-                    }
-
-                    // --- Vol3 command construction and preview: always update every frame ---
-                    if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
-                        let plugin_name = self.vol3_panel.get_selected_plugin();
-                        let mem_path = self.vol3_panel.get_memory_image_path().unwrap_or_default();
-                        // Only generate preview here; actual writing is done on Run button click.
-                        let preview_output_path = if self.vol3_panel.save_to_case {
-                            None
-                        } else {
-                            self.vol3_panel.arg_values.iter()
-                                .filter(|(_, v)| !v.trim().is_empty())
+            // --- Vol3 command construction and preview: always update every frame ---
+            if tool.command.get(0).map(|s| s.contains("vol")).unwrap_or(false) {
+                let plugin_name = self.vol3_panel.get_selected_plugin();
+                let mem_path = self.vol3_panel.get_memory_image_path().unwrap_or_default();
+                // Only generate preview here; actual writing is done on Run button click.
+                let preview_output_path = if self.vol3_panel.save_to_case {
+                    None
+                } else {
+                    self.vol3_panel.arg_values.iter()
+                        .filter(|(_, v)| !v.trim().is_empty())
                                 .find(|(k, _)| k.contains("output") || k.contains("dump") || k.contains("path"))
                                 .map(|(_, v)| v.as_str())
                         };
@@ -1771,7 +1825,7 @@ CentralPanel::default().show(ctx, |ui| {
                                     s
                                 }
                                 ExecType::Cargo => {
-                                    let mut base = format!("cargo run -p {}", tool.command[0]);
+                                    let mut base = format!("./target/release/{}", tool.command[0]);
                                     if tool.command.len() > 1 {
                                         base.push(' ');
                                         base.push_str(&tool.command[1..].join(" "));
@@ -1788,7 +1842,7 @@ CentralPanel::default().show(ctx, |ui| {
                                     }
                                     if !self.custom_args.trim().is_empty() {
                                         base.push(' ');
-                                        base.push_str(&self.custom_args.trim());
+                                        base.push_str(self.custom_args.trim());
                                     }
                                     base
                                 }
@@ -2711,12 +2765,13 @@ fn main() {
         workspace: WorkspacePanel::new(),
         case_sha256: None,
         case_modal: CaseModal::default(),
+        mitre_lookup_id: String::new(),
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1550.0, 900.0])
+            .with_inner_size([1650.0, 900.0])
             .with_icon(icon.unwrap_or_else(|| std::sync::Arc::new(IconData { rgba: vec![0; 4], width: 1, height: 1 }))),
         ..Default::default()
     };

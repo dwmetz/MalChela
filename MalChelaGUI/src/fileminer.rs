@@ -561,6 +561,27 @@ impl FileMinerPanel {
                         app_state.fileminer_panel.visible = false;
                     });
                 }
+                // --- Insert "Select All Tools" button here ---
+                if ui.button("✅ Select All Tools").clicked() {
+                    for result in self.results.iter_mut() {
+                        let mut selectable_tools = Vec::new();
+                        if result.filetype.contains("portable-executable") {
+                            selectable_tools.push("fileanalyzer");
+                            selectable_tools.push("mstrings");
+                            selectable_tools.push("malhash");
+                            selectable_tools.push("nsrlquery");
+                        } else if result.filetype == "Unknown" && result.size > 10_000 {
+                            selectable_tools.push("fileanalyzer");
+                            selectable_tools.push("malhash");
+                            selectable_tools.push("nsrlquery");
+                        }
+                        for tool_name in selectable_tools {
+                            if !result.selected_tool_outputs.iter().any(|(t, _)| t == tool_name) {
+                                result.selected_tool_outputs.push((tool_name.to_string(), "TXT".to_string()));
+                            }
+                        }
+                    }
+                }
                 if ui.button("▶ Run Selected Tools").clicked() {
 
                     let use_case = app_state.case_name.is_some();

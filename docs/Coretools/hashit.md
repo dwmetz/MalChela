@@ -3,7 +3,7 @@
 
 ![HashCheck](../images/hashit.png)
 
-<p align="center"><strong>Figure 17:</strong> Hash It</p>
+<p align="center"><strong>Figure 4.9:</strong> Hash It</p>
 
 The tool supports batch operations on directories and automatically recurses through subfolders. It's especially useful during triage to generate hash inventories or validate file integrity against known datasets.
 

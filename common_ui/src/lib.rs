@@ -37,3 +37,27 @@ pub fn styled_line(tag: &str, content: &str) -> String {
         _ => content.to_string(),
     }
 }
+
+pub fn parse_colored_output(input: &str) -> Vec<(String, Color32)> {
+    let mut styled_lines = Vec::new();
+
+    for line in input.lines() {
+        let (color, content) = if let Some(stripped) = line.strip_prefix("[green]") {
+            (Color32::from_rgb(0, 255, 0), stripped)
+        } else if let Some(stripped) = line.strip_prefix("[yellow]") {
+            (Color32::from_rgb(255, 255, 0), stripped)
+        } else if let Some(stripped) = line.strip_prefix("[red]") {
+            (Color32::from_rgb(255, 0, 0), stripped)
+        } else if let Some(stripped) = line.strip_prefix("[stone]") {
+            (STONE_BEIGE, stripped)
+        } else if let Some(stripped) = line.strip_prefix("[gray]") {
+            (Color32::GRAY, stripped)
+        } else {
+            (Color32::WHITE, line)
+        };
+
+        styled_lines.push((content.to_string(), color));
+    }
+
+    styled_lines
+}

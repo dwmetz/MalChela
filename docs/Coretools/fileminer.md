@@ -4,11 +4,11 @@
 
 ![File Miner](../images/fileminer.png)
 
-<p align="center"><strong>Figure 14:</strong> File Miner</p>
+<p align="center"><strong>Figure 4.6:</strong> File Miner</p>
 
 ![File Miner with Subtool Output](../images/fileminer_with_subtool_output.png)
 
-<p align="center"><strong>Figure 15:</strong> File Miner with Subtool Output</p>
+<p align="center"><strong>Figure 4.7:</strong> File Miner with Subtool Output</p>
 
 
 ## Function Overview

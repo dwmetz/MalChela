@@ -2,6 +2,7 @@
 use eframe::egui::{ScrollArea, Ui, ComboBox, RichText, Color32, Label};
 use eframe::egui::{Layout, Align};
 use crate::AppState;
+use common_ui::parse_colored_output;
 
 use eframe::egui::Id;
 use lazy_static::lazy_static;
@@ -523,7 +524,9 @@ impl FileMinerPanel {
         if !self.subtool_output.trim().is_empty() {
             ui.label(eframe::egui::RichText::new("Subtool Output").heading().color(eframe::egui::Color32::from_rgb(215, 100, 30)));
             ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                ui.label(&self.subtool_output);
+                for (line, color) in parse_colored_output(&self.subtool_output) {
+                    ui.colored_label(color, line);
+                }
             });
             ui.separator();
         }
@@ -919,8 +922,10 @@ impl FileMinerPanel {
 
                         match cmd.output() {
                             Ok(output) => {
-                                let stdout = String::from_utf8_lossy(&output.stdout);
-                                self.subtool_output = stdout.to_string();
+                                let tool_output = String::from_utf8_lossy(&output.stdout);
+                                for (line, color) in parse_colored_output(&tool_output) {
+                                    ui.colored_label(color, line);
+                                }
                                 ui.ctx().request_repaint();
                             }
                             Err(e) => {

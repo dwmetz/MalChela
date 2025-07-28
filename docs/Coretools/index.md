@@ -1,11 +1,11 @@
 
 ![MalChela GUI](../images/malchela_screenshot.png)
 
-<p align="center"><strong>Figure 9:</strong> MalChela GUI</p>
+<p align="center"><strong>Figure 4.1:</strong> MalChela GUI</p>
 
 ![MalChela CLI](../images/malchela_cli_screenshot.png)
 
-<p align="center"><strong>Figure 10:</strong> MalChela CLI</p>
+<p align="center"><strong>Figure 4.2:</strong> MalChela CLI</p>
 
 <h2 style="text-align: center;">MalChela Core Tools</h2>
 <p style="text-align: center;">

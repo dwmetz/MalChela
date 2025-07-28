@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela.png"/>
  <p>
  <h1>
-  Malchela v3.0
+  Malchela v3.0.1
  </h1>
   <h4>
       A YARA & Malware Analysis Toolkit written in Rust.
@@ -34,7 +34,7 @@
 | Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
 | Mismatch Miner      | Scans for executables masquerading as other file types (e.g., JPG, PDF) by detecting magic number mismatches |
-| mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, and identifies IOCs |
+| mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
 | mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
 | nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it’s known-good |
@@ -70,7 +70,7 @@ Install Rust - https://rustup.rs/</p>
 git clone https://github.com/dwmetz/MalChela.git
 cd MalChela
 chmod +x release.sh
-./release.sh
+./release.sh  # Builds all programs in release mode (recommended)
 ```
 
 <h3>
@@ -87,6 +87,8 @@ or
 cargo run -p MalChelaGUI
 
 ```
+
+ℹ️ It is recommended to build and run MalChela in `--release` mode to ensure GUI and subtools function optimally.
 
 ### Case Management (v3.0)
 
@@ -146,7 +148,7 @@ When run on a REMnux system, MalChela can load a REMnux-specific `tools.yaml` fi
 Enhanced Tool Support:
 </h3>
 
-MalChela v2.2.0 includes improved integration with the following third-party tools:
+MalChela includes improved integration with the following third-party tools:
 
 - **Volatility 3**: Dynamic plugin builder, argument templating, and output directory selection.
 - **TShark**: Visual reference panel and support for capturing filtered traffic with custom syntax.

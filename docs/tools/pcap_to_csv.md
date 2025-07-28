@@ -5,7 +5,7 @@ The `tshark_to_csv.py` script is a helper utility that converts `.pcap` or `.pca
 
 ![PCAP to CSV](../images/pcap_to_csv.png)
 
-<p align="center"><strong>Figure 28:</strong> PCAP to CSV</p>
+<p align="center"><strong>Figure 5.3:</strong> PCAP to CSV</p>
 
 The script uses `tshark` to extract key fields from each packet and writes them to a CSV file with headers. Users can specify custom fields, or rely on a default set commonly useful for forensic review.
 

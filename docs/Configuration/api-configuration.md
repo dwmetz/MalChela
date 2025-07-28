@@ -28,7 +28,7 @@ These keys will be read at runtime by tools such as `malhash` to enable external
 ---
 ![API Configuration Utility](../images/api_configuration.png)
 
-**Figure 4:** API Configuration Utility
+**Figure 2.2:** API Configuration Utility
 
 ## Managing Your Keys with the Configuration Utility
 

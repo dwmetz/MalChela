@@ -9,4 +9,4 @@ If TShark is included in your `tools.yaml` (or if you’re using the REMnux conf
 
 ![TShark](../images/tshark.png)
 
-<p align="center"><strong>Figure 27:</strong> TShark</p>
+<p align="center"><strong>Figure 5.2:</strong> TShark</p>

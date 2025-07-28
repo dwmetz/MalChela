@@ -1314,7 +1314,7 @@
 <h1 id="pcap-to-csv-conversion">PCAP to CSV Conversion</h1>
 <p>The <code>tshark_to_csv.py</code> script is a helper utility that converts <code>.pcap</code> or <code>.pcapng</code> files into structured <code>.csv</code> files using <code>tshark</code>. This allows packet captures to be processed and analyzed using familiar spreadsheet or database tools.</p>
 <p><img alt="PCAP to CSV" src="../../images/pcap_to_csv.png" /></p>
-<p align="center"><strong>Figure 28:</strong> PCAP to CSV</p>
+<p align="center"><strong>Figure 5.3:</strong> PCAP to CSV</p>
 
 <p>The script uses <code>tshark</code> to extract key fields from each packet and writes them to a CSV file with headers. Users can specify custom fields, or rely on a default set commonly useful for forensic review.</p>
 <p>Timestamps in the CSV output are converted into a human-readable ISO 8601 format with microsecond precision (<code>YYYY-MM-DDTHH:MM:SS.ssssssZ</code>), ensuring compatibility with downstream tools such as the Magnet Custom Artifact Generator.</p>

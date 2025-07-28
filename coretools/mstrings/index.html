@@ -1366,8 +1366,9 @@
   <h1>MStrings</h1>
 
 <p>mStrings extracts strings from files and classifies them using regular expressions, YARA rules, and MITRE ATT&amp;CK mappings. It highlights potential indicators of compromise and suspicious behavior, grouping matches by tactic and technique. Ideal for quickly surfacing malicious capabilities in binaries, scripts, and documents.</p>
+<p>A MITRE Technique Lookup bar is available at the top of the GUI panel when mStrings is selected. You can paste a MITRE technique ID (e.g., <code>T1055.001</code>) into the field and click "Lookup" to open the corresponding page on <a href="https://attack.mitre.org/">attack.mitre.org</a>. This is especially useful when reviewing detections with MITRE tags and needing additional context.</p>
 <p><img alt="MStrings" src="../../images/mstrings.png" /></p>
-<p align="center"><strong>Figure 19:</strong> MStrings</p>
+<p align="center"><strong>Figure 4.11:</strong> MStrings</p>
 
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
@@ -1391,6 +1392,9 @@ cargo run -p mstrings -- /path_to_file/ -o -t --case CaseXYZ
 <p>Otherwise, results are saved to:</p>
 <pre><code>saved_output/mstrings/
 </code></pre>
+<blockquote>
+<p>The MITRE Lookup feature is only available in the GUI version of mStrings.</p>
+</blockquote>
 
 
 

@@ -2,7 +2,7 @@ NSRL Query checks a file hash against the National Software Reference Library (N
 
 ![NSRL Hash Lookup](../images/nsrlquery.png)
 
-<p align="center"><strong>Figure 4.15:</strong> NSRL Hash Lookup</p>
+<p align="center"><strong>Figure 5.13:</strong> NSRL Hash Lookup</p>
 
 ---
 

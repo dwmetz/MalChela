@@ -4,7 +4,7 @@ A MITRE Technique Lookup bar is available at the top of the GUI panel when mStri
 
 ![MStrings](../images/mstrings.png)
 
-<p align="center"><strong>Figure 4.11:</strong> MStrings</p>
+<p align="center"><strong>Figure 5.10:</strong> MStrings</p>
 
 ---
 

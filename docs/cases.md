@@ -4,7 +4,7 @@ The Cases feature in MalChela v3.0 introduces a structured way to manage analysi
 
 ![Case Management](./images/case_management.png)
 
-<p align="center"><strong>Figure 3.1:</strong> Case Management</p>
+<p align="center"><strong>Figure 4.1:</strong> Case Management</p>
 
 ## Creating a Case
 
@@ -15,7 +15,7 @@ A case can be created by providing:
 
 ![New Case](./images/new_case.png)
 
-<p align="center"><strong>Figure 3.2:</strong> New Case</p>
+<p align="center"><strong>Figure 4.2:</strong> New Case</p>
 
 
 After choosing the input, assign a descriptive case name. The GUI will automatically create a new folder under:
@@ -54,7 +54,7 @@ The scratchpad allows users to record notes, label items with tags, and track in
 
 ![Searching Cases](./images/case_search.png)
 
-<p align="center"><strong>Figure 3.3:</strong> Searching Cases</p>
+<p align="center"><strong>Figure 4.3:</strong> Searching Cases</p>
 
 ## Archiving & Restoring Cases
 
@@ -75,7 +75,7 @@ Tools launched from the workspace automatically write output into the active cas
 
 ![Example Case](./images/case_example.png)
 
-<p align="center"><strong>Figure 3.4:</strong> Example Case</p>
+<p align="center"><strong>Figure 4.4:</strong> Example Case</p>
 
 ## Summary
 

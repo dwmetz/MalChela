@@ -14,7 +14,7 @@ These hash sets (.tsv preferred) can be used with [HashCheck](hashcheck.md).
 
 ![MZHash](../images/mzhash.png)
 
-<p align="center"><strong>Figure 4.14:</strong> MZHash</p>
+<p align="center"><strong>Figure 5.12:</strong> MZHash</p>
 
 ---
 

@@ -2,7 +2,7 @@ Combine YARA merges multiple YARA rule files into a single consolidated rule set
 
 ![Combine YARA](../images/combineyara.png)
 
-<p align="center"><strong>Figure 4.3:</strong> Combine YARA</p>
+<p align="center"><strong>Figure 5.3:</strong> Combine YARA</p>
 
 
 ---

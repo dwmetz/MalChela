@@ -2,7 +2,7 @@
 
 ![YARA-X](../images/yara-x.png)
 
-<p align="center"><strong>Figure 5.6:</strong> YARA-X </p>
+<p align="center"><strong>Figure 6.6:</strong> YARA-X </p>
 
 ---
 

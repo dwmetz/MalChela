@@ -24,7 +24,7 @@ MalChela supports easy switching between tool configurations via the GUI.
 
 ![YAML Config Tool](../images/yaml_configurator.png)
 
-<p align="left"><strong>Figure 5.1:</strong> YAML Config Tool</p>
+<p align="left"><strong>Figure 6.1:</strong> YAML Config Tool</p>
 
 To switch:
 

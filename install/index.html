@@ -541,6 +541,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#one-click-release-build-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      One-Click Release Build (Recommended)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#windows-notes" class="md-nav__link">
     <span class="md-ellipsis">
       Windows Notes
@@ -1403,6 +1412,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#one-click-release-build-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      One-Click Release Build (Recommended)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#windows-notes" class="md-nav__link">
     <span class="md-ellipsis">
       Windows Notes
@@ -1452,9 +1470,18 @@
 cd MalChela
 </code></pre>
 <h3 id="build-tools">Build Tools</h3>
-<pre><code>cargo build                 # Build all tools
-cargo build -p fileanalyzer # Build individual tool
+<pre><code>cargo build --release                  # Build all tools in release mode
+cargo build -p fileanalyzer --release # Build an individual tool in release mode
 </code></pre>
+<h3 id="one-click-release-build-recommended">One-Click Release Build (Recommended)</h3>
+<p>To build <strong>all tools</strong> in release mode in one step, use the script in the workspace root:</p>
+<pre><code class="language-bash">chmod +x release.sh
+./release.sh
+</code></pre>
+<p>This will compile every core tool and generate optimized release binaries under <code>target/release/</code>. This is especially useful before first use of the GUI or case features, which rely on prebuilt binaries.</p>
+<blockquote>
+<p>⚠️ Using <code>--release</code> is highly recommended to ensure optimal performance and avoid unexpected behavior when launching tools from the GUI.</p>
+</blockquote>
 <h3 id="windows-notes">Windows Notes</h3>
 <pre><code>•   Best experience via WSL2
 •   GUI is not supported natively on Windows

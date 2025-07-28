@@ -84,7 +84,7 @@ Run:
 or 
 
 ```
-cargo run -p MalChelaGUI
+./target/release/MalChelaGUI
 
 ```
 

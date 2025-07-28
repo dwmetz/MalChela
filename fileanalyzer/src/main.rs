@@ -142,9 +142,9 @@ async fn main() {
         }
     };
 
-    // NSRL hash lookup using internal nsrlquery subtool via cargo run
-    let nsrl_result = match std::process::Command::new("cargo")
-        .args(["run", "-p", "nsrlquery", "--", &md5])
+    // NSRL hash lookup using precompiled nsrlquery binary for speed
+    let nsrl_result = match std::process::Command::new("target/release/nsrlquery")
+        .args(["--hash", &md5])
         .output()
     {
         Ok(output) if output.status.success() => {

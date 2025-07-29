@@ -31,10 +31,10 @@
 | Combine YARA        | Combines all `.yara`/`.yar` files in a directory into a single rule file |
 | Extract Samples     | Recursively extracts password-protected malware archives (ZIP/RAR) using common passwords |
 | File Analyzer       | Analyzes a file for hashes, entropy, PE structure, fuzzy hashes, YARA matches, NSRL lookup, and VirusTotal status |
-| Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
+| File Miner          | Scans a folder for file type mismatches and metadata. |
+| Hash It              | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
-| Mismatch Miner      | Scans for executables masquerading as other file types (e.g., JPG, PDF) by detecting magic number mismatches |
-| mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
+| mStrings             | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
 | mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
 | nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it’s known-good |

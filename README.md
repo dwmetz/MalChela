@@ -31,7 +31,7 @@
 | Combine YARA        | Combines all `.yara`/`.yar` files in a directory into a single rule file |
 | Extract Samples     | Recursively extracts password-protected malware archives (ZIP/RAR) using common passwords |
 | File Analyzer       | Analyzes a file for hashes, entropy, PE structure, fuzzy hashes, YARA matches, NSRL lookup, and VirusTotal status |
-| File Miner          | Scans a folder for file type mismatches and metadata. |
+| File Miner          | Scans a folder for file type mismatches and metadata |
 | Hash It              | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
 | mStrings             | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |

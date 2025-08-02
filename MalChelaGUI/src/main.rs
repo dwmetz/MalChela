@@ -1201,7 +1201,7 @@ impl App for AppState {
 
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                let mut title = "MalChela Analysis Toolkit v3.0.1".to_string();
+                let mut title = "MalChela Analysis Toolkit v3.0.2".to_string();
                 if !self.edition.trim().is_empty() {
                     title.push_str(&format!(" ({})", self.edition));
                 }

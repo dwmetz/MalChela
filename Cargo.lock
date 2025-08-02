@@ -68,7 +68,7 @@ checksum = "b2187590a23ab1e3df8681afdf0987c48504d80291f002fcdb651f0ef5e25169"
 
 [[package]]
 name = "about"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "colored 2.2.0",
  "common_ui",
@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "cached"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "combine_yara"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "chrono",
  "clap",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "common_config"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -1323,7 +1323,7 @@ dependencies = [
 
 [[package]]
 name = "common_ui"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "colored 3.0.0",
  "egui 0.27.2",
@@ -1340,7 +1340,7 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "3.0.1"
+version = "3.0.2"
 
 [[package]]
 name = "console"
@@ -1986,7 +1986,7 @@ dependencies = [
 
 [[package]]
 name = "extract_samples"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "walkdir",
  "which 7.0.3",
@@ -2018,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "fileanalyzer"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -2046,7 +2046,7 @@ dependencies = [
 
 [[package]]
 name = "fileminer"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "clap",
  "infer",
@@ -2589,14 +2589,14 @@ checksum = "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5"
 
 [[package]]
 name = "hashcheck"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "chrono",
 ]
 
 [[package]]
 name = "hashit"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "chrono",
  "clap",
@@ -3549,7 +3549,7 @@ dependencies = [
 
 [[package]]
 name = "malhash"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "chrono",
  "clap",
@@ -3680,7 +3680,7 @@ dependencies = [
 
 [[package]]
 name = "mismatchminer"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "chrono",
  "clap",
@@ -3695,7 +3695,7 @@ dependencies = [
 
 [[package]]
 name = "mstrings"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -3722,7 +3722,7 @@ dependencies = [
 
 [[package]]
 name = "mzcount"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "atty",
  "chrono",
@@ -3736,7 +3736,7 @@ dependencies = [
 
 [[package]]
 name = "mzhash"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "clap",
  "common_config",
@@ -3896,7 +3896,7 @@ dependencies = [
 
 [[package]]
 name = "nsrlquery"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "chrono",
  "clap",
@@ -5646,7 +5646,7 @@ checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 
 [[package]]
 name = "strings_to_yara"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "common_config",
 ]
@@ -7452,7 +7452,7 @@ checksum = "6fd8403733700263c6eb89f192880191f1b83e332f7a20371ddcf421c4a337c7"
 
 [[package]]
 name = "xmzhash"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "common_config",
  "indicatif",

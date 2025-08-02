@@ -39,6 +39,7 @@ nav:
       - HashIt: coretools/hashit.md
       - MalHash: coretools/malhash.md
       - MStrings: coretools/mstrings.md
+      - MITRE Lookup: coretools/mitre_lookup.md
       - MZCount: coretools/mzcount.md      
       - MZHash: coretools/mzhash.md
       - NSRLQuery: coretools/nsrlquery.md

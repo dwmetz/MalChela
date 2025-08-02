@@ -1,6 +1,6 @@
 mStrings extracts strings from files and classifies them using regular expressions, YARA rules, and MITRE ATT&CK mappings. It highlights potential indicators of compromise and suspicious behavior, grouping matches by tactic and technique. Ideal for quickly surfacing malicious capabilities in binaries, scripts, and documents.
 
-A MITRE Technique Lookup bar is available at the top of the GUI panel when mStrings is selected. You can paste a MITRE technique ID (e.g., `T1055.001`) into the field and click "Lookup" to open the corresponding page on [attack.mitre.org](https://attack.mitre.org/). This is especially useful when reviewing detections with MITRE tags and needing additional context.
+Note: The MITRE Technique Lookup bar, introduced in v3.0.1 has been removed. It has been replaced with a full [MITRE lookup utility](mitre_lookup.md) (no internet required.)
 
 ![MStrings](../images/mstrings.png)
 

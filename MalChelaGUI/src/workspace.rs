@@ -1,4 +1,6 @@
 use eframe::egui;
+use pulldown_cmark::{Parser, Event, Tag};
+use egui::RichText;
 use walkdir::WalkDir;
 use crate::AppState;
 use crate::egui::ComboBox;
@@ -22,7 +24,6 @@ pub struct CaseMetadata {
     pub notes: String,
 }
 
-use crate::egui::RichText;
 use crate::egui::Ui;
 use crate::egui::Label;
 use crate::egui::Sense;
@@ -124,13 +125,17 @@ impl WorkspacePanel {
         use crate::egui::ScrollArea;
         ScrollArea::vertical()
             .id_source("workspace_scroll")
+            .auto_shrink([false; 2])
             .show(ui, |ui| {
                 // Case Control Bar: Move this block above the case heading
                 // Add vertical space before the Case Management heading
                 ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    use crate::egui::Color32;
-                    let button_text = |label: &str| RichText::new(label).size(16.0).color(Color32::from_rgb(144, 238, 144));
+                // Replace horizontal layout with horizontal_wrapped for case header buttons
+                use crate::egui::Color32;
+                let button_text = |label: &str| RichText::new(label).size(16.0).color(Color32::from_rgb(144, 238, 144));
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.set_max_width(f32::INFINITY);
                     // 1. "📝 Case Notes"
                     if ui.button(button_text("📝 Case Notes")).clicked() {
                         self.show_notes_modal = true;
@@ -321,9 +326,10 @@ impl WorkspacePanel {
                                             } else {
                                                 input_path.to_string_lossy().to_string()
                                             };
-                                            let result = Command::new("cargo")
+                                // Use the built binary from target/release instead of cargo run
+                                let tool_bin = format!("target/release/{}", tool);
+                                let result = Command::new(tool_bin)
                                                 .env("MALCHELA_WORKSPACE_MODE", "1")
-                                                .args(&["run", "-p", tool, "--"])
                                                 .arg(input_arg)
                                                 .arg("-o")
                                                 .arg(format_flag)
@@ -531,21 +537,58 @@ impl WorkspacePanel {
                     Ok(contents) => contents,
                     Err(e) => format!("❌ Failed to read file: {}", e),
                 };
+                use crate::egui::Vec2;
                 Window::new(RichText::new("📄 File Preview").color(OXIDE_ORANGE))
                     .open(&mut modal_is_open)
                     .resizable(true)
                     .vscroll(true)
-                    .default_width(700.0)
-                    .default_height(400.0)
+                    .min_size(Vec2::new(1150.0, 600.0))
                     .show(ui.ctx(), |ui| {
+                        use eframe::egui::vec2;
+                        const PREVIEW_WIDTH: f32 = 1100.0;
+                        const PREVIEW_HEIGHT: f32 = 550.0;
                         ui.label(RichText::new(display_path).color(STONE_BEIGE));
                         ui.add_space(6.0);
                         ui.separator();
-                        ui.add(
-                            TextEdit::multiline(&mut self.preview_contents)
-                                .desired_rows(20)
-                                .desired_width(f32::INFINITY),
-                        );
+                        // Use pulldown_cmark for .md preview before .txt fallback
+                        let file_path = preview_path;
+                        if file_path.extension().map(|ext| ext == "md").unwrap_or(false) {
+                            if let Ok(content) = std::fs::read_to_string(&file_path) {
+                                let parser = Parser::new(&content);
+                                for event in parser {
+                                    match event {
+                                        Event::Start(Tag::Heading(_level, _, _)) => {
+                                            ui.separator();
+                                        }
+                                        Event::Text(text) => {
+                                            ui.label(RichText::new(text.to_string()));
+                                        }
+                                        Event::Code(code) => {
+                                            ui.monospace(code.to_string());
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            } else {
+                                let mut cleaned_text = self.preview_contents.clone();
+                                ui.add_sized(
+                                    vec2(PREVIEW_WIDTH, PREVIEW_HEIGHT),
+                                    egui::TextEdit::multiline(&mut cleaned_text)
+                                        .font(egui::TextStyle::Monospace)
+                                        .code_editor()
+                                        .desired_rows(20),
+                                );
+                            }
+                        } else {
+                            let mut cleaned_text = self.preview_contents.clone();
+                            ui.add_sized(
+                                vec2(PREVIEW_WIDTH, PREVIEW_HEIGHT),
+                                egui::TextEdit::multiline(&mut cleaned_text)
+                                    .font(egui::TextStyle::Monospace)
+                                    .code_editor()
+                                    .desired_rows(20),
+                            );
+                        }
                         ui.add_space(12.0);
                         ui.separator();
                         // Removed "❌ Close Preview" button block
@@ -577,27 +620,30 @@ impl WorkspacePanel {
             Window::new(RichText::new("📓 Case Notes").color(OXIDE_ORANGE))
                 .collapsible(false)
                 .resizable(true)
-                .default_width(600.0)
+                // Removed .default_width(600.0) to allow natural expansion
                 .default_height(300.0)
                 .open(&mut show)
                 .show(ui.ctx(), |ui| {
-                    ui.label(RichText::new("Notes:").strong().color(CYAN));
-                    ui.add(
-                        TextEdit::multiline(&mut self.notes)
-                            .desired_rows(20)
-                            .desired_width(f32::INFINITY),
-                    );
-                    ui.add_space(8.0);
-                    if ui.button("💾 Save Notes").clicked() {
-                        self.save_case_metadata();
-                    }
-                    if let Some(t) = self.notes_save_confirmed {
-                        if t.elapsed().as_secs() < 2 {
-                            ui.label(RichText::new("✅ Notes saved").color(CYAN));
-                        } else {
-                            self.notes_save_confirmed = None;
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("Notes:").strong().color(CYAN));
+                        ui.add(
+                            TextEdit::multiline(&mut self.notes)
+                                .desired_rows(20)
+                                // .desired_width(f32::INFINITY) removed to allow natural width
+                                .hint_text("Notes about this case...")
+                        );
+                        ui.add_space(8.0);
+                        if ui.button("💾 Save Notes").clicked() {
+                            self.save_case_metadata();
                         }
-                    }
+                        if let Some(t) = self.notes_save_confirmed {
+                            if t.elapsed().as_secs() < 2 {
+                                ui.label(RichText::new("✅ Notes saved").color(CYAN));
+                            } else {
+                                self.notes_save_confirmed = None;
+                            }
+                        }
+                    });
                 });
             self.show_notes_modal = show;
         }
@@ -836,8 +882,7 @@ impl WorkspacePanel {
 
     /// Render the output and reports panel (right column)
     pub fn render_output_and_reports_panel(&mut self, _ui: &mut Ui) {
-        // Implementation for the right panel would go here.
-        // For now, nothing is rendered.
+        // Temporarily disabled to prevent duplicate console output rendering.
     }
 }
 /// Render update check status, if present in AppState.

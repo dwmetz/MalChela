@@ -239,12 +239,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Enter the file path:");
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
-            input.trim().to_string()
+            let input = input.trim();  // Remove trailing newline and whitespace
+
+
+            input.to_string()
         }
     };
     let file_path_copy = file_path.clone(); // clone once for later reuse
 
-    let file = File::open(file_path.clone())?;
+    // Ensure Path::new uses trimmed input (file_path is already trimmed at this point)
+    let path = std::path::Path::new(&file_path);
+    let file = File::open(path)?;
     let mut mstrings = Mstrings::new();
     let mut buffer = Vec::new();
     BufReader::new(file).read_to_end(&mut buffer)?;
@@ -305,19 +310,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create the table using the `display_matches`
-    let mut table = TabledTable::new(&display_matches);
-
-    // Apply the styles, with Tactic column (index 4) using 20-width wrap, others 40
     use tabled::settings::object::Columns;
+    let mut table = TabledTable::new(&display_matches);
     table
         .with(Style::modern())
         .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
-        .with(Modify::new(Columns::single(4)).with(Width::wrap(20).keep_words(true)))
-        .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)));
+        .with(Modify::new(Columns::single(4)).with(Width::wrap(15).keep_words(true)))
+        .with(Modify::new(Columns::new(0..)).with(Width::wrap(25).keep_words(true)));
+
+    // Stringify the table after applying formatting, for both display and output file
+    let table_str = table.to_string();
 
     // Ensure the table is printed
     if !is_gui_mode() {
-        let table_str = format!("{table}");
         let mut lines = table_str.lines();
         if let Some(top_border) = lines.next() {
             println!("{}", top_border);
@@ -335,7 +340,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         // For GUI mode, print the table directly
-        println!("{table}");
+        println!("{table_str}");
         // Handle clicking on "Open TXXXX" buttons (pseudo-code for illustration)
         // In actual GUI, you would have event/callback handling here.
         // For demonstration, if this were a GUI event loop, you might do:
@@ -433,33 +438,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Add summary
         report_buffer.push_str(&format!("{} unique detections matched.\n\n", mstrings.matches.iter().filter(|m| m.rule_name.is_some()).count()));
 
-        // Add table content
-        let display_matches: Vec<DisplayMatch> = mstrings.matches.iter()
-            .filter_map(|m| {
-                if let Some(rule) = &m.rule_name {
-                    Some(DisplayMatch {
-                        offset: format!("0x{:08X}", m.offset),
-                        encoding: format!("{:?}", m.encoding),
-                        matched_str: truncate_string(&m.matched_str, 80),
-                        rule_name: rule.clone(),
-                        tactic: m.tactic.clone().unwrap_or_default(),
-                        technique: m.technique.clone().unwrap_or_default(),
-                        technique_id: m.technique_id.clone().unwrap_or_default(),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let mut table = TabledTable::new(&display_matches);
-        table
-            .with(Style::modern())
-            .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
-            .with(Modify::new(Columns::single(4)).with(Width::wrap(20).keep_words(true)))
-            .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)));
-
-        report_buffer.push_str(&format!("{}\n\n", table.to_string()));
+        // Add table content (for .txt, use the same stringified/formatting as console)
+        if format == "txt" {
+            report_buffer.push_str(&format!("{}\n\n", table_str));
+        } else if format == "md" {
+            // For markdown, re-generate table with markdown style if desired, or just reuse.
+            report_buffer.push_str(&format!("{}\n\n", table_str));
+        }
 
         // Add IOCs
         if !fs_iocs.is_empty() {
@@ -521,7 +506,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // End: Output saving logic
     // Optional CLI footer: MITRE reference note
     if !is_gui_mode() {
-        println!("Note: MITRE Tactic IDs can be referenced at https://attack.mitre.org/techniques/");
+        println!("Note: MITRE Tactic IDs can be referenced with MITRE_lookup tool.");
     }
     Ok(())
 }

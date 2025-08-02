@@ -32,9 +32,11 @@ fn find_workspace_root() -> io::Result<PathBuf> {
 
     if let Some(parent1) = resolved_exe_path.parent() {
         if let Some(parent2) = parent1.parent() {
-            let workspace_root = parent2.to_path_buf();
-            if workspace_root.exists() && workspace_root.is_dir() {
-                return Ok(workspace_root);
+            if let Some(parent3) = parent2.parent() {
+                let workspace_root = parent3.to_path_buf();
+                if workspace_root.exists() && workspace_root.is_dir() {
+                    return Ok(workspace_root);
+                }
             }
         }
     }
@@ -122,7 +124,7 @@ fn print_banner() {
     println!("{}", crab_art.red());
     println!("        {}", "    https://bakerstreetforensics.com".truecolor(110, 130, 140));
     println!();
-    println!("        {}", "     MalChela Analysis Toolkit v3.0.1".yellow());
+    println!("        {}", "    MalChela Analysis Toolkit v3.0.2".yellow());
     println!();
 }
 
@@ -196,15 +198,32 @@ fn main() {
             println!("{}", format!("Launching: {}", entry.display_name).cyan());
             let binary_path = std::path::Path::new(&entry.binary_path);
 
+
+
             if !binary_path.exists() {
                 eprintln!("❌ Binary not found at: {}", binary_path.display());
                 eprintln!("🏃‍♂️ Run release.sh in workspace root")
             } else if let Ok(workspace_root) = find_workspace_root() {
-                let child = Command::new(binary_path)
-                    .current_dir(&workspace_root)
-                    .spawn();
+                let launch_result = if entry.shortcode == "ml" {
+                    // Explicit path to MITRE JSON in workspace root
+                    Command::new(binary_path)
+                        .env("MITRE_ASSETS_DIR", workspace_root.join("assets").to_string_lossy().to_string())
+                        .current_dir(&workspace_root)
+                        .spawn()
+                } else if entry.shortcode == "mstrings" {
+                    println!("📂 Working directory: {}", workspace_root.display());
+                    // We don't have direct access to the arguments here, but let's build the command to inspect args
+                    let mut cmd = Command::new(binary_path);
+                    cmd.current_dir(&workspace_root);
+                    println!("🧵 Args: {:?}", cmd.get_args());
+                    cmd.spawn()
+                } else {
+                    Command::new(binary_path)
+                        .current_dir(&workspace_root)
+                        .spawn()
+                };
 
-                match child {
+                match launch_result {
                     Ok(mut child_proc) => {
                         let _ = child_proc.wait();
                     }

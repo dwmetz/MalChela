@@ -24,23 +24,25 @@ pub fn generate_tool_menu() -> Vec<ToolEntry> {
         ("NSRL Hash Lookup", "nh"),
         ("Extract Samples", "es"),
         ("About", "ab"),
+        ("MITRE Lookup", "ml"),
     ].iter().cloned().collect();
 
     let entries = vec![
+        ("About", "about"),
+        ("Combine YARA", "combine_yara"),
+        ("Extract Samples", "extract_samples"),
         ("File Analyzer", "fileanalyzer"),
         ("File Miner", "fileminer"),
-        ("MStrings", "mstrings"),
-        ("Hash It", "hashit"),
         ("Hash Check", "hashcheck"),
+        ("Hash It", "hashit"),
+        ("Malware Hash Lookup", "malhash"),
+        ("MITRE Lookup", "MITRE_lookup"),
+        ("MStrings", "mstrings"),
         ("MZCount", "mzcount"),
         ("MZHash", "mzhash"),
-        ("XMZHash", "xmzhash"),
-        ("Combine YARA", "combine_yara"),
-        ("Strings to YARA", "strings_to_yara"),
-        ("Malware Hash Lookup", "malhash"),
         ("NSRL Hash Lookup", "nsrlquery"),
-        ("Extract Samples", "extract_samples"),
-        ("About", "about"),
+        ("Strings to YARA", "strings_to_yara"),
+        ("XMZHash", "xmzhash"),
     ];
 
     for (display_name, binary_name) in entries {
@@ -59,6 +61,8 @@ pub fn generate_tool_menu() -> Vec<ToolEntry> {
             shortcode,
             binary_path: format!("{}/../target/release/{}", env!("CARGO_MANIFEST_DIR"), binary_name),
         });
+
+
     }
 
     tools

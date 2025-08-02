@@ -1,9 +1,11 @@
 mod tshark_panel;
 mod case_modal;
 mod fileminer;
+mod mitre;
 use case_modal::CaseModal;
 // use crate::case_modal::NewCaseModal;
 use crate::case_modal::show_case_modal;
+use mitre::MitreLookupModal;
 use tshark_panel::TsharkPanel;
 use fileminer::{FileMinerPanel};
 mod vol3_panel;
@@ -16,7 +18,6 @@ use eframe::{
     egui::{self, CentralPanel, Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Visuals, Vec2},
     App,
 };
-use open;
 use egui::viewport::IconData;
 fn load_icon() -> Option<IconData> {
     use std::path::PathBuf;
@@ -139,8 +140,8 @@ pub struct AppState {
     pub current_panel: ActivePanel,
     pub input_type: InputType,
     pub fileminer_minimized: bool,
-    // --- MITRE Technique Lookup field ---
-    pub mitre_lookup_id: String,
+    pub show_mitre_modal: bool,
+    pub mitre_modal: MitreLookupModal,
 }
 fn resolve_env_vars(s: &str) -> String {
     let replaced = if s.contains("${MALCHELA_ROOT}") {
@@ -214,8 +215,9 @@ impl Default for AppState {
             // Set a valid default input_type (File is common default, or Folder if preferred)
             input_type: InputType::File,
             fileminer_minimized: false,
-            // --- MITRE Technique Lookup field ---
-            mitre_lookup_id: String::new(),
+            // --- MITRE Technique Lookup fields ---
+            show_mitre_modal: false,
+            mitre_modal: MitreLookupModal::default(),
         }
     }
 }
@@ -1422,6 +1424,11 @@ impl App for AppState {
                         let _ = std::process::Command::new("explorer").arg(&guide_path).spawn();
                     }
 
+                    // --- MITRE Lookup Button ---
+                    if ui.button(RichText::new("📚 MITRE Lookup").color(STONE_BEIGE)).on_hover_text("Search the MITRE ATT&CK matrix").clicked() {
+                        self.show_mitre_modal = true;
+                    }
+
                     if ui.button(RichText::new("📝 Scratchpad").color(STONE_BEIGE)).on_hover_text("Open in-app notepad").clicked() {
                         self.show_scratchpad = !self.show_scratchpad;
                         self.fileminer_panel.visible = false;
@@ -1450,9 +1457,10 @@ impl App for AppState {
                 });
             });
 
-        // Avoid simultaneous immutable and mutable borrows of self:
-        let tool_clone = self.selected_tool.clone();
-        let _tool_command = tool_clone.as_ref().and_then(|t| t.command.get(0)).cloned();
+// Avoid simultaneous immutable and mutable borrows of self:
+let tool_clone = self.selected_tool.clone();
+let _tool_command = tool_clone.as_ref().and_then(|t| t.command.get(0)).cloned();
+
 
 
 
@@ -1532,29 +1540,17 @@ CentralPanel::default().show(ctx, |ui| {
         }
     }
 
-    // --- MITRE Technique Lookup bar (above output display) ---
-    if let Some(tool) = &self.selected_tool {
-        if tool.command.iter().any(|arg| arg.contains("mstrings")) {
-            ui.horizontal(|ui| {
-                ui.label("MITRE Technique ID:");
-                let mut lookup_id = self.mitre_lookup_id.clone();
-                if ui.text_edit_singleline(&mut lookup_id).changed() {
-                    self.mitre_lookup_id = lookup_id.clone();
-                }
-                if ui.button("Lookup").clicked() {
-                    let url = if let Some((base, sub)) = lookup_id.split_once('.') {
-                        format!("https://attack.mitre.org/techniques/{}/{}/", base, sub)
-                    } else {
-                        format!("https://attack.mitre.org/techniques/{}/", lookup_id)
-                    };
-                    let _ = open::that(url);
-                }
-            });
-            ui.add(egui::Separator::default().spacing(12.0));
-        }
+
+    // --- MITRE Lookup Modal using egui::Window ---
+    if self.show_mitre_modal {
+        self.mitre_modal.show_ui(
+            ctx,
+            &mut self.show_mitre_modal,
+        );
     }
 
-    if let Some(tool) = &tool_clone {
+
+if let Some(tool) = &tool_clone {
         // FileMiner panel: show if selected tool is fileminer
         if self.selected_tool.as_ref().map(|t| &t.name) == Some(&tool.name) && tool.command.get(0).map(|s| s == "fileminer").unwrap_or(false) {
             // --- PATCH: Parse and load FileMiner output as JSON before showing panel ---
@@ -1622,19 +1618,19 @@ CentralPanel::default().show(ctx, |ui| {
                 } else {
                     self.vol3_panel.arg_values.iter()
                         .filter(|(_, v)| !v.trim().is_empty())
-                                .find(|(k, _)| k.contains("output") || k.contains("dump") || k.contains("path"))
-                                .map(|(_, v)| v.as_str())
-                        };
-                        let preview_custom_args = self.vol3_panel.arg_values.iter()
-                            .filter(|(k, _)| !k.contains("output") && !k.contains("dump") && !k.contains("path"))
-                            .map(|(k, v)| format!("--{} \"{}\"", k, v))
-                            .collect::<Vec<String>>()
-                            .join(" ");
+                        .find(|(k, _)| k.contains("output") || k.contains("dump") || k.contains("path"))
+                        .map(|(_, v)| v.as_str())
+                };
+                let preview_custom_args = self.vol3_panel.arg_values.iter()
+                    .filter(|(k, _)| !k.contains("output") && !k.contains("dump") && !k.contains("path"))
+                    .map(|(k, v)| format!("--{} \"{}\"", k, v))
+                    .collect::<Vec<String>>()
+                    .join(" ");
 
-                        let full_command_str = self.vol3_panel.build_vol3_command(
-                            &mem_path,
-                            &plugin_name,
-                            &preview_custom_args,
+                let full_command_str = self.vol3_panel.build_vol3_command(
+                    &mem_path,
+                    &plugin_name,
+                    &preview_custom_args,
                             preview_output_path,
                         );
                         self.vol3_panel.launch_command = Some(full_command_str.clone());
@@ -2765,13 +2761,14 @@ fn main() {
         workspace: WorkspacePanel::new(),
         case_sha256: None,
         case_modal: CaseModal::default(),
-        mitre_lookup_id: String::new(),
+        show_mitre_modal: false,
+        mitre_modal: MitreLookupModal::default(),
     };
 
     AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1650.0, 900.0])
+            .with_inner_size([1400.0, 800.0])
             .with_icon(icon.unwrap_or_else(|| std::sync::Arc::new(IconData { rgba: vec![0; 4], width: 1, height: 1 }))),
         ..Default::default()
     };

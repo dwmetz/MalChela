@@ -1,0 +1,11 @@
+[package]
+name = "serde_yml"
+version = "0.0.12"
+edition = "2021"
+
+[dependencies]
+serde_yaml = "0.9"
+
+[lib]
+name = "serde_yml"
+path = "src/lib.rs"

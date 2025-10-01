@@ -2,6 +2,7 @@ use dialoguer::theme::Theme;
 use console::Style;
 use std::fmt::{self, Write};
 
+#[allow(dead_code)]
 pub struct NoPrefixTheme;
 
 impl Theme for NoPrefixTheme {

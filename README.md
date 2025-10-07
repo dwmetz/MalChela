@@ -165,4 +165,4 @@ These enhancements make working with memory images, PCAPs, and YARA rules more s
 #### Caveat Emptor:
 Successfully tested on MacOS on Silicon, Ubuntu, and RaspberryPi. Yara version 4.2 or greater is required.Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. 
 
-**As of October 2025 both MalChela CLI and GUI will operate on Windows under WSL2. **
+**As of October 2025 both MalChela CLI and GUI will operate on Windows under WSL2.**

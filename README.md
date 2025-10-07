@@ -66,6 +66,12 @@ Installation & Usage:
 
 Install Rust - https://rustup.rs/</p>
 
+For CLI only installations (WSL, Raspberry Pi, etc.): 
+
+```
+ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+Clone the repository and build 
 ```
 git clone https://github.com/dwmetz/MalChela.git
 cd MalChela

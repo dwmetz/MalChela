@@ -1,31 +1,13 @@
-# tools.yaml - MalChela Tool Configuration File
-#
-# This file defines tools that will appear in the MalChela GUI.
-# Each tool block consists of:
-#   - name: Unique name used for display and reference
-#   - category: Category under which the tool appears in the GUI
-#   - command: The command to run (must be in PATH or relative to workspace)
-#   - input_type: One of "file", "folder", or "hash"
-#
-# To disable a tool without deleting it, simply comment out its block using "#".
-#
-# Example usage:
-#
-# - name: fileanalyzer
-#   description: "Extracts metadata, entropy, hashes, and YARA matches"
-#   category: "File Analysis"
-#   command: "fileanalyzer"
-#   input_type: "file"
-#
-# Tools can be written in any language and don’t need to be Rust-based,
-# as long as they are executable and accept input via stdin, env vars,
-# or CLI arguments as expected.
-#
-# This file is loaded once at startup. Any changes require restarting the GUI.
 
-edition: " "
+edition: "Doug's Dev Edition"
 
 tools:
+- name: "File Miner"
+  description: "Scans a folder for file type mismatches and metadata"
+  command: ["fileminer"]
+  input_type: folder
+  category: "File Analysis"
+  exec_type: cargo
 
 - name: "mStrings"
   description: "Extracts strings with IOC and MITRE mapping"
@@ -35,7 +17,7 @@ tools:
   exec_type: cargo
 
 - name: Malware Hash Lookup
-  description: "Checks hash against VirusTotal and MalwareBazaar"
+  description: "Checks hash against VT and MalwareBazaar"
   command: ["malhash"]
   input_type: hash
   category: "Threat Intel"
@@ -53,13 +35,6 @@ tools:
   command: ["extract_samples"]
   input_type: folder
   category: "Utilities"
-  exec_type: cargo
-
-- name: Hash Check
-  description: "Check a hash value against a lookup file"
-  command: ["hashcheck"]
-  input_type: file
-  category: "Hashing Tools"
   exec_type: cargo
 
 - name: File Analyzer
@@ -100,7 +75,7 @@ tools:
 - name: Strings to YARA
   description: "Converts string sets into YARA rules"
   command: ["strings_to_yara"]
-  input_type: file
+  input_type: hash
   category: "YARA Tools"
   exec_type: cargo
 
@@ -111,86 +86,115 @@ tools:
   category: "Hashing Tools"
   exec_type: cargo
 
-- name: "File Miner"
-  description: "Scans a folder for file type mismatches and metadata"
-  command: ["fileminer"]
-  input_type: folder
-  category: "File Analysis"
-  exec_type: cargo
+- name: PCAP to CSV (.zip)
+  description: "Converts PCAP for processing in Magnet Axiom"
+  command: ["python3"]
+  input_type: "file"
+  file_position: "last"
+  category: "Utilities"
+  optional_args: ["scripts/tshark_to_csv.py"]
+  exec_type: script
 
 # -------------------------------------
-# Example script in workspace integration:
-# This script is included in MalChela (requires Tshark)
-# - name: PCAP to CSV (.zip)
-#   description: "Converts PCAP for processing in Magnet Axiom"
-#   command: ["python3"]
-#   input_type: "file"
-#   file_position: "last"
-#   category: "Utilities"
-#   optional_args: ["scripts/tshark_to_csv.py"]
-#   exec_type: script
-# 
-# -------------------------------------
-# Special Tools Integrations:
-# If you have YARA-X, Tshark, or Volatility3 installed and in your path,
-# Uncomment the entries below to enable special panels in MalChela
-# 
-# - name: YARA-X
-#   description: "Run YARA-X with custom rule and target file"
-#   command: ["yr"]
-#   input_type: file
-#   file_position: "last"
-#   category: "YARA Tools"
-#   optional_args: []
-#   exec_type: binary
-#   cargo: false
-# 
-# - name: TShark
-#   description: "Analyze network traffic"
-#   command: ["tshark"]
-#   input_type: file
-#   accepted_extensions: ["pcap", "pcapng"]
-#   file_position: "last"
-#   category: "Network Analysis"
-#   optional_args: []
-#   exec_type: binary
-# 
-# - name: Volatility 3
-#   description: "Memory analysis using Volatility 3"
-#   command: ["/Users/dmetz/.local/bin/vol3"]
-#   input_type: "file"
-#   file_position: "first"
-#   category: "Memory Forensics"
-#   gui_mode_args: []
-#   exec_type: binary
-# 
-# -------------------------------------
 # Example 3rd party integrations:
-# - name: capa
-#   description: "Detects capabilities in binaries via rules"
-#   command: ["capa"]
-#   input_type: "file"
-#   file_position: "last"
-#   category: "File Analysis"
-#   optional_args: []
-#   exec_type: binary
-# 
-# - name: exiftool
-#   description: "Displays metadata for various file types"
-#   command: ["exiftool"]
-#   input_type: "file"
-#   file_position: "last"
-#   category: "Metadata Analysis"
-#   optional_args: []
-#   exec_type: binary
-# 
-# - name: pdf-parser
-#   description: "Parses and analyzes suspicious PDF structures"
-#   command: ["python3"]
-#   input_type: "file"
-#   file_position: "last"
-#   category: "PDF Analysis"
-#   optional_args: ["/Users/dmetz/Tools/pdfparser/pdf-parser.py"]
-#   exec_type: script
-# 
-#  ** Note: See User Guide for Python requirements
+# Below is a disabled example for capa
+# Uncomment to enable if capa is in your PATH
+
+- name: YARA-X
+  description: "Run YARA-X with custom rule and target file"
+  command: ["yr"]
+  input_type: file
+  file_position: "last"
+  category: "YARA Tools"
+  optional_args: []
+  exec_type: binary
+
+- name: TShark
+  description: "Analyze network traffic"
+  command: ["tshark"]
+  input_type: file
+  accepted_extensions: ["pcap", "pcapng"]
+  file_position: "last"
+  category: "Network Analysis"
+  optional_args: []
+  exec_type: binary
+
+- name: capa
+  description: "Detects capabilities in binaries via rules"
+  command: ["capa"]
+  input_type: "file"
+  file_position: "last"
+  category: "File Analysis"
+  optional_args: []
+  exec_type: binary
+
+- name: exiftool
+  description: "Displays metadata for various file types"
+  command: ["exiftool"]
+  input_type: "file"
+  file_position: "last"
+  category: "Metadata Analysis"
+  optional_args: []
+  exec_type: binary
+
+- name: pdf-parser
+  description: "Parses and analyzes suspicious PDF structures"
+  command: ["python3"]
+  input_type: "file"
+  file_position: "last"
+  category: "PDF Analysis"
+  optional_args: ["/Users/dmetz/Tools/pdfparser/pdf-parser.py"]
+  exec_type: script
+
+- name: Volatility 3
+  description: "Memory analysis using Volatility 3"
+  command: ["/Users/dmetz/.local/bin/vol3"]
+  input_type: "file"
+  file_position: "first"
+  category: "Memory Forensics"
+  gui_mode_args: []
+  exec_type: binary
+
+- name: FLOSS
+  description: "Extracts strings and function names from binaries"
+  command: ["/Users/dmetz/Tools/FLOSS/floss"]
+  input_type: file
+  file_position: last
+  category: "Strings Analysis"
+  optional_args: []
+  exec_type: binary
+
+- name: zipdump
+  description: "Parses and analyzes suspicious PDF structures"
+  command: ["zipdump.py"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  optional_args: []
+  exec_type: script
+
+
+- name: olevba
+  description: "Extract VBA macros from OLE files"
+  command: ["olevba"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  exec_type: script
+
+- name: oledump
+  description: "Dump streams from OLE files"
+  command: ["oledump.py"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  optional_args: []
+  exec_type: script
+
+- name: oleid
+  description: "Analyze OLE files for suspicious indicators"
+  command: ["oleid"]
+  input_type: "file"
+  file_position: "last"
+  category: "Office Document Analysis"
+  exec_type: script

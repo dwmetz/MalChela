@@ -124,7 +124,7 @@ fn print_banner() {
     println!("{}", crab_art.red());
     println!("        {}", "    https://bakerstreetforensics.com".truecolor(110, 130, 140));
     println!();
-    println!("        {}", "    MalChela Analysis Toolkit v3.0.2".yellow());
+    println!("        {}", "    MalChela Analysis Toolkit v3.0.3".yellow());
     println!();
 }
 

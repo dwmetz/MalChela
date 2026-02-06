@@ -22,7 +22,6 @@ shell-words = "1.1.1"
 rand = "0.9.2"
 common_ui = { path = "../common_ui" }
 which = "7.0.3"
-helpers = "0.6.1"
 tabled = "0.19.0"
 sha2 = "0.10.9"
 md5 = "0.7.0"

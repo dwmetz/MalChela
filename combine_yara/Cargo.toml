@@ -8,5 +8,5 @@ walkdir = "2" #Or newer
 colored = "2" #Or newer
 common_config = { path = "../common_config" }
 common_ui = { path = "../common_ui" }
-chrono = "0.4.41"
+chrono = "0.4.43"
 clap = { version = "4", features = ["derive"] }

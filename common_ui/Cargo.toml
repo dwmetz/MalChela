@@ -4,5 +4,5 @@ version = "3.0.2"
 edition = "2021"
 
 [dependencies]
-colored = "3.0.0"
+colored = "3.1.1"
 egui = "0.27"

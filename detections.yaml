@@ -64,13 +64,13 @@ SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
   status: "experimental"
-  description: "Domain with random characters, typically used for malicious activities"
+  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names like microsoft.com or windows.com."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "[a-zA-Z0-9]{6,}\\.(com|biz|net|org|info)"
+      - "[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
   tags:
     - attack.t1071.001
   level: high
@@ -312,9 +312,9 @@ AntiDebuggingNtQuerySystemInformation:
   title: "Anti-debugging NtQuerySystemInformation with Debug-Related Classes"
   id: "o8b8d3b6-8e3e-4b0b-b87f-d929a0b17be0"
   status: "experimental"
-  description: "Detects NtQuerySystemInformation calls with specific classes commonly used for anti-debugging."
+  description: "Detects class constants passed to NtQuerySystemInformation for anti-debugging. Note: NtQuerySystemInformation itself is typically dynamically resolved via GetProcAddress and will not appear as a string in the IAT — matching on the class name constants alone is sufficient signal."
   logsource:
-    category: "api_call" # Or process_events depending on your log source.
+    category: "file_event"
     product: "windows"
   detection:
     strings:
@@ -322,7 +322,6 @@ AntiDebuggingNtQuerySystemInformation:
       - "SystemKernelDebuggerInformation"
       - "SystemProcessInformation"
       - "SystemDebugObjectInformation"
-  condition: "NtQuerySystemInformation and (SystemKernelDebuggerInformation or SystemProcessInformation or SystemDebugObjectInformation)"
   tags:
     - attack.T1082
     - attack.T1497.003
@@ -646,49 +645,45 @@ SuspiciousBatFilename:
       technique_name: "Command and Scripting Interpreter: Windows Command Shell"
       tactics: ["Execution"]
 
-SuspiciousDllApiHooks:
-  title: "Suspicious Windows API Calls for Injection or Discovery"
+DynamicAPIResolution:
+  title: "Dynamic API Resolution via LoadLibrary and GetProcAddress"
   id: "dllhook-api-discovery-002"
   status: "experimental"
-  description: "Detects use of DLL exports and API calls often leveraged for injection or process discovery."
+  description: "Detects dynamic library loading and API resolution imports (both ANSI and Wide variants). This pattern is used to resolve API calls at runtime to avoid static IAT analysis. Replaces overlapping SuspiciousDllApiHooks and SuspiciousWindowsAPIDiscovery rules."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "LoadLibraryA"
       - "GetProcAddress"
-      - "SetWindowsHookEx"
-      - "CreateToolhelp32Snapshot"
-      - "EnumProcesses"
+      - "(LoadLibraryA|LoadLibraryW|LoadLibraryExA|LoadLibraryExW)"
+      - "(GetModuleHandleW|GetModuleHandleA)"
+      - "(GetModuleFileNameW|GetModuleFileNameA)"
   tags:
-    - attack.T1055
+    - attack.T1129
     - attack.T1106
-    - attack.T1082
   level: high
   mitre:
-    - technique_id: "T1055"
-      technique_name: "Process Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+    - technique_id: "T1129"
+      technique_name: "Shared Modules"
+      tactics: ["Execution"]
     - technique_id: "T1106"
       technique_name: "Native API"
       tactics: ["Execution"]
-    - technique_id: "T1082"
-      technique_name: "System Information Discovery"
-      tactics: ["Discovery"]
 
 
 SuspiciousURLGeneric:
   title: "Suspicious URL Detection"
   id: "87654321-b98e-3d21-654a-266424710000"
   status: "experimental"
-  description: "Detects URLs within strings, including HTTP, HTTPS, FTP, and FTPS."
+  description: "Detects suspicious URLs in two focused forms: raw IP-address URLs (almost never legitimate in malware strings) and URLs with query string parameters (typical of dynamic C2 beaconing). Intentionally excludes bare domain/path URLs to avoid XML namespace false positives (e.g. schemas.microsoft.com)."
   logsource:
-    category: "process_command_line" #Or network_connection, or file_event, depending on what best fits your needs.
+    category: "process_command_line"
     product: "any"
   detection:
     strings:
-      - "(?:https?|ftp|ftps)://[a-zA-Z0-9\\.\\-_\\?=/]+"
+      - "(?:https?|ftp|ftps)://\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?::\\d{1,5})?(?:/[a-zA-Z0-9\\.\\-_\\?=/]*)?"
+      - "(?:https?|ftp|ftps)://[a-zA-Z0-9\\.\\-_]+(?:/[a-zA-Z0-9\\.\\-_/]*)?\\?[a-zA-Z0-9\\.\\-_=&%]+"
   tags:
     - attack.T1071.001
     - attack.T1566.002
@@ -720,31 +715,35 @@ UnusualDllFilenamePattern:
       technique_name: "Process Injection"
       tactics: ["Defense Evasion", "Privilege Escalation"]
 
-SuspiciousWindowsAPIDiscovery:
-  title: "Suspicious Windows API Calls for System Discovery"
+ProcessEnumerationAndHooking:
+  title: "Process Enumeration and API Hooking Indicators"
   id: "a9c8b7d6-e5f4-4321-bacd-fedcba987654"
   status: "experimental"
-  description: "Detects usage of API calls related to system and process discovery often abused by malware."
+  description: "Detects process enumeration and hook installation APIs. CreateToolhelp32Snapshot/EnumProcesses are used to walk running processes before injection or termination. SetWindowsHookEx installs keyboard/mouse hooks. ZwQueryInformationProcess is used for anti-debug and process inspection. Consolidates overlapping coverage from retired SuspiciousDllApiHooks, SuspiciousWindowsAPIDiscovery, and SuspiciousDllExports rules."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "NtQuerySystemInformation"
+      - "(CreateToolhelp32Snapshot|EnumProcesses)"
+      - "SetWindowsHookEx"
       - "ZwQueryInformationProcess"
-      - "GetProcAddress"
-      - "LoadLibraryA"
+      - "DllMain"
   tags:
-    - attack.T1082
-    - attack.T1106
+    - attack.T1055
+    - attack.T1056.001
+    - attack.T1057
   level: high
   mitre:
-    - technique_id: "T1082"
-      technique_name: "System Information Discovery"
+    - technique_id: "T1055"
+      technique_name: "Process Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+    - technique_id: "T1056.001"
+      technique_name: "Input Capture: Keylogging"
+      tactics: ["Credential Access"]
+    - technique_id: "T1057"
+      technique_name: "Process Discovery"
       tactics: ["Discovery"]
-    - technique_id: "T1106"
-      technique_name: "Native API"
-      tactics: ["Execution"]
 
 SuspiciousUserAgent:
   title: "Suspicious or hardcoded User-Agent strings"
@@ -822,17 +821,18 @@ GeolocationCheck:
       technique_name: "Gather Victim Host Information"
       tactics: ["Reconnaissance"]
 
-SuspiciousDllExports:
-  title: "Suspicious DLL exports or Windows API hooks"
+VirtualProtectShellcode:
+  title: "VirtualProtect Used for Shellcode Memory Permission Change"
   id: "dllhook-detect-8675309"
   status: "experimental"
-  description: "Detects strings commonly seen in malicious DLLs for API hooking or injection."
+  description: "Detects VirtualProtect and VirtualQuery API imports. VirtualProtect is the final step in classic shellcode injection — changing memory from RW to RX after writing code. Distinct from VirtualAllocEx (allocation) and WriteProcessMemory (write). VirtualQuery is used to inspect memory regions, common in reflective loaders and anti-analysis routines."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(DllMain|LoadLibraryA|GetProcAddress|SetWindowsHookEx|CreateToolhelp32Snapshot|EnumProcesses)"
+      - "VirtualProtect"
+      - "VirtualQuery"
   tags:
     - attack.T1055
   level: high
@@ -1102,4 +1102,525 @@ PowerShellMemoryExecution:
       tactics: ["Execution"]
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+RansomwareCryptoAPIs:
+  title: "Ransomware Cryptography APIs"
+  id: "ransom-crypto-001"
+  status: "experimental"
+  description: "Detects Windows cryptographic APIs commonly used in ransomware."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(CryptEncrypt|CryptDecrypt|CryptAcquireContext|BCryptEncrypt|BCryptDecrypt|BCryptGenRandom)"
+      - "(RtlEncryptMemory|RtlDecryptMemory)"
+  tags:
+    - attack.T1486
+  level: high
+  mitre:
+    - technique_id: "T1486"
+      technique_name: "Data Encrypted for Impact"
+      tactics: ["Impact"]
+
+
+StringEncodingObfuscation:
+  title: "String Encoding / Obfuscation"
+  id: "obfuscation-encoding-002"
+  status: "experimental"
+  description: "Detects base64, hex, and XOR encoding patterns."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "FromBase64String"
+      - "base64_decode"
+      - "base64_encode"
+      - "\\b[0-9A-Fa-f]{32,}\\b"
+      - "xor\\s*\\("
+      - "XORKEY"
+  tags:
+    - attack.T1027
+  level: high
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+
+StartupFolderPersistence:
+  title: "Startup Folder Persistence"
+  id: "startup-persistence-001"
+  status: "experimental"
+  description: "Detects usage of Windows Startup folders."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "Startup\\\\"
+      - "Start Menu\\\\Programs\\\\Startup"
+      - "shell:startup"
+  tags:
+    - attack.T1547.001
+  level: high
+  mitre:
+    - technique_id: "T1547.001"
+      technique_name: "Registry Run Keys / Startup Folder"
+      tactics: ["Persistence"]
+
+
+COMHijackingPersistence:
+  title: "COM Hijacking Persistence"
+  id: "com-hijack-001"
+  status: "experimental"
+  description: "Detects COM hijacking registry paths."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "InprocServer32"
+      - "CLSID\\\\{"
+      - "LocalServer32"
+  tags:
+    - attack.T1546.015
+  level: high
+  mitre:
+    - technique_id: "T1546.015"
+      technique_name: "Event Triggered Execution: Component Object Model Hijacking"
+      tactics: ["Persistence"]
+
+
+WMIPermanentSubscription:
+  title: "WMI Permanent Event Subscription"
+  id: "wmi-persistence-002"
+  status: "experimental"
+  description: "Detects WMI event subscription persistence."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "__EventFilter"
+      - "CommandLineEventConsumer"
+      - "FilterToConsumerBinding"
+  tags:
+    - attack.T1546.003
+  level: high
+  mitre:
+    - technique_id: "T1546.003"
+      technique_name: "Event Triggered Execution: WMI Event Subscription"
+      tactics: ["Persistence"]
+
+
+ShadowCopyDeletion:
+  title: "Volume Shadow Copy Deletion"
+  id: "shadowcopy-delete-001"
+  status: "experimental"
+  description: "Detects deletion of Windows shadow copies."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "vssadmin delete shadows"
+      - "wmic shadowcopy delete"
+      - "Delete Shadows /All"
+  tags:
+    - attack.T1490
+  level: high
+  mitre:
+    - technique_id: "T1490"
+      technique_name: "Inhibit System Recovery"
+      tactics: ["Impact"]
+
+
+HttpPostExfiltration:
+  title: "HTTP POST Data Exfiltration"
+  id: "http-exfil-002"
+  status: "experimental"
+  description: "Detects HTTP POST used for data exfiltration."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "POST /"
+      - "Content-Type: application/octet-stream"
+      - "multipart/form-data"
+      - "boundary="
+  tags:
+    - attack.T1041
+  level: medium
+  mitre:
+    - technique_id: "T1041"
+      technique_name: "Exfiltration Over C2 Channel"
+      tactics: ["Exfiltration"]
+
+
+MalwareC2Paths:
+  title: "Common Malware C2 Paths"
+  id: "c2-paths-001"
+  status: "experimental"
+  description: "Detects common botnet and loader C2 endpoints."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "/gate.php"
+      - "/connect.php"
+      - "/panel/login"
+      - "/bot.php"
+      - "/cmd.php"
+      - "/loader.php"
+  tags:
+    - attack.T1071.001
+  level: high
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol"
+      tactics: ["Command and Control"]
+
+
+FileSystemManipulationAPI:
+  title: "File System Manipulation via Windows API"
+  id: "fs-api-manipulation-001"
+  status: "experimental"
+  description: "Detects Windows file system API imports for creation, deletion, move, and hard link operations. Present as IAT imports in binaries performing file manipulation (ransomware staging, cleanup, etc.)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(CreateFileW|CreateFileA)"
+      - "(DeleteFileW|DeleteFileA)"
+      - "(MoveFileW|MoveFileExW|MoveFileExA)"
+      - "(RemoveDirectoryW|CreateDirectoryW)"
+      - "CreateHardLinkW"
+      - "SHFileOperationW"
+  tags:
+    - attack.T1565.001
+    - attack.T1070.004
+  level: medium
+  mitre:
+    - technique_id: "T1565.001"
+      technique_name: "Data Manipulation: Stored Data Manipulation"
+      tactics: ["Impact"]
+    - technique_id: "T1070.004"
+      technique_name: "Indicator Removal: File Deletion"
+      tactics: ["Defense Evasion"]
+
+
+FileSystemDiscoveryAPI:
+  title: "File System Enumeration via Windows API"
+  id: "fs-api-discovery-001"
+  status: "experimental"
+  description: "Detects FindFirstFile/FindNextFile API imports used for file system enumeration. Common in ransomware pre-encryption traversal and data discovery."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(FindFirstFileW|FindFirstFileExA)"
+      - "(FindNextFileW|FindNextFileA)"
+  tags:
+    - attack.T1083
+  level: medium
+  mitre:
+    - technique_id: "T1083"
+      technique_name: "File and Directory Discovery"
+      tactics: ["Discovery"]
+
+
+FileAttributeManipulationAPI:
+  title: "File Attribute and Permission Manipulation via Windows API"
+  id: "fs-attr-manipulation-001"
+  status: "experimental"
+  description: "Detects API imports for modifying file attributes, timestamps, and permissions — commonly used to hide files or cover tracks."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "SetFileAttributesW"
+      - "SetFileSecurityW"
+      - "SetFileTime"
+  tags:
+    - attack.T1564.001
+    - attack.T1222.001
+  level: medium
+  mitre:
+    - technique_id: "T1564.001"
+      technique_name: "Hide Artifacts: Hidden Files and Directories"
+      tactics: ["Defense Evasion"]
+    - technique_id: "T1222.001"
+      technique_name: "File and Directory Permissions Modification: Windows File and Directory Permissions Modification"
+      tactics: ["Defense Evasion"]
+
+
+RegistryModificationAPI:
+  title: "Registry Modification via Windows API"
+  id: "reg-api-modify-001"
+  status: "experimental"
+  description: "Detects RegCreateKeyEx and RegSetValueEx API imports — direct evidence of registry write capability, used for persistence and configuration storage."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(RegCreateKeyExW|RegCreateKeyExA)"
+      - "(RegSetValueExW|RegSetValueExA)"
+  tags:
+    - attack.T1112
+  level: high
+  mitre:
+    - technique_id: "T1112"
+      technique_name: "Modify Registry"
+      tactics: ["Defense Evasion"]
+
+
+RegistryQueryAPI:
+  title: "Registry Query via Windows API"
+  id: "reg-api-query-001"
+  status: "experimental"
+  description: "Detects RegOpenKeyEx and RegQueryValueEx API imports used for reading registry values — common in configuration discovery and sandbox detection."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(RegOpenKeyExW|RegOpenKeyExA)"
+      - "(RegQueryValueExW|RegQueryValueExA)"
+  tags:
+    - attack.T1012
+  level: medium
+  mitre:
+    - technique_id: "T1012"
+      technique_name: "Query Registry"
+      tactics: ["Discovery"]
+
+
+ProcessThreadManipulationAPI:
+  title: "Process and Thread Manipulation via Windows API"
+  id: "proc-thread-api-001"
+  status: "experimental"
+  description: "Detects CreateThread and TerminateProcess API imports. Combined presence indicates capability to spawn and kill processes/threads — common in loaders and ransomware."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "CreateThread"
+      - "TerminateProcess"
+  tags:
+    - attack.T1055
+    - attack.T1562.001
+  level: high
+  mitre:
+    - technique_id: "T1055"
+      technique_name: "Process Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+    - technique_id: "T1562.001"
+      technique_name: "Impair Defenses: Disable or Modify Tools"
+      tactics: ["Defense Evasion"]
+
+
+TokenPrivilegeManipulationAPI:
+  title: "Access Token and Privilege Manipulation via Windows API"
+  id: "token-priv-api-001"
+  status: "experimental"
+  description: "Detects OpenProcessToken, AdjustTokenPrivileges, and LookupPrivilegeValue — the standard token manipulation chain used to elevate privileges (e.g., enabling SeDebugPrivilege or SeBackupPrivilege)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "OpenProcessToken"
+      - "AdjustTokenPrivileges"
+      - "LookupPrivilegeValueW"
+  tags:
+    - attack.T1134.001
+  level: high
+  mitre:
+    - technique_id: "T1134.001"
+      technique_name: "Access Token Manipulation: Token Impersonation/Theft"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+
+
+WMISystemDiscovery:
+  title: "WMI System Discovery Query"
+  id: "wmi-sysquery-001"
+  status: "experimental"
+  description: "Detects literal WMI query strings and CoSetProxyBlanket — a COM call required for remote WMI authentication. Win32_OperatingSystem queries are common for fingerprinting the victim system."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "SELECT \\* FROM Win32_"
+      - "CoSetProxyBlanket"
+  tags:
+    - attack.T1047
+    - attack.T1082
+  level: high
+  mitre:
+    - technique_id: "T1047"
+      technique_name: "Windows Management Instrumentation"
+      tactics: ["Execution", "Discovery"]
+    - technique_id: "T1082"
+      technique_name: "System Information Discovery"
+      tactics: ["Discovery"]
+
+
+DPAPIMemoryEncryption:
+  title: "DPAPI Memory Encryption (CryptProtectMemory)"
+  id: "dpapi-memory-crypt-001"
+  status: "experimental"
+  description: "Detects CryptProtectMemory and CryptUnprotectMemory — Windows DPAPI functions for encrypting data in memory. Used to protect credentials, keys, or payloads from memory inspection."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(CryptProtectMemory|CryptUnprotectMemory)"
+  tags:
+    - attack.T1027
+    - attack.T1486
+  level: high
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+    - technique_id: "T1486"
+      technique_name: "Data Encrypted for Impact"
+      tactics: ["Impact"]
+
+
+FileMappingInjection:
+  title: "File Mapping for Code Injection or Encrypted Payload"
+  id: "filemapping-inject-001"
+  status: "experimental"
+  description: "Detects MapViewOfFile, CreateFileMappingW, and OpenFileMappingW — used for shared memory sections, which is a common technique for process injection and for mapping encrypted payloads into memory."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "MapViewOfFile"
+      - "(CreateFileMappingW|OpenFileMappingW)"
+  tags:
+    - attack.T1055.001
+  level: high
+  mitre:
+    - technique_id: "T1055.001"
+      technique_name: "Process Injection: Dynamic-link Library Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+
+
+TimingBasedSandboxEvasion:
+  title: "Timing-Based Sandbox Evasion Indicators"
+  id: "timing-sandbox-evade-001"
+  status: "experimental"
+  description: "Detects GetTickCount, QueryPerformanceCounter, and QueryPerformanceFrequency — the standard timing trio used to measure elapsed time before and after Sleep. Sandboxes often accelerate execution, causing the measured delta to be too small, which malware uses to detect analysis environments."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "GetTickCount"
+      - "(QueryPerformanceCounter|QueryPerformanceFrequency)"
+  tags:
+    - attack.T1497.003
+  level: medium
+  mitre:
+    - technique_id: "T1497.003"
+      technique_name: "Virtualization/Sandbox Evasion: Time Based Evasion"
+      tactics: ["Defense Evasion"]
+
+
+OSVersionFingerprinting:
+  title: "OS Version and System Info Fingerprinting"
+  id: "os-fingerprint-001"
+  status: "experimental"
+  description: "Detects GetVersionExW and GetSystemInfo — used to query OS version, architecture, and processor count before execution. Common in malware that targets specific Windows versions or uses this data to tailor payloads."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "GetVersionExW"
+      - "GetSystemInfo"
+  tags:
+    - attack.T1082
+  level: medium
+  mitre:
+    - technique_id: "T1082"
+      technique_name: "System Information Discovery"
+      tactics: ["Discovery"]
+
+
+StagingPathResolution:
+  title: "Temp and AppData Path Resolution for Staging"
+  id: "staging-path-resolve-001"
+  status: "experimental"
+  description: "Detects GetTempPathW, ExpandEnvironmentStringsW, and SHGetFolderLocation — used to dynamically resolve staging directories like %TEMP% and %APPDATA% at runtime. A common pre-drop step in loaders and ransomware."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "GetTempPathW"
+      - "ExpandEnvironmentStringsW"
+      - "SHGetFolderLocation"
+  tags:
+    - attack.T1074.001
+  level: medium
+  mitre:
+    - technique_id: "T1074.001"
+      technique_name: "Data Staged: Local Data Staging"
+      tactics: ["Collection"]
+
+
+DLLSearchOrderManipulation:
+  title: "DLL Search Order Manipulation via SetDllDirectory"
+  id: "dll-searchorder-hijack-001"
+  status: "experimental"
+  description: "Detects SetDllDirectoryW — modifies the DLL search path, allowing a malicious DLL to be loaded in place of a legitimate one. Paired with SetDefaultDllDirectories which can restrict or redirect loading."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "SetDllDirectoryW"
+      - "SetDefaultDllDirectories"
+  tags:
+    - attack.T1574.001
+  level: medium
+  mitre:
+    - technique_id: "T1574.001"
+      technique_name: "Hijack Execution Flow: DLL Search Order Hijacking"
+      tactics: ["Persistence", "Privilege Escalation", "Defense Evasion"]
+
+
+ConsoleWindowHiding:
+  title: "Console and Window Hiding"
+  id: "console-window-hide-001"
+  status: "experimental"
+  description: "Detects AllocConsole, FreeConsole, AttachConsole, and ShowWindow — used to create hidden console windows or suppress visible windows during malicious execution. Common in droppers and loaders that run silently."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(AllocConsole|FreeConsole|AttachConsole)"
+      - "ShowWindow"
+  tags:
+    - attack.T1564.003
+  level: medium
+  mitre:
+    - technique_id: "T1564.003"
+      technique_name: "Hide Artifacts: Hidden Window"
       tactics: ["Defense Evasion"]

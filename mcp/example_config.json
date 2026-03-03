@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "mcp-kali-server": {
+      "command": "ssh",
+      "args": [
+        "-i",
+        "/YOUR/SSH/KEY/PATH/id_ed25519",
+        "YOUR_USER@YOUR_KALI_IP",
+        "mcp-server"
+      ],
+      "transport": "stdio"
+    },
+    "malchela": {
+      "command": "node",
+      "args": ["/YOUR/PATH/TO/mcp-malchela/index.js"],
+      "env": {
+        "MALCHELA_DIR": "/YOUR/PATH/TO/MalChela"
+      }
+    }
+  }
+}

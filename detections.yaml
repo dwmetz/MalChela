@@ -64,14 +64,14 @@ SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
   status: "experimental"
-  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names. IMPORTANT: Pattern now requires an http/https/ftp scheme prefix to avoid false positives from Go binary embedded import paths (e.g. github.com/quic-go/...) which contain digits in path components."
+  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names. Scheme prefix required to avoid Go import path false positives. Optional subdomain prefix (e.g. www.) handled via non-capturing group to correctly match cases like the WannaCry kill switch domain (http://www.iuqerfsodp9...)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "https?://[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
-      - "ftp://[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "https?://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "ftp://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
   tags:
     - attack.t1071.001
   level: high
@@ -472,7 +472,7 @@ SandboxDetectionZwQueryInformationProcess:
   title: "Sandbox detection (ZwQueryInformationProcess)"
   id: "w0b7b2c8-7b89-460f-b939-7179d3749fa8"
   status: "experimental"
-  description: "Detects ZwQueryInformationProcess — a native API used to query process information including debug port status (ProcessDebugPort class). Malware uses this to detect debuggers and analysis environments by checking whether a debugger is attached to the current process."
+  description: "Detecting sandbox environments"
   logsource:
     category: "file_event"
     product: "windows"
@@ -480,16 +480,12 @@ SandboxDetectionZwQueryInformationProcess:
     strings:
       - "ZwQueryInformationProcess"
   tags:
-    - attack.T1082
-    - attack.T1497.001
+    - attack.T1083
   level: high
   mitre:
-    - technique_id: "T1082"
-      technique_name: "System Information Discovery"
+    - technique_id: "T1083"
+      technique_name: "File and Directory Discovery"
       tactics: ["Discovery"]
-    - technique_id: "T1497.001"
-      technique_name: "Virtualization/Sandbox Evasion: System Checks"
-      tactics: ["Defense Evasion"]
 
 SleepCommandSleep:
   title: "Sleep command (sleep(60000))"
@@ -514,7 +510,7 @@ UserActivityDetection:
   title: "User activity detection (GetForegroundWindow, GetCursorPos)"
   id: "y5f8d8a9-2f32-4506-8b77-0d3a989b0d90"
   status: "experimental"
-  description: "Detecting user activity via window and cursor state queries — used by stealers and keyloggers to confirm an active user session before executing, and by sandbox evasion routines to detect automated analysis environments."
+  description: "Detecting user activity, often used to avoid analysis or in malicious toolkits"
   logsource:
     category: "file_event"
     product: "windows"
@@ -522,11 +518,11 @@ UserActivityDetection:
     strings:
       - "(GetForegroundWindow|GetCursorPos)"
   tags:
-    - attack.T1010
+    - attack.T1083
   level: high
   mitre:
-    - technique_id: "T1010"
-      technique_name: "Application Window Discovery"
+    - technique_id: "T1083"
+      technique_name: "File and Directory Discovery"
       tactics: ["Discovery"]
 
 SuspiciousURLDetection:
@@ -1120,7 +1116,7 @@ RansomwareCryptoAPIs:
   title: "Ransomware Cryptography APIs"
   id: "ransom-crypto-001"
   status: "experimental"
-  description: "Detects Windows cryptographic APIs used in ransomware (CryptEncrypt/BCryptEncrypt for data encryption) and credential stealers (CryptProtectData/CryptUnprotectData to decrypt browser-stored passwords via DPAPI). The presence of these APIs indicates either encryption-for-impact or credential harvesting capability depending on context."
+  description: "Detects Windows cryptographic APIs commonly used in ransomware."
   logsource:
     category: "file_event"
     product: "windows"
@@ -1130,15 +1126,11 @@ RansomwareCryptoAPIs:
       - "(RtlEncryptMemory|RtlDecryptMemory)"
   tags:
     - attack.T1486
-    - attack.T1555.003
   level: high
   mitre:
     - technique_id: "T1486"
       technique_name: "Data Encrypted for Impact"
       tactics: ["Impact"]
-    - technique_id: "T1555.003"
-      technique_name: "Credentials from Password Stores: Credentials from Web Browsers"
-      tactics: ["Credential Access"]
 
 
 StringEncodingObfuscation:
@@ -1639,3 +1631,4 @@ ConsoleWindowHiding:
     - technique_id: "T1564.003"
       technique_name: "Hide Artifacts: Hidden Window"
       tactics: ["Defense Evasion"]
+

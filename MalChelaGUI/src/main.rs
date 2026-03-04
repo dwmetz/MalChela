@@ -39,6 +39,38 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use rand::prelude::*;
 
+/// Opens a path in the system file manager/viewer, with proper WSL support.
+/// WSL compiles as Linux but lacks a desktop environment, so we detect it at
+/// runtime and use explorer.exe via wslpath (both built into WSL by default).
+fn open_path(path: &std::path::Path) {
+    #[cfg(target_os = "linux")]
+    {
+        let is_wsl = std::env::var("WSL_DISTRO_NAME").is_ok()
+            || std::fs::read_to_string("/proc/version")
+                .map(|v| v.to_lowercase().contains("microsoft"))
+                .unwrap_or(false);
+
+        if is_wsl {
+            if let Ok(output) = std::process::Command::new("wslpath")
+                .arg("-w")
+                .arg(path)
+                .output()
+            {
+                let win_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !win_path.is_empty() {
+                    let _ = std::process::Command::new("explorer.exe").arg(&win_path).spawn();
+                    return;
+                }
+            }
+        }
+        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+    }
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(path).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("explorer").arg(path).spawn();
+}
+
 #[derive(Debug, Deserialize)]
 struct Koans {
     koans: Vec<String>,
@@ -1416,12 +1448,7 @@ impl App for AppState {
                             }
                             guide_path = parent.to_path_buf();
                         }
-                        #[cfg(target_os = "macos")]
-                        let _ = std::process::Command::new("open").arg(&guide_path).spawn();
-                        #[cfg(target_os = "linux")]
-                        let _ = std::process::Command::new("xdg-open").arg(&guide_path).spawn();
-                        #[cfg(target_os = "windows")]
-                        let _ = std::process::Command::new("explorer").arg(&guide_path).spawn();
+                        open_path(&guide_path);
                     }
 
                     // --- MITRE Lookup Button ---
@@ -1437,21 +1464,9 @@ impl App for AppState {
 
                     if ui.button(RichText::new("📁 View Reports").color(STONE_BEIGE)).on_hover_text("Open saved_output folder").clicked() {
                         self.current_panel = ActivePanel::None;
-                        if let Ok(mut exe_path) = std::env::current_exe() {
-                            while let Some(parent) = exe_path.parent() {
-                                if parent.ends_with("MalChela") {
-                                    exe_path = parent.to_path_buf();
-                                    break;
-                                }
-                                exe_path = parent.to_path_buf();
-                            }
-                            let reports_path = exe_path.join("saved_output");
-                            #[cfg(target_os = "macos")]
-                            let _ = Command::new("open").arg(&reports_path).spawn();
-                            #[cfg(target_os = "windows")]
-                            let _ = Command::new("explorer").arg(reports_path).spawn();
-                            #[cfg(target_os = "linux")]
-                            let _ = Command::new("xdg-open").arg(reports_path).spawn();
+                        if let Ok(cwd) = std::env::current_dir() {
+                            let reports_path = cwd.join("saved_output");
+                            open_path(&reports_path);
                         }
                     }
                 });

@@ -2,10 +2,10 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/terminator-malchela.png"/>
  <p>
  <h1>
-  Malchela v3.1.1
+  MalChela v3.1.1
  </h1>
   <h4>
-      A YARA & Malware Analysis Toolkit written in Rust.
+      A YARA &amp; Malware Analysis Toolkit written in Rust.
    </h4>
 <p>
 <p>
@@ -22,9 +22,8 @@
     </tr>
   </table>
 </div>
-  <h3>
-   Features:
-  </h3>
+
+<h3>Features:</h3>
 
 | Program             | Function |
 |---------------------|----------|
@@ -32,46 +31,42 @@
 | Extract Samples     | Recursively extracts password-protected malware archives (ZIP/RAR) using common passwords |
 | File Analyzer       | Analyzes a file for hashes, entropy, PE structure, fuzzy hashes, YARA matches, NSRL lookup, and VirusTotal status |
 | File Miner          | Scans a folder for file type mismatches and metadata |
-| Hash It              | Generates MD5, SHA1, and SHA256 hashes for a single file |
+| Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
-| mStrings             | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
+| Malware Hash Lookup | Queries a hash against VirusTotal and MalwareBazaar for threat intelligence |
+| mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
 | mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
-| nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it’s known-good |
+| nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it's known-good |
 | strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
-| xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for  non-Windows malware corpus |
+| xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for non-Windows malware corpus |
 
-**The Malware Hash Lookup requires an api key for Virus Total and Malware Bazaar.  If unidentified , MalChela will prompt you to create them the first time you run the malware lookup function.*
+**Malware Hash Lookup requires API keys for VirusTotal and MalwareBazaar.  If not configured, MalChela will prompt you to create them the first time you run the malware lookup function.*
 
+<h3>About:</h3>
 
-<h3>
-   About:
-   </h3>
+> **mal** — malware  
+> **chela** — "crab hand"  
+> A chela on a crab is the scientific term for a claw or pincer. It's a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things — just like these programs.
 
-> **mal** — malware</p>
-> **chela** — “crab hand”</p>
-> A chela on a crab is the scientific term for a claw or pincer. It’s a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things;  just like these programs.
-
-<h3>
-Dependencies:
-</h3>
+<h3>Dependencies:</h3>
 
 ```
 sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-essential libglib2.0-dev libgtk-3-dev
 ```
 
-<h3>
-Installation & Usage:
-</h3>
+<h3>Installation &amp; Usage:</h3>
 
-Install Rust - https://rustup.rs/</p>
+Install Rust — https://rustup.rs/
 
-For CLI only installations (WSL, Raspberry Pi, etc.): 
+For CLI only installations (WSL, Raspberry Pi, etc.):
 
 ```
- curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
-Clone the repository and build 
+
+Clone the repository and build:
+
 ```
 git clone https://github.com/dwmetz/MalChela.git
 cd MalChela
@@ -79,22 +74,23 @@ chmod +x release.sh
 ./release.sh  # Builds all programs in release mode (recommended)
 ```
 
-<h3>
-Run:
-</h3>
+<h3>Run:</h3>
 
 ```
 ./target/release/malchela
 ```
 
-or 
+or
 
 ```
 ./target/release/MalChelaGUI
-
 ```
 
 ℹ️ It is recommended to build and run MalChela in `--release` mode to ensure GUI and subtools function optimally.
+
+> ⚠️ **Important:** MalChela binaries must be invoked from the project root directory. Always use `cd /path/to/MalChela && ./target/release/<binary>` rather than calling the binary directly from another path. This is required for correct resolution of API key files (`vt-api.txt`, `mb-api.txt`), YARA rules, and Sigma rules — all of which are resolved relative to the project root. API keys are read exclusively from these files; environment variables are not supported.
+
+---
 
 ### Case Management (v3.0)
 
@@ -105,11 +101,82 @@ MalChela v3.0 introduces a full-featured case system:
 - Integrated tagging, search, and scratchpad with VS Code support
 - Seamless case loading and archiving in GUI mode
 
+---
+
+### 🤖 AI Integration &amp; MCP Support (v3.1.0)
+
+MalChela v3.1.0 introduces support for AI-assisted malware analysis through the **Model Context Protocol (MCP)**, exposing all 13 MalChela tools to AI agents like Claude. Three deployment paths are supported depending on your environment:
+
+---
+
+#### Path 1: Native MCP Server (Claude Desktop on macOS)
+
+A Node.js MCP server exposes all MalChela tools directly to Claude Desktop on macOS with no additional infrastructure required.
+
+**Setup:**
+
+```
+cd mcp/
+npm install
+```
+
+Configure Claude Desktop to load the server by adding it to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "malchela": {
+      "command": "node",
+      "args": ["/path/to/MalChela/mcp/server.js"]
+    }
+  }
+}
+```
+
+See [`mcp/README.md`](mcp/README.md) for full configuration details.
+
+---
+
+#### Path 2: Kali MCP Server (Remote Linux host / Raspberry Pi)
+
+A two-layer architecture for running MalChela on a remote Kali Linux system (e.g., a Raspberry Pi forensics toolkit) and exposing it to Claude Desktop via MCP.
+
+- **`mcp_server.py`** — FastMCP frontend, receives tool calls and forwards them
+- **`kali_server.py`** — Flask backend, executes MalChela binaries on the Kali host
+
+**Setup on the Kali host:**
+
+```
+cd /usr/share/mcp-kali-server/
+pip install -r requirements.txt
+python3 kali_server.py
+```
+
+Configure `mcp_server.py` with the host's IP and start it. Then point Claude Desktop at `mcp_server.py` as the MCP server.
+
+> 📝 Note: `malhash` accepts a hash string as its argument, not a file path.
+
+See [`mcp/README.md`](mcp/README.md) for full setup and configuration.
+
+---
+
+#### Path 3: OpenCode / AGENTS.md (REMnux / Agentic CLI)
+
+For agentic coding environments and CLI-based AI tools, MalChela ships with an `AGENTS.md` file describing all available tools, their arguments, and usage patterns. This allows tools like OpenCode to discover and invoke MalChela automatically.
+
+On REMnux, OpenCode can be pointed at the MalChela directory and will use `AGENTS.md` to drive analysis workflows autonomously.
+
+---
+
+For a detailed walkthrough of all three approaches, see the blog post: [**MalChela Meets AI: Three Paths to Smarter Malware Analysis**](https://bakerstreetforensics.com)
+
+---
+
 <h3>🔧 Adding Custom Tools:</h3>
 
 You can extend MalChela by editing the `tools.yaml` file to add third-party or custom tools to the GUI. This flexible configuration supports binaries, Python scripts, and Rust-based programs.
 
-Each entry defines the tool’s name, category, execution type, how input is passed (file, folder, or hash), and any optional arguments. Here are a few sample entries:
+Each entry defines the tool's name, category, execution type, how input is passed (file, folder, or hash), and any optional arguments. Here are a few sample entries:
 
 ```yaml
 - name: capa
@@ -139,10 +206,11 @@ Each entry defines the tool’s name, category, execution type, how input is pas
   file_position: "last"
   optional_args: ["tools/pdf-parser/pdf-parser.py"]
 ```
+---
+<h3> 🦀 **REMnux Mode:**  </h3>
 
-🦀 **REMnux Mode:**  
+
 When run on a REMnux system, MalChela can load a REMnux-specific `tools.yaml` file tailored for the built-in tools available in that distro. This ensures smoother setup with minimal configuration required.
-
 
 📝 **Notes:**
 - Tools must be in your system `PATH` or include a full/relative path.
@@ -150,9 +218,9 @@ When run on a REMnux system, MalChela can load a REMnux-specific `tools.yaml` fi
 - `file_position` indicates where the input is placed in the command (`first` or `last`).
 - See the [MalChela User Guide](https://dwmetz.github.io/MalChela/) for detailed configuration examples and workflows.
 
-<h3>
-Enhanced Tool Support:
-</h3>
+---
+
+<h3>Enhanced Tool Support:</h3>
 
 MalChela includes improved integration with the following third-party tools:
 
@@ -162,7 +230,12 @@ MalChela includes improved integration with the following third-party tools:
 
 These enhancements make working with memory images, PCAPs, and YARA rules more streamlined for forensic workflows.
 
-#### Caveat Emptor:
-Successfully tested on MacOS on Silicon, Ubuntu, and RaspberryPi. Yara version 4.2 or greater is required.Even though it's Rust (cross-platform), Windows is problematic based on different requirements for YARA64.exe. 
+---
 
-**As of October 2025 both MalChela CLI and GUI will operate on Windows under WSL2.**
+#### Platform Support:
+
+Successfully tested on macOS (Apple Silicon), Ubuntu, and Raspberry Pi.  
+
+YARA version 4.2 or greater is required.
+
+**Windows:** As of October 2025, both MalChela CLI and GUI operate on Windows under WSL2. MalChelaGUI improvements for WSL included in v3.1.1.

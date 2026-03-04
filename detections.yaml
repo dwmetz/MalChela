@@ -64,13 +64,14 @@ SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
   status: "experimental"
-  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names like microsoft.com or windows.com."
+  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names. IMPORTANT: Pattern now requires an http/https/ftp scheme prefix to avoid false positives from Go binary embedded import paths (e.g. github.com/quic-go/...) which contain digits in path components."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "https?://[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "ftp://[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
   tags:
     - attack.t1071.001
   level: high
@@ -108,7 +109,7 @@ SuspiciousExecutableCmdPowershell:
     product: "windows"
   detection:
     strings:
-      - "(cmd\\.exe|powershell\\.exe|wscript\\.exe|cscript\\.exe)"
+      - "(cmd\\.exe|powershell\\.exe|wscript\\.exe|cscript\\.exe)(?:[^a-zA-Z0-9_\\-]|$)"
   tags:
     - attack.t1059
   level: high
@@ -127,7 +128,7 @@ LOLBinsExecution:
     product: "windows"
   detection:
     strings:
-      - "(cmd\\.exe|powershell\\.exe|mshta\\.exe|cscript\\.exe|wscript\\.exe|wmic\\.exe|forfiles\\.exe|msbuild\\.exe|installutil\\.exe)"
+      - "(cmd\\.exe|powershell\\.exe|mshta\\.exe|cscript\\.exe|wscript\\.exe|wmic\\.exe|forfiles\\.exe|msbuild\\.exe|installutil\\.exe)(?:[^a-zA-Z0-9_\\-]|$)"
   tags:
     - attack.T1059
   level: high
@@ -146,7 +147,7 @@ LOLBinsDefenseEvasion:
     product: "windows"
   detection:
     strings:
-      - "(rundll32\\.exe|regsvr32\\.exe|certutil\\.exe|sdbinst\\.exe|msbuild\\.exe|installutil\\.exe)"
+      - "(rundll32\\.exe|regsvr32\\.exe|certutil\\.exe|sdbinst\\.exe|msbuild\\.exe|installutil\\.exe)(?:[^a-zA-Z0-9_\\-]|$)"
   tags:
     - attack.T1218
   level: high
@@ -165,7 +166,7 @@ LOLBinsLateralMovement:
     product: "windows"
   detection:
     strings:
-      - "(wmic\\.exe|xcopy\\.exe|bitsadmin\\.exe)"
+      - "(wmic\\.exe|xcopy\\.exe|bitsadmin\\.exe)(?:[^a-zA-Z0-9_\\-]|$)"
   tags:
     - attack.T1021
   level: medium
@@ -293,13 +294,13 @@ SetWindowsHookExKeylogger:
   title: "SetWindowsHookEx (keylogger)"
   id: "n7e7c8a9-2744-4638-bc57-c6b3b70a7c67"
   status: "experimental"
-  description: "SetWindowsHookEx typically used by keyloggers"
+  description: "SetWindowsHookEx typically used by keyloggers. Negative lookbehind prevents matching UnhookWindowsHookEx."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "SetWindowsHookEx"
+      - "(?<![a-zA-Z])SetWindowsHookEx"
   tags:
     - attack.T1056.001
   level: high
@@ -381,7 +382,8 @@ WgetOrCurlDownloadPayload:
     product: "windows"
   detection:
     strings:
-      - "(wget|curl|Invoke-WebRequest)"
+      - "(?:^|[\\s\"'`(])(?:wget|curl)(?:[\\s\"'`/]|$)"
+      - "Invoke-WebRequest"
   tags:
     - attack.T1105
   level: high
@@ -470,7 +472,7 @@ SandboxDetectionZwQueryInformationProcess:
   title: "Sandbox detection (ZwQueryInformationProcess)"
   id: "w0b7b2c8-7b89-460f-b939-7179d3749fa8"
   status: "experimental"
-  description: "Detecting sandbox environments"
+  description: "Detects ZwQueryInformationProcess — a native API used to query process information including debug port status (ProcessDebugPort class). Malware uses this to detect debuggers and analysis environments by checking whether a debugger is attached to the current process."
   logsource:
     category: "file_event"
     product: "windows"
@@ -478,12 +480,16 @@ SandboxDetectionZwQueryInformationProcess:
     strings:
       - "ZwQueryInformationProcess"
   tags:
-    - attack.T1083
+    - attack.T1082
+    - attack.T1497.001
   level: high
   mitre:
-    - technique_id: "T1083"
-      technique_name: "File and Directory Discovery"
+    - technique_id: "T1082"
+      technique_name: "System Information Discovery"
       tactics: ["Discovery"]
+    - technique_id: "T1497.001"
+      technique_name: "Virtualization/Sandbox Evasion: System Checks"
+      tactics: ["Defense Evasion"]
 
 SleepCommandSleep:
   title: "Sleep command (sleep(60000))"
@@ -508,7 +514,7 @@ UserActivityDetection:
   title: "User activity detection (GetForegroundWindow, GetCursorPos)"
   id: "y5f8d8a9-2f32-4506-8b77-0d3a989b0d90"
   status: "experimental"
-  description: "Detecting user activity, often used to avoid analysis or in malicious toolkits"
+  description: "Detecting user activity via window and cursor state queries — used by stealers and keyloggers to confirm an active user session before executing, and by sandbox evasion routines to detect automated analysis environments."
   logsource:
     category: "file_event"
     product: "windows"
@@ -516,11 +522,11 @@ UserActivityDetection:
     strings:
       - "(GetForegroundWindow|GetCursorPos)"
   tags:
-    - attack.T1083
+    - attack.T1010
   level: high
   mitre:
-    - technique_id: "T1083"
-      technique_name: "File and Directory Discovery"
+    - technique_id: "T1010"
+      technique_name: "Application Window Discovery"
       tactics: ["Discovery"]
 
 SuspiciousURLDetection:
@@ -559,7 +565,7 @@ SuspiciousScriptReferences:
     product: "windows"
   detection:
     strings:
-      - "([a-zA-Z0-9_\\-\\.]*\\.)(js|jse|vbe|msi|hta|bat|ps1|vbs)"
+      - "(?:^|[\\s\\\\/'\"(])([a-zA-Z0-9_\\-\\.]+\\.)(js|jse|vbe|msi|hta|bat|ps1|vbs)(?:$|[\\s\"'\\)])"
   tags:
     - attack.T1059
   level: high
@@ -676,7 +682,7 @@ SuspiciousURLGeneric:
   title: "Suspicious URL Detection"
   id: "87654321-b98e-3d21-654a-266424710000"
   status: "experimental"
-  description: "Detects suspicious URLs in two focused forms: raw IP-address URLs (almost never legitimate in malware strings) and URLs with query string parameters (typical of dynamic C2 beaconing). Intentionally excludes bare domain/path URLs to avoid XML namespace false positives (e.g. schemas.microsoft.com)."
+  description: "Detects suspicious URLs in two focused forms: raw IP-address URLs (almost never legitimate in malware strings) and URLs with query string parameters (typical of dynamic C2 beaconing). Intentionally excludes bare domain/path URLs to avoid XML namespace false positives (e.g. schemas.microsoft.com). NOTE: Go binaries embed many internal runtime strings containing colons and slashes that can resemble URL fragments - the IP-form pattern is the more reliable signal of the two."
   logsource:
     category: "process_command_line"
     product: "any"
@@ -726,8 +732,7 @@ ProcessEnumerationAndHooking:
   detection:
     strings:
       - "(CreateToolhelp32Snapshot|EnumProcesses)"
-      - "SetWindowsHookEx"
-      - "ZwQueryInformationProcess"
+      - "(?<![a-zA-Z])SetWindowsHookEx"
       - "DllMain"
   tags:
     - attack.T1055
@@ -749,13 +754,16 @@ SuspiciousUserAgent:
   title: "Suspicious or hardcoded User-Agent strings"
   id: "abc12345-user-agent-detect"
   status: "experimental"
-  description: "Detects suspicious or uncommon User-Agent values often used in malware HTTP requests."
+  description: "Detects suspicious or uncommon User-Agent values often used in malware HTTP requests. NOTE: 'scanner' was removed - it matched Go's encoding/json internal method names (json.(*scanner).*). 'bot' was removed as too broad. Retained specific tool UA signatures."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(User-Agent: Mozilla/4.0|curl/|python-requests|Go-http-client|bot|scanner)"
+      - "User-Agent: Mozilla/4.0"
+      - "curl/"
+      - "python-requests"
+      - "Go-http-client"
   tags:
     - attack.T1071.001
   level: medium
@@ -768,13 +776,18 @@ CredentialStrings:
   title: "Credential-related strings"
   id: "cred1234-detect"
   status: "experimental"
-  description: "Detects hardcoded credential or authentication-related strings."
+  description: "Detects hardcoded credential or authentication-related strings. NOTE: Bare 'password' and 'username' patterns were tightened - they matched extensively in Go runtime data blobs, HTTP framework strings, and protocol error messages. Patterns now require context (assignment-style or quoted form) to reduce noise. 'login' removed as it matches too many legitimate path strings."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(password|passwd|username|login|credentials|auth_token|apikey)"
+      - "password="
+      - "passwd="
+      - "username="
+      - "auth_token"
+      - "apikey"
+      - "(?<!allow-)credentials"
   tags:
     - attack.T1552
   level: high
@@ -831,7 +844,7 @@ VirtualProtectShellcode:
     product: "windows"
   detection:
     strings:
-      - "VirtualProtect"
+      - "VirtualProtect(?!Ex)"
       - "VirtualQuery"
   tags:
     - attack.T1055
@@ -950,7 +963,7 @@ WMIPersistenceEventConsumers:
     product: "windows"
   detection:
     strings:
-      - "WMI"
+      - "\\bWMI\\b"
       - "EventConsumer"
       - "ActiveScriptEventConsumer"
   tags:
@@ -971,8 +984,8 @@ WMIUsageDiscoveryExecution:
     product: "windows"
   detection:
     strings:
-      - "wmic"
-      - "WMI"
+      - "\\bwmic\\b"
+      - "\\bWMI\\b"
   tags:
     - attack.T1047
   level: high
@@ -1048,7 +1061,7 @@ LsassCredDump:
     product: "windows"
   detection:
     strings:
-      - "lsass.exe"
+      - "lsass\\.exe(?! not found)"
       - "SeDebugPrivilege"
       - "MiniDumpWriteDump"
   tags:
@@ -1107,7 +1120,7 @@ RansomwareCryptoAPIs:
   title: "Ransomware Cryptography APIs"
   id: "ransom-crypto-001"
   status: "experimental"
-  description: "Detects Windows cryptographic APIs commonly used in ransomware."
+  description: "Detects Windows cryptographic APIs used in ransomware (CryptEncrypt/BCryptEncrypt for data encryption) and credential stealers (CryptProtectData/CryptUnprotectData to decrypt browser-stored passwords via DPAPI). The presence of these APIs indicates either encryption-for-impact or credential harvesting capability depending on context."
   logsource:
     category: "file_event"
     product: "windows"
@@ -1117,18 +1130,22 @@ RansomwareCryptoAPIs:
       - "(RtlEncryptMemory|RtlDecryptMemory)"
   tags:
     - attack.T1486
+    - attack.T1555.003
   level: high
   mitre:
     - technique_id: "T1486"
       technique_name: "Data Encrypted for Impact"
       tactics: ["Impact"]
+    - technique_id: "T1555.003"
+      technique_name: "Credentials from Password Stores: Credentials from Web Browsers"
+      tactics: ["Credential Access"]
 
 
 StringEncodingObfuscation:
   title: "String Encoding / Obfuscation"
   id: "obfuscation-encoding-002"
   status: "experimental"
-  description: "Detects base64, hex, and XOR encoding patterns."
+  description: "Detects base64, hex, and XOR encoding patterns. NOTE: The broad hex pattern (32+ hex chars) was removed due to false positives against Go binary type shape hashes (go.shape.*). Standalone base64/XOR API names are retained. XORKEY is a known malware string."
   logsource:
     category: "file_event"
     product: "windows"
@@ -1137,8 +1154,6 @@ StringEncodingObfuscation:
       - "FromBase64String"
       - "base64_decode"
       - "base64_encode"
-      - "\\b[0-9A-Fa-f]{32,}\\b"
-      - "xor\\s*\\("
       - "XORKEY"
   tags:
     - attack.T1027
@@ -1530,7 +1545,7 @@ TimingBasedSandboxEvasion:
     product: "windows"
   detection:
     strings:
-      - "GetTickCount"
+      - "GetTickCount(?!64)"
       - "(QueryPerformanceCounter|QueryPerformanceFrequency)"
   tags:
     - attack.T1497.003

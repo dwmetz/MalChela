@@ -359,24 +359,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         */
     }
 
+    // Pre-compile IOC extraction regexes once, outside the loop.
+    //
+    // Go binaries store their entire runtime error-message table as one
+    // continuous null-free UTF-8 blob in .rodata; the strings extractor
+    // emits the whole thing as a single matched_str.  For blobs (len > 300)
+    // we use targeted regexes to pull only well-formed patterns out of the
+    // blob rather than classifying the whole string.
+    // Short strings use the original logic unchanged.
+    //
+    // \x22 is used in char classes instead of \" to avoid raw-string issues.
+    // The regex crate does not support lookarounds, so IP boundary validation
+    // is done in Rust after matching.
+    let re_url    = Regex::new(r"https?://[^\s\x22'<>]{8,}").unwrap();
+    let re_ip     = Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap();
+    let re_fspath = Regex::new(r"(?i)(?:%\w+%|\\|\$\{[^}]+\})[^\s\x22'<>]*\.(?:exe|bat|ps1|vbs|pdb|dll|txt|zip|lnk)").unwrap();
+
     for m in &mstrings.matches {
         if let Some(rule) = &m.rule_name {
             let s = m.matched_str.to_lowercase();
 
-            if rule.to_lowercase().contains("filesystem")
-                || s.contains(".exe")
-                || s.contains(".bat")
-                || s.contains(".ps1")
-                || s.contains(".vbs")
-                || s.contains(".pdb")
-            {
-                fs_iocs.insert(m.matched_str.clone());
-            } else if rule.to_lowercase().contains("ip address")
-                || s.contains("http:")
-                || s.contains("https:")
-                || (s.contains('.') && s.split('.').count() == 4)
-            {
-                net_iocs.insert(m.matched_str.clone());
+            if m.matched_str.len() > 300 {
+                // Blob path: extract well-formed IOCs via regex
+                for cap in re_url.find_iter(&m.matched_str) {
+                    net_iocs.insert(cap.as_str().to_string());
+                }
+                // IP boundary check: regex crate has no lookarounds, so verify
+                // surrounding bytes manually.  127.0.0.1 is omitted — it appears
+                // in every Go net-stack binary and has no analytical value.
+                // RFC 1918 ranges are kept: a private IP hardcoded in malware
+                // strings is a meaningful tell (lateral movement target, lab
+                // infrastructure leak, etc.).
+                let blob = m.matched_str.as_bytes();
+                for mat in re_ip.find_iter(&m.matched_str) {
+                    let start = mat.start();
+                    let end   = mat.end();
+                    let before_ok = start == 0 || !matches!(blob[start - 1], b'0'..=b'9' | b'.');
+                    let after_ok  = end == blob.len() || !matches!(blob[end], b'0'..=b'9' | b'.');
+                    if before_ok && after_ok && mat.as_str() != "127.0.0.1" {
+                        net_iocs.insert(mat.as_str().to_string());
+                    }
+                }
+                for cap in re_fspath.find_iter(&m.matched_str) {
+                    fs_iocs.insert(cap.as_str().to_string());
+                }
+            } else {
+                // Normal path: short discrete string, original logic unchanged
+                if rule.to_lowercase().contains("filesystem")
+                    || s.contains(".exe")
+                    || s.contains(".bat")
+                    || s.contains(".ps1")
+                    || s.contains(".vbs")
+                    || s.contains(".pdb")
+                {
+                    fs_iocs.insert(m.matched_str.clone());
+                } else if rule.to_lowercase().contains("ip address")
+                    || s.contains("http:")
+                    || s.contains("https:")
+                    || (s.contains('.') && s.split('.').count() == 4)
+                {
+                    net_iocs.insert(m.matched_str.clone());
+                }
             }
         }
     }

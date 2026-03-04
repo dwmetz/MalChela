@@ -484,13 +484,28 @@ async fn main() {
         writeln!(temp_file, "{}", plain_text(&line)).ok();
     }
 
-    if let Ok(matches) = yara_scan::scan_file_with_yara_rules(&file_path) {
-        if !matches.is_empty() {
-            let line = styled_line("yellow", &format!("- YARA Matches: [{}]", matches.join(", ")));
-            println!("{}", line);
-            writeln!(temp_file, "{}", plain_text(&line)).ok();
-        }
+let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file_path) {
+    Ok(matches) if !matches.is_empty() => {
+        let line = styled_line("yellow", &format!("- YARA Matches: [{}]", matches.join(", ")));
+        println!("{}", line);
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
+        matches
     }
+    Ok(_) => {
+        let line = styled_line("stone", "- YARA: No matches");
+        println!("{}", line);
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
+        vec![]
+    }
+    Err(e) => {
+        let line = styled_line("yellow", &format!("- YARA: Error - {}", e));
+        println!("{}", line);
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
+        vec![format!("Error: {}", e)]
+    }
+};
+    temp_file.flush().expect("Failed to flush after YARA scan");
+    let _ = std::io::stdout().flush();
     if save_output {
         let output_dir = if let Some(ref case) = args.case {
             let path = format!("saved_output/cases/{}/fileanalyzer", case);
@@ -532,10 +547,7 @@ async fn main() {
                 Some(false) => "Clean or Unknown".to_string(),
                 None => "Error".to_string(),
             },
-            yara_matches: match yara_scan::scan_file_with_yara_rules(&file_path) {
-                Ok(m) => m,
-                Err(_) => vec!["Error scanning".to_string()],
-            },
+            yara_matches,
             metadata: metadata::get_metadata(&file_path).ok(),
             uncommon_sections: bad_sections.clone(),
             suspicious_imports: suspicious_imports.clone(),
@@ -599,6 +611,14 @@ async fn main() {
             writeln!(temp_file, "{}", plain_text(&line)).ok();
             writeln!(temp_file).ok();
             println!();
+        }
+        println!();
+
+        // Flush stdout and pause briefly so the GUI's pipe reader has time
+        // to consume all output (including the YARA line) before process exits.
+        let _ = std::io::stdout().flush();
+        if std::env::var("MALCHELA_GUI_MODE").is_ok() {
+            std::thread::sleep(std::time::Duration::from_millis(200));
         }
     }
 }

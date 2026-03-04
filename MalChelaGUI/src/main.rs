@@ -923,6 +923,10 @@ if !is_external {
                                         out.push_str(&saved_line);
                                     }
                                 }
+                                // Brief pause before marking done so egui's repaint cycle
+                                // has time to render the final stdout lines (e.g. YARA result)
+                                // before the "Running..." indicator disappears.
+                                std::thread::sleep(std::time::Duration::from_millis(150));
                                 is_running_clone.store(false, std::sync::atomic::Ordering::Relaxed);
                             });
 
@@ -2367,6 +2371,11 @@ if let Some(tool) = &tool_clone {
             ui.separator();
             ui.heading(RichText::new("Console Output").color(LIGHT_CYAN));
             let output_lines = self.output_lines.lock().unwrap().clone();
+            // Continuously repaint while the tool is running so all stdout lines,
+            // including the final ones (e.g. YARA result), are always captured and displayed.
+            if self.is_running.load(std::sync::atomic::Ordering::Relaxed) {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
+            }
             ScrollArea::vertical().stick_to_bottom(true).show(ui, |ui| {
                 let mut latest_table_lines = vec![];
                 let mut in_table_block = false;
@@ -2455,6 +2464,9 @@ if let Some(tool) = &tool_clone {
                         ui.label(styled_line.clone());
                     }
                 }
+
+                // Bottom padding so the last line is never clipped by the scroll area
+                ui.add_space(8.0);
             });
 
             if self.show_scratchpad {
@@ -2780,7 +2792,6 @@ fn main() {
         mitre_modal: MitreLookupModal::default(),
     };
 
-    AppState::check_for_updates_in_thread(Arc::clone(&app.command_output), Arc::clone(&app.output_lines));
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([1400.0, 800.0])

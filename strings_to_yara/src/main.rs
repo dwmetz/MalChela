@@ -130,7 +130,7 @@ for (_i, arg) in args.iter().enumerate().skip(1) {
             file.write_all(yara_rule.as_bytes())?;
 
             println!(
-                "\nYARA rule saved to: {}",
+                "\nYARA rule saved to: {}\n",
                 output_path.display()
             );
         }

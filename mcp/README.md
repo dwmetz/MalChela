@@ -30,7 +30,7 @@ The easiest way to set them up is via MalChela's built-in config tool, run from 
 
 ```bash
 cd /path/to/MalChela
-./target/release/config
+cargo run -p config
 ```
 
 Alternatively, create them manually:

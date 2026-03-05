@@ -142,6 +142,6 @@ fn main() {
             }
         };
         let _ = std::fs::write(&output_file, report);
-        println!("\nThe results have been saved to: {}", output_file.display());
+        println!("\nThe results have been saved to: {}\n", output_file.display());
     }
 }

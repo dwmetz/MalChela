@@ -11,7 +11,17 @@ use common_ui::styled_line;
 use serde::Serialize;
 
 fn plain_text(s: &str) -> String {
-    strip_ansi_escapes::strip_str(s)
+    let stripped = strip_ansi_escapes::strip_str(s);
+    // Strip GUI color tags like [stone], [red], [NOTE], [highlight], etc.
+    // Process line-by-line so multi-line strings (e.g. pe_output) are fully cleaned.
+    stripped.lines().map(|line| {
+        if line.starts_with('[') {
+            if let Some(end) = line.find(']') {
+                return line[end + 1..].to_string();
+            }
+        }
+        line.to_string()
+    }).collect::<Vec<_>>().join("\n")
 }
 
 #[derive(Parser)]
@@ -294,7 +304,7 @@ async fn main() {
                         }
                         for line in version_lines {
                             println!("{}", line);
-                            writeln!(temp_file, "{}", line).ok();
+                            writeln!(temp_file, "{}", plain_text(&line)).ok();
                         }
                     }
                 }
@@ -583,13 +593,13 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
                 use std::io::Write;
                 temp_file.flush().expect("Failed to flush temp file before saving report");
                 fs::copy(&temp_path, &output_file_path).expect("Failed to save text report");
-                println!("\n{}", styled_line("green", &format!("Text report saved to: {}", output_file_path.display())));
+                println!("\n{}\n", styled_line("green", &format!("Text report saved to: {}", output_file_path.display())));
             }
             "md" => {
                 use std::io::Write;
                 temp_file.flush().expect("Failed to flush temp file before saving report");
                 fs::copy(&temp_path, &output_file_path).expect("Failed to save markdown report");
-                println!("\n{}", styled_line("green", &format!("Markdown report saved to: {}", output_file_path.display())));
+                println!("\n{}\n", styled_line("green", &format!("Markdown report saved to: {}", output_file_path.display())));
             }
             _ => {
                 // Ensure parent directories exist before creating the file
@@ -599,7 +609,7 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
                 let mut file = File::create(&output_file_path).expect("Failed to create report file");
                 let json = serde_json::to_string_pretty(&report).expect("Failed to serialize report");
                 file.write_all(json.as_bytes()).expect("Failed to write report");
-                println!("\n{}", styled_line("green", &format!("JSON report saved to: {}", output_file_path.display())));
+                println!("\n{}\n", styled_line("green", &format!("JSON report saved to: {}", output_file_path.display())));
             }
         }
     } else {

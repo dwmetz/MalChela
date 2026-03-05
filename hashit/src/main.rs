@@ -113,7 +113,7 @@ fn main() {
                 writeln!(file, "SHA1: {:x}", sha1_hash).unwrap();
                 writeln!(file, "SHA256: {:x}", sha256_hash).unwrap();
 
-                println!("{}", styled_line("green", &format!("Text report saved to: {}", text_path.display())));
+                println!("\n{}\n", styled_line("green", &format!("Text report saved to: {}", text_path.display())));
             }
             "md" => {
                 let md_path = output_dir.join(format!("report_{}.md", timestamp));
@@ -126,7 +126,7 @@ fn main() {
                 writeln!(file, "- **SHA1**: {:x}", sha1_hash).unwrap();
                 writeln!(file, "- **SHA256**: {:x}", sha256_hash).unwrap();
 
-                println!("{}", styled_line("green", &format!("Markdown report saved to: {}", md_path.display())));
+                println!("\n{}\n", styled_line("green", &format!("Markdown report saved to: {}", md_path.display())));
             }
             _ => {
                 let json_path = output_dir.join(format!("report_{}.json", timestamp));
@@ -141,7 +141,7 @@ fn main() {
                 });
 
                 file.write_all(serde_json::to_string_pretty(&json).unwrap().as_bytes()).unwrap();
-                println!("{}", styled_line("green", &format!("JSON report saved to: {}", json_path.display())));
+                println!("\n{}\n", styled_line("green", &format!("JSON report saved to: {}", json_path.display())));
             }
         }
     } else if std::env::var("MALCHELA_GUI_MODE").is_err() {

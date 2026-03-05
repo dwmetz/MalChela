@@ -1,10 +1,21 @@
 # MalChela Tool Instructions for AI Assistants
 
 MalChela is installed at: /home/remnux/Tools/MalChela
+(Adjust this path if MalChela is installed elsewhere on the system.)
 
-All tools are Rust binaries. The execution pattern is:
+All tools are Rust binaries built with Cargo. You must `cd` to the MalChela
+root before running any tool. The execution pattern is:
+
+```
 cd /home/remnux/Tools/MalChela
-./target/release/<toolname> <arguments>
+cargo run -p <toolname> -- <arguments>
+```
+
+Example:
+```
+cd /home/remnux/Tools/MalChela
+cargo run -p fileanalyzer -- /path/to/sample.exe
+```
 
 ## Primary Static Analysis Tools
 

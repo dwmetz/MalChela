@@ -377,7 +377,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for m in &mstrings.matches {
         if let Some(rule) = &m.rule_name {
-            let s = m.matched_str.to_lowercase();
+            let _s = m.matched_str.to_lowercase();
 
             if m.matched_str.len() > 300 {
                 // Blob path: extract well-formed IOCs via regex
@@ -401,24 +401,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 for cap in re_fspath.find_iter(&m.matched_str) {
-                    fs_iocs.insert(cap.as_str().to_string());
+                    let extracted = cap.as_str();
+                    // Skip template variables like ${EXTENSION}-FILES.txt
+                    if !extracted.starts_with("${") && !extracted.starts_with('%') {
+                        fs_iocs.insert(extracted.to_string());
+                    }
                 }
             } else {
-                // Normal path: short discrete string, original logic unchanged
-                if rule.to_lowercase().contains("filesystem")
-                    || s.contains(".exe")
-                    || s.contains(".bat")
-                    || s.contains(".ps1")
-                    || s.contains(".vbs")
-                    || s.contains(".pdb")
-                {
-                    fs_iocs.insert(m.matched_str.clone());
-                } else if rule.to_lowercase().contains("ip address")
-                    || s.contains("http:")
-                    || s.contains("https:")
-                    || (s.contains('.') && s.split('.').count() == 4)
-                {
-                    net_iocs.insert(m.matched_str.clone());
+                // Normal path: short discrete string.
+                // Normalize key=value pairs — take only the value after '='.
+                let candidate: &str = if let Some(pos) = m.matched_str.find('=') {
+                    m.matched_str[pos + 1..].trim()
+                } else {
+                    m.matched_str.trim()
+                };
+                let sc = candidate.to_lowercase();
+
+                // Quality filters: skip template vars, multi-word command strings,
+                // and Rust/C++ namespace-polluted matches — none are usable file IOCs.
+                let is_template  = candidate.starts_with("${") || candidate.starts_with('%');
+                let has_spaces   = candidate.contains(' ') || candidate.contains('\t');
+                let has_namespace = candidate.contains("::");
+
+                if !is_template && !has_spaces && !has_namespace {
+                    if rule.to_lowercase().contains("filesystem")
+                        || sc.ends_with(".exe")
+                        || sc.ends_with(".bat")
+                        || sc.ends_with(".ps1")
+                        || sc.ends_with(".vbs")
+                        || sc.ends_with(".pdb")
+                    {
+                        fs_iocs.insert(candidate.to_string());
+                    } else if rule.to_lowercase().contains("ip address")
+                        || sc.contains("http:")
+                        || sc.contains("https:")
+                        || (sc.contains('.') && sc.split('.').count() == 4)
+                    {
+                        net_iocs.insert(candidate.to_string());
+                    }
                 }
             }
         }
@@ -514,7 +534,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let mut file = File::create(&text_path).expect("Failed to save text report");
                 file.write_all(report_buffer.as_bytes()).expect("Failed to write report");
-                println!("\n{}", format!("Text report saved to: {}", text_path.display()).green());
+                println!("\n{}\n", format!("Text report saved to: {}", text_path.display()).green());
             }
             "md" => {
                 let md_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.md", timestamp)));
@@ -523,7 +543,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let mut file = File::create(&md_path).expect("Failed to save markdown report");
                 file.write_all(report_buffer.as_bytes()).expect("Failed to write report");
-                println!("\n{}", format!("Markdown report saved to: {}", md_path.display()).green());
+                println!("\n{}\n", format!("Markdown report saved to: {}", md_path.display()).green());
             }
             _ => {
                 let json_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.json", timestamp)));
@@ -538,7 +558,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "matches": matched_only
                 })).expect("Failed to serialize report");
                 file.write_all(json.as_bytes()).expect("Failed to write JSON report");
-                println!("\n{}", format!("JSON report saved to: {}", json_path.display()).green());
+                println!("\n{}\n", format!("JSON report saved to: {}", json_path.display()).green());
             }
         }
     } else {

@@ -396,7 +396,7 @@ impl AppState {
             }
 
             self.show_running_command(ctx);
-            std::env::set_var("MALCHELA_GUI_MODE", "1");
+            unsafe { std::env::set_var("MALCHELA_GUI_MODE", "1") };
             let gui_mode_args = selected_tool.gui_mode_args.clone();
             let current_progress = Arc::new(Mutex::new(0));
             let total_progress = Arc::new(Mutex::new(0));
@@ -716,10 +716,11 @@ if !is_external {
                 if save_report.0
                     && !tool_id.contains("mzhash")
                     && tool_id != "strings_to_yara"
+                    && tool_id != "yr"
                 {
                     args.push("-o".to_string());
                 }
-                if save_report.0 {
+                if save_report.0 && tool_id != "yr" {
                     match save_report.1.as_str() {
                         ".txt" => args.push("-t".to_string()),
                         ".json" => args.push("-j".to_string()),
@@ -762,7 +763,7 @@ if !is_external {
                 if command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
                     for (key, value) in &env_vars {
                         if key == "MZCOUNT_TABLE_DISPLAY" {
-                            std::env::set_var(key, value);
+                            unsafe { std::env::set_var(key, value) };
                         }
                     }
                 }
@@ -771,9 +772,9 @@ if !is_external {
                 }
 
                 if save_report.0 {
-                    std::env::set_var("MALCHELA_SAVE_OUTPUT", "1");
+                    unsafe { std::env::set_var("MALCHELA_SAVE_OUTPUT", "1") };
                 } else {
-                    std::env::remove_var("MALCHELA_SAVE_OUTPUT");
+                    unsafe { std::env::remove_var("MALCHELA_SAVE_OUTPUT") };
                 }
 
                 let mut command_builder = {
@@ -1775,6 +1776,20 @@ if let Some(tool) = &tool_clone {
                             preview.push_str(self.custom_args.trim());
                         }
                         ui.label(RichText::new(preview).color(GREEN).strong());
+                    } else if tool.command.get(0).map(|s| s == "yr").unwrap_or(false) {
+                        let target_str = self.input_path.as_ref()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default();
+                        let mut preview = format!(
+                            "yr scan \"{}\" \"{}\"",
+                            &self.scratchpad_path,
+                            target_str
+                        );
+                        if !self.custom_args.trim().is_empty() {
+                            preview.push(' ');
+                            preview.push_str(self.custom_args.trim());
+                        }
+                        ui.label(RichText::new(preview).color(GREEN).strong());
                     } else if let Some(ref p) = self.input_path {
                         let input_path_str = p.display().to_string();
                         let command_line = if tool.command.get(0).map(|s| s == "hashcheck").unwrap_or(false) {
@@ -2039,20 +2054,7 @@ if let Some(tool) = &tool_clone {
                         ui.text_edit_singleline(&mut self.custom_args);
                     });
 
-                    // Override save report checkbox for YARA-X
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.save_report.0, "Save Report");
-                        if self.save_report.0 {
-                            ui.label("Format:");
-                            egui::ComboBox::from_id_source("save_format")
-                                .selected_text(&self.save_report.1)
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut self.save_report.1, ".txt".to_string(), "txt");
-                                    ui.selectable_value(&mut self.save_report.1, ".json".to_string(), "json");
-                                    ui.selectable_value(&mut self.save_report.1, ".md".to_string(), "md");
-                                });
-                        }
-                    });
+                    self.save_report.0 = false;
                 } else if tool.command.get(0).map(|s| s.ends_with("floss")).unwrap_or(false) {
                     // --- FLOSS tool configuration section ---
                     ui.horizontal(|ui| {

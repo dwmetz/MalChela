@@ -327,7 +327,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             if is_gui_mode() {
                 println!(
-                    "{}",
+                    "{}\n",
                     styled_line(
                         "green",
                         &format!(
@@ -409,7 +409,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             if is_gui_mode() {
                 println!(
-                    "{}",
+                    "{}\n",
                     styled_line(
                         "yellow",
                         &format!(

@@ -4,7 +4,7 @@ version = "3.1.2"
 edition = "2021"
 
 [dependencies]
-eframe = { version = "0.27", features = ["glow"] }
+eframe = { version = "0.27", features = ["wgpu"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 rfd = "0.13"  

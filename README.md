@@ -51,8 +51,20 @@
 
 <h3>Dependencies:</h3>
 
+Linux
 ```
 sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-essential libglib2.0-dev libgtk-3-dev
+```
+
+Mac
+```
+brew install openssl yara pkg-config gtk+3 glib
+```
+Note: YARA 4.2> required.
+Before building, point the build to to Homebrew's YARA prefix
+```
+export YARA_LIBRARY_PATH=$(brew --prefix yara)/lib
+export BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix yara)/include"
 ```
 
 <h3>Installation &amp; Usage:</h3>

@@ -1,0 +1,40 @@
+{
+  "name": "malchela-marketplace",
+  "owner": {
+    "name": "Doug Metz",
+    "github": "dwmetz"
+  },
+  "description": "MalChela — A YARA & Malware Analysis Toolkit with Claude MCP integration for DFIR analysts.",
+  "homepage": "https://bakerstreetforensics.com",
+  "repository": "https://github.com/dwmetz/MalChela",
+  "plugins": [
+    {
+      "name": "malchela",
+      "source": {
+        "source": "github",
+        "repo": "dwmetz/MalChela"
+      },
+      "description": "Exposes MalChela's full malware analysis suite to Claude: file analysis (hashes, entropy, PE metadata, YARA, VirusTotal), string extraction with MITRE ATT&CK mapping, hash lookups against VirusTotal and MalwareBazaar, NSRL known-good queries, and directory scanning for file type anomalies.",
+      "version": "3.1.2",
+      "author": {
+        "name": "Doug Metz",
+        "email": "dwmetz@gmail.com"
+      },
+      "homepage": "https://bakerstreetforensics.com",
+      "repository": "https://github.com/dwmetz/MalChela",
+      "license": "MIT",
+      "keywords": [
+        "malware",
+        "dfir",
+        "forensics",
+        "yara",
+        "threat-intel",
+        "virustotal",
+        "mcp",
+        "security",
+        "rust"
+      ],
+      "category": "security"
+    }
+  ]
+}

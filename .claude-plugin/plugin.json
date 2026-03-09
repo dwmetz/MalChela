@@ -1,0 +1,32 @@
+{
+  "name": "malchela",
+  "version": "3.1.2",
+  "description": "MalChela malware analysis toolkit — exposes file analysis, string extraction, hash lookup, NSRL queries, and directory scanning to Claude via MCP. Built for DFIR analysts and malware researchers.",
+  "author": {
+    "name": "Doug Metz",
+    "email": "dwmetz@gmail.com"
+  },
+  "homepage": "https://bakerstreetforensics.com",
+  "repository": "https://github.com/dwmetz/MalChela",
+  "license": "MIT",
+  "keywords": [
+    "malware",
+    "dfir",
+    "forensics",
+    "yara",
+    "threat-intel",
+    "virustotal",
+    "mcp",
+    "security"
+  ],
+  "category": "security",
+  "mcpServers": {
+    "malchela": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/index.js"],
+      "env": {
+        "MALCHELA_DIR": "${CLAUDE_PLUGIN_ROOT}"
+      }
+    }
+  }
+}

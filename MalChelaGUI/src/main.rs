@@ -2690,22 +2690,26 @@ if let Some(tool) = &tool_clone {
             self.show_tools_modal = modal_open && !should_close;
         }
 
-        use egui::widgets::Hyperlink;
-        TopBottomPanel::bottom("footer").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new("Developed by Baker Street Forensics")
-                        .color(STONE_BEIGE)
-                        .monospace(),
-                );
-                ui.add(Hyperlink::from_label_and_url(RichText::new("Blog").color(LIGHT_CYAN), "https://bakerstreetforensics.com")
-                );
-                ui.add(Hyperlink::from_label_and_url(RichText::new("Github").color(LIGHT_CYAN), "https://github.com/dwmetz")
-                );
-                ui.add(Hyperlink::from_label_and_url(RichText::new("Store").color(LIGHT_CYAN), "https://www.teepublic.com/user/baker-street-forensics")
-            );
-            });
-        });
+use egui::widgets::Hyperlink;
+TopBottomPanel::bottom("footer").show(ctx, |ui| {
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new("Developed by Baker Street Forensics  · ")
+                .color(STONE_BEIGE)
+                .monospace(),
+        );
+        
+        let separator = RichText::new(" · ").color(STONE_BEIGE).monospace();
+        
+        ui.add(Hyperlink::from_label_and_url(RichText::new("Blog").color(LIGHT_CYAN).monospace(), "https://bakerstreetforensics.com"));
+        ui.label(separator.clone());
+        ui.add(Hyperlink::from_label_and_url(RichText::new("Github").color(LIGHT_CYAN).monospace(), "https://github.com/dwmetz"));
+        ui.label(separator.clone());
+        ui.add(Hyperlink::from_label_and_url(RichText::new("Store").color(LIGHT_CYAN).monospace(), "https://www.teepublic.com/user/baker-street-forensics"));
+        ui.label(separator.clone());
+        ui.add(Hyperlink::from_label_and_url(RichText::new("YouTube").color(LIGHT_CYAN).monospace(), "https://www.youtube.com/@bakerstreetforensics"));
+    });
+});
 
     }
 }

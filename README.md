@@ -8,6 +8,9 @@
       A YARA &amp; Malware Analysis Toolkit written in Rust.
    </h4>
 <p>
+
+ Check out the new [MalChela instructional series](https://www.youtube.com/playlist?list=PL__KsCEzV6Ae5jA-YObTmvZEKuu-rkON6) on YouTube 
+ 
 <p>
  </div>
 <div align="center">
@@ -22,7 +25,8 @@
     </tr>
   </table>
 </div>
-Check out the new MalChela instructional series on [YouTube](https://youtube.com/playlist?list=PL%5F%5FKsCEzV6Ae5jA-YObTmvZEKuu-rkON6&si=Y3HCB0L2Wnj9Iejf)
+
+
 
 <h3>Features:</h3>
 

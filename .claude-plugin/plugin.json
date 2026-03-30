@@ -19,7 +19,6 @@
     "mcp",
     "security"
   ],
-  "category": "security",
   "mcpServers": {
     "malchela": {
       "command": "node",

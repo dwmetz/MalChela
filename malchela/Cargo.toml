@@ -1,6 +1,6 @@
 [package]
 name = "malchela"
-version = "3.1.2"
+version = "3.1.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,7 +12,7 @@ dialoguer = "0.11"
 console = "0.15"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
-rand = "0.8"
+rand = "0.9.3"
 common_ui = { path = "../common_ui" }
 dispatch = "0.2.0"
 

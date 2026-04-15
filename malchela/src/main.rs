@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::fs;
 
 use colored::*;
-use rand::seq::SliceRandom;
+use rand::prelude::IndexedRandom;
 use serde::Deserialize;
 
 use crate::menu::{generate_tool_menu};
@@ -19,7 +19,7 @@ fn load_random_koan() -> String {
     std::fs::read_to_string("MalChelaGUI/koans/crabby_koans.yaml")
         .ok()
         .and_then(|content| serde_yaml::from_str::<Koans>(&content).ok())
-        .and_then(|k| k.koans.choose(&mut rand::thread_rng()).cloned())
+        .and_then(|k| k.koans.choose(&mut rand::rng()).cloned())
         .unwrap_or_else(|| "🦀 No koan today.".to_string())
 }
 
@@ -124,7 +124,7 @@ fn print_banner() {
     println!("{}", crab_art.red());
     println!("        {}", "    https://bakerstreetforensics.com".truecolor(110, 130, 140));
     println!();
-    println!("        {}", "    MalChela Analysis Toolkit v3.1.2".yellow());
+    println!("        {}", "    MalChela Analysis Toolkit v3.1.3".yellow());
     println!();
 }
 

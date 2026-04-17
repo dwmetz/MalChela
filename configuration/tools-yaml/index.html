@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../yara-x/">
+        <link rel="prev" href="../../install/">
       
       
-        <link rel="next" href="../../remnux/">
+        <link rel="next" href="../api-configuration/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>Python Integrations - MalChela Documentation</title>
+        <title>tools.yaml - MalChela Documentation</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#configuring-python-based-tools-oletools-oledump" class="md-skip">
+        <a href="#key-fields-in-each-tool-entry" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Python Integrations
+              tools.yaml
             
           </span>
         </div>
@@ -248,11 +248,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/tools-yaml/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
           
   
   
@@ -307,13 +309,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../tools/" class="md-tabs__link">
           
   
   
@@ -478,24 +478,29 @@
       
   
   
+    
   
   
+  
     
     
     
     
-      
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -508,7 +513,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Configuration
@@ -519,10 +524,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/tools-yaml/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    tools.yaml
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -533,6 +558,90 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-fields-in-each-tool-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Fields in Each Tool Entry
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swapping-configs-remnux-mode-and-beyond" class="md-nav__link">
+    <span class="md-ellipsis">
+      Swapping Configs: REMnux Mode and Beyond
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Swapping Configs: REMnux Mode and Beyond">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Tips
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backing-up-and-restoring-toolyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backing Up and Restoring tool.yaml
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backing Up and Restoring tool.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      Restore
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -545,7 +654,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/api-configuration/" class="md-nav__link">
+      <a href="../api-configuration/" class="md-nav__link">
         
   
   
@@ -1010,29 +1119,24 @@
       
   
   
-    
   
   
-  
     
     
     
     
       
-        
-        
-      
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1045,7 +1149,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
@@ -1059,7 +1163,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../tools/" class="md-nav__link">
         
   
   
@@ -1082,7 +1186,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tools-yaml/" class="md-nav__link">
+      <a href="../../tools/tools-yaml/" class="md-nav__link">
         
   
   
@@ -1105,7 +1209,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../enhanced/" class="md-nav__link">
+      <a href="../../tools/enhanced/" class="md-nav__link">
         
   
   
@@ -1128,7 +1232,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tshark/" class="md-nav__link">
+      <a href="../../tools/tshark/" class="md-nav__link">
         
   
   
@@ -1151,7 +1255,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pcap_to_csv/" class="md-nav__link">
+      <a href="../../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
@@ -1174,7 +1278,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../vol3/" class="md-nav__link">
+      <a href="../../tools/vol3/" class="md-nav__link">
         
   
   
@@ -1197,7 +1301,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../yara-x/" class="md-nav__link">
+      <a href="../../tools/yara-x/" class="md-nav__link">
         
   
   
@@ -1217,30 +1321,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Python Integrations
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../tools/python/" class="md-nav__link">
         
   
   
@@ -1251,57 +1335,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#configuring-python-based-tools-oletools-oledump" class="md-nav__link">
-    <span class="md-ellipsis">
-      Configuring Python-Based Tools (oletools &amp; oledump)
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Configuring Python-Based Tools (oletools &amp; oledump)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#olevba-from-oletools" class="md-nav__link">
-    <span class="md-ellipsis">
-      🔧 olevba (from oletools)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#oledump-standalone-script" class="md-nav__link">
-    <span class="md-ellipsis">
-      oledump (standalone script)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1383,28 +1416,61 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#configuring-python-based-tools-oletools-oledump" class="md-nav__link">
+  <a href="#key-fields-in-each-tool-entry" class="md-nav__link">
     <span class="md-ellipsis">
-      Configuring Python-Based Tools (oletools &amp; oledump)
+      Key Fields in Each Tool Entry
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Configuring Python-Based Tools (oletools &amp; oledump)">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swapping-configs-remnux-mode-and-beyond" class="md-nav__link">
+    <span class="md-ellipsis">
+      Swapping Configs: REMnux Mode and Beyond
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Swapping Configs: REMnux Mode and Beyond">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#olevba-from-oletools" class="md-nav__link">
+  <a href="#key-tips" class="md-nav__link">
     <span class="md-ellipsis">
-      🔧 olevba (from oletools)
+      Key Tips
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backing-up-and-restoring-toolyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backing Up and Restoring tool.yaml
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backing Up and Restoring tool.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backup
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#oledump-standalone-script" class="md-nav__link">
+  <a href="#restore" class="md-nav__link">
     <span class="md-ellipsis">
-      oledump (standalone script)
+      Restore
     </span>
   </a>
   
@@ -1434,66 +1500,95 @@
   
 
 
-  <h1>Python Integrations</h1>
+  <h1>tools.yaml</h1>
 
-<h3 id="configuring-python-based-tools-oletools-oledump">Configuring Python-Based Tools (oletools &amp; oledump)</h3>
-<p>MalChela supports Python-based tools as long as they are properly declared in <code>tools.yaml</code>. Below are detailed examples and installation instructions for two commonly used utilities:</p>
-<h4 id="olevba-from-oletools">🔧 <code>olevba</code> (from <code>oletools</code>)</h4>
-<p><strong>Install via <code>pipx</code>:</strong></p>
-<pre><code class="language-bash">pipx install oletools
-</code></pre>
-<p>This installs <code>olevba</code> as a standalone CLI tool accessible in your user path.</p>
-<p><strong><code>tools.yaml</code> configuration example:</strong></p>
-<pre><code class="language-yaml">- name: olevba
-  description: “OLE document macro utility”
-  command: [“/Users/youruser/.local/bin/olevba”]
-  input_type: “file”
-  file_position: “last”
-  category: “Office Document Analysis”
-  optional_args: []
-  exec_type: script
-</code></pre>
-<p><strong>Notes:</strong></p>
-<ul>
-<li><code>olevba</code> is run directly (thanks to pipx)</li>
-<li>No need to specify a Python interpreter in <code>command</code></li>
-<li>Ensure the path to <code>olevba</code> is correct and executable</li>
-</ul>
-<p>—</p>
-<h4 id="oledump-standalone-script"><code>oledump</code> (standalone script)</h4>
-<p><strong>Manual installation:</strong></p>
-<pre><code class="language-bash">mkdir -p ~/Tools/oledump
-cd ~/Tools/oledump
-curl -O https://raw.githubusercontent.com/DidierStevens/DidierStevensSuite/master/oledump.py
-chmod +x oledump.py
-</code></pre>
+<p>MalChela uses a central <code>tools.yaml</code> file to define which tools appear in the GUI, along with their launch method, input types, categories, and optional arguments. This YAML-driven approach allows full control without editing source code.</p>
+<h3 id="key-fields-in-each-tool-entry">Key Fields in Each Tool Entry</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>name</td>
+<td>Internal and display name of the tool</td>
+</tr>
+<tr>
+<td>description</td>
+<td>Shown in GUI for clarity</td>
+</tr>
+<tr>
+<td>command</td>
+<td>How the tool is launched (binary path or interpreter)</td>
+</tr>
+<tr>
+<td>exec_type</td>
+<td>One of <code>cargo</code>, <code>binary</code>, or <code>script</code></td>
+</tr>
+<tr>
+<td>input_type</td>
+<td>One of <code>file</code>, <code>folder</code>, or <code>hash</code></td>
+</tr>
+<tr>
+<td>file_position</td>
+<td>Controls argument ordering</td>
+</tr>
+<tr>
+<td>optional_args</td>
+<td>Additional CLI arguments passed to the tool</td>
+</tr>
+<tr>
+<td>category</td>
+<td>Grouping used in the GUI left panel</td>
+</tr>
+</tbody>
+</table>
 <blockquote>
-<p>Make sure the script path in <code>optional_args</code> is absolute, and that the file is executable if it’s run directly (not through a Python interpreter in <code>command</code>).</p>
+<p>⚠️ All fields except <code>optional_args</code> are required.</p>
 </blockquote>
-<p><strong>Dependencies:</strong></p>
-<pre><code class="language-bash">python3 -m pip install olefile
-</code></pre>
-<p>Alternatively, create a virtual environment to isolate dependencies:</p>
-<pre><code class="language-bash">python3 -m venv ~/venvs/oledump-env
-source ~/venvs/oledump-env/bin/activate
-pip install olefile
-</code></pre>
-<p><strong><code>tools.yaml</code> configuration example:</strong></p>
-<pre><code class="language-yaml">- name: oledump
-  description: “OLE Document Dump Utility”
-  command: [“/usr/local/bin/python3”]
-  input_type: “file”
-  file_position: “last”
-  category: “Office Document Analysis”
-  optional_args: [“/Users/youruser/Tools/oledump/oledump.py”]
-  exec_type: script
-</code></pre>
-<p><strong>Notes:</strong></p>
+<h2 id="swapping-configs-remnux-mode-and-beyond">Swapping Configs: REMnux Mode and Beyond</h2>
+<p>MalChela supports easy switching between tool configurations via the GUI.</p>
+<p><img alt="YAML Config Tool" src="../../images/yaml_configurator.png" /></p>
+<p><strong>Figure 3.1:</strong> YAML Config Tool – Tool entry shown in table and form</p>
+<p>To switch:</p>
 <ul>
-<li>The GUI ensures correct argument order: <code>python oledump.py &lt;input_file&gt;</code></li>
-<li><code>command</code> points to the Python interpreter</li>
-<li><code>optional_args</code> contains the path to the script</li>
+<li>Open the <strong>Configuration Panel</strong></li>
+<li>Use <strong>“Select tools.yaml”</strong> to point to a different config</li>
+<li>Restart the GUI or reload tools</li>
 </ul>
+<p>This allows forensic VMs like REMnux to use a tailored toolset while keeping your default config untouched.</p>
+<blockquote>
+<p>A bundled <code>tools_remnux.yaml</code> is included in the repo for convenience.</p>
+</blockquote>
+<h4 id="key-tips">Key Tips</h4>
+<ul>
+<li>Always use <code>file_position: “last”</code> unless the tool expects input before the script</li>
+<li>For scripts requiring Python, keep the script path in <code>optional_args[0]</code></li>
+<li>For tools installed via <code>pipx</code>, reference the binary path directly in <code>command</code></li>
+</ul>
+<h2 id="backing-up-and-restoring-toolyaml">Backing Up and Restoring tool.yaml</h2>
+<p>The MalChela GUI provides built-in functionality to back up and restore your <code>tools.yaml</code> configuration file.</p>
+<h3 id="backup">Backup</h3>
+<p>To create a backup of your current <code>tools.yaml</code>:</p>
+<ul>
+<li>Open the <strong>Configuration Panel</strong></li>
+<li>Click the <strong>“Back Up Config”</strong> button</li>
+<li>A timestamped copy of <code>tools.yaml</code> will be saved to the default location</li>
+</ul>
+<p>You’ll see a confirmation message when the operation completes successfully.</p>
+<h3 id="restore">Restore</h3>
+<p>To restore from a previous backup:</p>
+<ul>
+<li>Click the <strong>“Restore Config”</strong> button in the Configuration Panel</li>
+<li>Select a previously saved backup file</li>
+<li>The selected file will overwrite the current configuration</li>
+</ul>
+<blockquote>
+<p>This feature makes it easy to experiment with custom tool setups while retaining a safety net for recovery.</p>
+</blockquote>
 
 
 

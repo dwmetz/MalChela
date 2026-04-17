@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../yara-x/">
+        <link rel="prev" href="../tools-yaml/">
       
       
-        <link rel="next" href="../../remnux/">
+        <link rel="next" href="../../cases/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>Python Integrations - MalChela Documentation</title>
+        <title>api configuration - MalChela Documentation</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#configuring-python-based-tools-oletools-oledump" class="md-skip">
+        <a href="#api-configuration" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Python Integrations
+              api configuration
             
           </span>
         </div>
@@ -248,11 +248,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/tools-yaml/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../tools-yaml/" class="md-tabs__link">
           
   
   
@@ -307,13 +309,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../tools/" class="md-tabs__link">
           
   
   
@@ -478,24 +478,29 @@
       
   
   
+    
   
   
+  
     
     
     
     
-      
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -508,7 +513,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Configuration
@@ -522,7 +527,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/tools-yaml/" class="md-nav__link">
+      <a href="../tools-yaml/" class="md-nav__link">
         
   
   
@@ -542,10 +547,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/api-configuration/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    api configuration
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -556,6 +583,62 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tools-that-use-api-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tools That Use API Keys
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-configure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where to Configure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#managing-your-keys-with-the-configuration-utility" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managing Your Keys with the Configuration Utility
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Best Practices
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1010,29 +1093,24 @@
       
   
   
-    
   
   
-  
     
     
     
     
       
-        
-        
-      
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1045,7 +1123,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
@@ -1059,7 +1137,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../tools/" class="md-nav__link">
         
   
   
@@ -1082,7 +1160,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tools-yaml/" class="md-nav__link">
+      <a href="../../tools/tools-yaml/" class="md-nav__link">
         
   
   
@@ -1105,7 +1183,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../enhanced/" class="md-nav__link">
+      <a href="../../tools/enhanced/" class="md-nav__link">
         
   
   
@@ -1128,7 +1206,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tshark/" class="md-nav__link">
+      <a href="../../tools/tshark/" class="md-nav__link">
         
   
   
@@ -1151,7 +1229,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pcap_to_csv/" class="md-nav__link">
+      <a href="../../tools/pcap_to_csv/" class="md-nav__link">
         
   
   
@@ -1174,7 +1252,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../vol3/" class="md-nav__link">
+      <a href="../../tools/vol3/" class="md-nav__link">
         
   
   
@@ -1197,7 +1275,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../yara-x/" class="md-nav__link">
+      <a href="../../tools/yara-x/" class="md-nav__link">
         
   
   
@@ -1217,30 +1295,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Python Integrations
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../tools/python/" class="md-nav__link">
         
   
   
@@ -1251,57 +1309,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#configuring-python-based-tools-oletools-oledump" class="md-nav__link">
-    <span class="md-ellipsis">
-      Configuring Python-Based Tools (oletools &amp; oledump)
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Configuring Python-Based Tools (oletools &amp; oledump)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#olevba-from-oletools" class="md-nav__link">
-    <span class="md-ellipsis">
-      🔧 olevba (from oletools)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#oledump-standalone-script" class="md-nav__link">
-    <span class="md-ellipsis">
-      oledump (standalone script)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1375,6 +1382,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1383,35 +1392,38 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#configuring-python-based-tools-oletools-oledump" class="md-nav__link">
+  <a href="#tools-that-use-api-keys" class="md-nav__link">
     <span class="md-ellipsis">
-      Configuring Python-Based Tools (oletools &amp; oledump)
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Configuring Python-Based Tools (oletools &amp; oledump)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#olevba-from-oletools" class="md-nav__link">
-    <span class="md-ellipsis">
-      🔧 olevba (from oletools)
+      Tools That Use API Keys
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#oledump-standalone-script" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#where-to-configure" class="md-nav__link">
     <span class="md-ellipsis">
-      oledump (standalone script)
+      Where to Configure
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#managing-your-keys-with-the-configuration-utility" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managing Your Keys with the Configuration Utility
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Best Practices
+    </span>
+  </a>
   
 </li>
       
@@ -1434,66 +1446,83 @@
   
 
 
-  <h1>Python Integrations</h1>
-
-<h3 id="configuring-python-based-tools-oletools-oledump">Configuring Python-Based Tools (oletools &amp; oledump)</h3>
-<p>MalChela supports Python-based tools as long as they are properly declared in <code>tools.yaml</code>. Below are detailed examples and installation instructions for two commonly used utilities:</p>
-<h4 id="olevba-from-oletools">🔧 <code>olevba</code> (from <code>oletools</code>)</h4>
-<p><strong>Install via <code>pipx</code>:</strong></p>
-<pre><code class="language-bash">pipx install oletools
+<h1 id="api-configuration">API Configuration</h1>
+<p>Some tools within MalChela rely on external services. In order to use these integrations, you must configure your API credentials.</p>
+<h2 id="tools-that-use-api-keys">Tools That Use API Keys</h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Service</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fileanalyzer</code></td>
+<td>VirusTotal</td>
+<td>Hash lookup</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>VirusTotal</td>
+<td>Multi-source hash lookup (Tier 1)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>MalwareBazaar</td>
+<td>Multi-source hash lookup (Tier 1)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>AlienVault OTX</td>
+<td>Multi-source hash lookup (Tier 1)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>Hybrid Analysis</td>
+<td>Multi-source hash lookup (Tier 2)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>FileScan.IO</td>
+<td>Multi-source hash lookup (Tier 2)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>Malshare</td>
+<td>Multi-source hash lookup (Tier 2)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>MetaDefender</td>
+<td>Multi-source hash lookup (Tier 2)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="where-to-configure">Where to Configure</h2>
+<p>MalChela uses two plain text files to store API keys for its third-party integrations:</p>
+<pre><code>vt-api.txt
+mb-api.txt
 </code></pre>
-<p>This installs <code>olevba</code> as a standalone CLI tool accessible in your user path.</p>
-<p><strong><code>tools.yaml</code> configuration example:</strong></p>
-<pre><code class="language-yaml">- name: olevba
-  description: “OLE document macro utility”
-  command: [“/Users/youruser/.local/bin/olevba”]
-  input_type: “file”
-  file_position: “last”
-  category: “Office Document Analysis”
-  optional_args: []
-  exec_type: script
-</code></pre>
-<p><strong>Notes:</strong></p>
+<p>These files should be placed in the <strong>root of your MalChela workspace</strong>, alongside <code>tools.yaml</code>. Each file should contain a single line with your API key.</p>
+<p>These keys will be read at runtime by tools such as <code>tiquery</code> to enable external lookups.</p>
+<hr />
+<p><img alt="API Configuration Utility" src="../../images/api_configuration.png" /></p>
+<p><strong>Figure 3.2:</strong> API Configuration Utility</p>
+<h2 id="managing-your-keys-with-the-configuration-utility">Managing Your Keys with the Configuration Utility</h2>
+<p>The MalChela GUI includes a built-in Configuration Panel that lets you easily <strong>Create or update API key files</strong> without opening a text editor.</p>
+<p>Look for the <strong>API Key Management</strong> section in the Configuration Panel. Changes take effect immediately and persist across sessions.</p>
+<hr />
+<h2 id="best-practices">Best Practices</h2>
 <ul>
-<li><code>olevba</code> is run directly (thanks to pipx)</li>
-<li>No need to specify a Python interpreter in <code>command</code></li>
-<li>Ensure the path to <code>olevba</code> is correct and executable</li>
+<li><strong>Keep these files private.</strong> Do not commit them to Git or share them publicly.</li>
 </ul>
-<p>—</p>
-<h4 id="oledump-standalone-script"><code>oledump</code> (standalone script)</h4>
-<p><strong>Manual installation:</strong></p>
-<pre><code class="language-bash">mkdir -p ~/Tools/oledump
-cd ~/Tools/oledump
-curl -O https://raw.githubusercontent.com/DidierStevens/DidierStevensSuite/master/oledump.py
-chmod +x oledump.py
-</code></pre>
+<hr />
 <blockquote>
-<p>Make sure the script path in <code>optional_args</code> is absolute, and that the file is executable if it’s run directly (not through a Python interpreter in <code>command</code>).</p>
+<p>If a tool requires an API key but none is found, it will log a warning and skip external requests.</p>
 </blockquote>
-<p><strong>Dependencies:</strong></p>
-<pre><code class="language-bash">python3 -m pip install olefile
-</code></pre>
-<p>Alternatively, create a virtual environment to isolate dependencies:</p>
-<pre><code class="language-bash">python3 -m venv ~/venvs/oledump-env
-source ~/venvs/oledump-env/bin/activate
-pip install olefile
-</code></pre>
-<p><strong><code>tools.yaml</code> configuration example:</strong></p>
-<pre><code class="language-yaml">- name: oledump
-  description: “OLE Document Dump Utility”
-  command: [“/usr/local/bin/python3”]
-  input_type: “file”
-  file_position: “last”
-  category: “Office Document Analysis”
-  optional_args: [“/Users/youruser/Tools/oledump/oledump.py”]
-  exec_type: script
-</code></pre>
-<p><strong>Notes:</strong></p>
-<ul>
-<li>The GUI ensures correct argument order: <code>python oledump.py &lt;input_file&gt;</code></li>
-<li><code>command</code> points to the Python interpreter</li>
-<li><code>optional_args</code> contains the path to the script</li>
-</ul>
 
 
 

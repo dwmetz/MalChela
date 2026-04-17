@@ -1,5 +1,6 @@
 use eframe::egui::{self, RichText};
 use chrono::Local;
+use common_config;
 
 #[derive(Clone)]
 pub struct TsharkPanel {
@@ -138,15 +139,13 @@ impl TsharkPanel {
             ui.checkbox(&mut self.compress_output, "Compress Output as .gz");
         }
 
-        // Move Save to Case option here, after all option sections and before Run button
-        if self.save_output || self.export_objects {
-            ui.checkbox(&mut self.save_to_case, "Save Exports to Case");
-            if self.save_to_case {
-                ui.horizontal(|ui| {
-                    ui.label("Case Name:");
-                    ui.text_edit_singleline(&mut self.case_subfolder);
-                });
-            }
+        ui.checkbox(&mut self.save_to_case, "Save to Case");
+        if self.save_to_case {
+            self.save_output = true;
+            ui.horizontal(|ui| {
+                ui.label("Case Name:");
+                ui.text_edit_singleline(&mut self.case_subfolder);
+            });
         }
 
         if ui.button("Run").clicked() {
@@ -254,6 +253,11 @@ impl TsharkPanel {
             let _ = write("/tmp/tshark_debug.txt", debug_info);
 
             let _ = std::fs::create_dir_all(format!("saved_output/{}", subfolder));
+
+            // Ensure case.json exists so the GUI case browser can open this case.
+            if self.save_to_case && !self.case_subfolder.trim().is_empty() {
+                common_config::ensure_case_json(self.case_subfolder.trim());
+            }
 
             let output = Command::new("tshark")
                 .args(args.iter().map(|s| s.as_str()))

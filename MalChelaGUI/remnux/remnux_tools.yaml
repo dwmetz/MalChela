@@ -41,9 +41,9 @@ tools:
   category: "Strings Analysis"
   exec_type: cargo
 
-- name: Malware Hash Lookup
-  description: "Checks hash against VT and MalwareBazaar"
-  command: ["malhash"]
+- name: Threat Intel Query
+  description: "Multi-source threat intel hash lookup (VT, MB, OTX, HA, FileScan, Malshare, MetaDefender, ObjectiveSee)"
+  command: ["tiquery"]
   input_type: hash
   category: "Threat Intel"
   exec_type: cargo

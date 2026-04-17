@@ -31,11 +31,11 @@
     <tr><td>MZcount</td><td>Recurse a directory, uses YARA to count MZ, Zip, PDF, other</td></tr>
     <tr><td>NSRL Query</td><td>Query a MD5 or SHA1 hash against NSRL</td></tr>
     <tr><td>Strings to YARA</td><td>Prompts for metadata and strings (text file) to create a YARA rule</td></tr>
-    <tr><td>Malware Hash Lookup</td><td>Query a hash value against VirusTotal & Malware Bazaar*</td></tr>
+    <tr><td>Threat Intel Query</td><td>Multi-source threat intel hash lookup across VT, MB, OTX, HA, FileScan, Malshare, MetaDefender, and ObjectiveSee*</td></tr>
     <tr><td>XMZHash</td><td>Recurse a directory, for files without MZ, Zip or PDF header, create hash list and lookup table</td></tr>
   </tbody>
 </table>
 
 <p style="text-align: center;">
-  <strong>*The Malware Hash Lookup requires an API key for VirusTotal and Malware Bazaar.</strong> If unidentified, MalChela will prompt you to create them the first time you run the malware lookup function.
+  <strong>*Threat Intel Query supports optional API keys for its sources.</strong> Keys can be managed via the API Keys panel in the MalChela GUI or by placing them in the <code>api/</code> directory. Sources without configured keys are skipped automatically.
 </p>

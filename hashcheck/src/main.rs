@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
 use chrono::Local;
+use common_config;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -105,6 +106,7 @@ fn main() {
 
     if save_output {
         let path = if let Some(case) = case_name {
+            common_config::ensure_case_json(&case);
             let p = Path::new("saved_output").join("cases").join(case).join("hashcheck");
             std::fs::create_dir_all(&p).ok();
             p

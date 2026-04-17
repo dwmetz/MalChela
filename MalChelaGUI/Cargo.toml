@@ -1,6 +1,6 @@
 [package]
 name = "MalChelaGUI"
-version = "3.1.3"
+version = "3.2.0"
 edition = "2021"
 
 [dependencies]
@@ -33,6 +33,8 @@ opener = "0.8.4"
 lazy_static = "1.5.0"
 open = "5.3.3"
 pulldown-cmark = "0.9"
+dirs = "5"
+csv = "1.4"
 
 
 

@@ -45,7 +45,8 @@ fn create_yara_rule(
                 continue;
             }
             if !trimmed.is_empty() {
-                yara_rule.push_str(&format!("\t\t$s{} = \"{}\"\n", id, line_owned));
+                let escaped = line_owned.replace('\\', "\\\\").replace('"', "\\\"");
+                yara_rule.push_str(&format!("\t\t$s{} = \"{}\"\n", id, escaped));
                 id += 1;
             }
         }
@@ -117,6 +118,7 @@ for (_i, arg) in args.iter().enumerate().skip(1) {
             println!("\n--- YARA Rule Content ---\n{}", yara_rule);
 
             let output_dir = if let Some(case) = case_name {
+                common_config::ensure_case_json(case);
                 get_output_dir(&format!("cases/{}", case))
             } else {
                 get_output_dir("strings_to_yara")
@@ -133,6 +135,19 @@ for (_i, arg) in args.iter().enumerate().skip(1) {
                 "\nYARA rule saved to: {}\n",
                 output_path.display()
             );
+
+            // If MALCHELA_YARA_LIB is set, also copy to the workspace yara_rules directory
+            if std::env::var("MALCHELA_YARA_LIB").is_ok() {
+                if let Some(workspace) = common_config::find_workspace_root() {
+                    let lib_dir = workspace.join("yara_rules");
+                    if let Ok(()) = std::fs::create_dir_all(&lib_dir) {
+                        let lib_path = lib_dir.join(&filename);
+                        if let Ok(()) = std::fs::copy(&output_path, &lib_path).map(|_| ()) {
+                            println!("Also saved to YARA Library: {}", lib_path.display());
+                        }
+                    }
+                }
+            }
         }
         Err(e) => {
             eprintln!("Error generating YARA rule: {}", e);

@@ -259,6 +259,9 @@ fn main() {
     let input = matches.get_one::<String>("input").cloned();
     let progress = matches.get_flag("progress");
     let case = matches.get_one::<String>("case").cloned();
+    if let Some(ref c) = case {
+        common_config::ensure_case_json(c);
+    }
     let algorithms: Vec<String> = matches.get_many::<String>("algorithm").map(|vals| vals.map(|v| v.to_string()).collect()).unwrap_or_default();
 
     let input = if let Some(path) = input {

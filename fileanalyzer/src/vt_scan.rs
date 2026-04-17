@@ -1,56 +1,6 @@
 use reqwest::{Client, Error, header};
 use serde_json::Value;
-use std::env;
-use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
-
-fn find_workspace_root() -> io::Result<PathBuf> {
-    let exe_path = env::current_exe()?;
-    let mut current_dir = exe_path
-        .parent()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Executable parent not found"))?
-        .to_path_buf();
-
-    loop {
-        let cargo_toml_path = current_dir.join("Cargo.toml");
-        if cargo_toml_path.exists() && cargo_toml_path.is_file() {
-            let cargo_toml_content = fs::read_to_string(&cargo_toml_path)?;
-            if cargo_toml_content.contains("[workspace]") {
-                return Ok(current_dir);
-            } else {
-                let mut parent_dir = current_dir.clone();
-                while parent_dir.pop() {
-                    let parent_cargo_toml_path = parent_dir.join("Cargo.toml");
-                    if parent_cargo_toml_path.exists() && parent_cargo_toml_path.is_file() {
-                        let parent_cargo_toml_content = fs::read_to_string(&parent_cargo_toml_path)?;
-                        if parent_cargo_toml_content.contains("[workspace]") {
-                            return Ok(parent_dir);
-                        }
-                    }
-                }
-                return Ok(current_dir);
-            }
-        }
-        if !current_dir.pop() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "Cargo.toml not found",
-            ));
-        }
-    }
-}
-
-fn read_api_key_from_file(workspace_root: &Path) -> io::Result<String> {
-    let api_key_path = workspace_root.join("vt-api.txt");
-    let display_path = api_key_path.clone();
-    fs::read_to_string(api_key_path)
-        .map(|s| s.trim().to_string())
-        .map_err(|e| io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("VT API key not found at '{}'. Please set it in the Configuration menu. ({})", display_path.display(), e)
-        ))
-}
 
 async fn submit_request(url: &str, api_key: &str) -> Result<Value, Error> {
     let client = Client::new();
@@ -62,8 +12,11 @@ async fn submit_request(url: &str, api_key: &str) -> Result<Value, Error> {
 }
 
 pub async fn check_virustotal(hash: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    let workspace_root = find_workspace_root()?;
-    let api_key = read_api_key_from_file(&workspace_root)?;
+    let api_key = common_config::resolve_api_key("vt")
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::NotFound,
+            "VT API key not found in api/vt-api.txt. Please set it in the Configuration menu."
+        ))?;
 
     let url = format!("https://www.virustotal.com/api/v3/files/{}", hash);
 

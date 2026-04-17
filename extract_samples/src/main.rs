@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process::{Command, exit};
 use walkdir::WalkDir;
 use std::env;
+use common_config;
 
 fn main() {
     // Check if 7z or 7zz exists in PATH
@@ -51,6 +52,7 @@ fn main() {
 
     // Determine base output path
     let case_output_dir = if let Some(ref name) = case_name {
+        common_config::ensure_case_json(name);
         let path = format!("saved_output/cases/{}", name);
         std::fs::create_dir_all(&path).expect("Failed to create case output directory");
         Some(path)

@@ -463,7 +463,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if save_output {
         let output_dir = match matches.get_one::<String>("case") {
-            Some(case_name) => get_output_dir("cases").join(case_name).join("mstrings"),
+            Some(case_name) => {
+                common_config::ensure_case_json(case_name);
+                get_output_dir("cases").join(case_name).join("mstrings")
+            }
             None => get_output_dir("mstrings"),
         };
         std::fs::create_dir_all(&output_dir)?;

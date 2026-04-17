@@ -4,11 +4,16 @@ Some tools within MalChela rely on external services. In order to use these inte
 
 ## Tools That Use API Keys
 
-| Tool          | Service        | Purpose                               |
-|---------------|----------------|----------------------------------------|
-| `malhash`     | VirusTotal     | Hash lookup and enrichment             |
-| `malhash`     | MalwareBazaar  | Hash lookup and sample classification  |
-| `fileanalyzer`| VirusTotal     | Hash lookup                             |
+| Tool          | Service          | Purpose                                       |
+|---------------|------------------|-----------------------------------------------|
+| `fileanalyzer`| VirusTotal       | Hash lookup                                   |
+| `tiquery`     | VirusTotal       | Multi-source hash lookup (Tier 1)             |
+| `tiquery`     | MalwareBazaar    | Multi-source hash lookup (Tier 1)             |
+| `tiquery`     | AlienVault OTX   | Multi-source hash lookup (Tier 1)             |
+| `tiquery`     | Hybrid Analysis  | Multi-source hash lookup (Tier 2)             |
+| `tiquery`     | FileScan.IO      | Multi-source hash lookup (Tier 2)             |
+| `tiquery`     | Malshare         | Multi-source hash lookup (Tier 2)             |
+| `tiquery`     | MetaDefender     | Multi-source hash lookup (Tier 2)             |
 
 ---
 
@@ -23,7 +28,7 @@ mb-api.txt
 
 These files should be placed in the **root of your MalChela workspace**, alongside `tools.yaml`. Each file should contain a single line with your API key.
 
-These keys will be read at runtime by tools such as `malhash` to enable external lookups.
+These keys will be read at runtime by tools such as `tiquery` to enable external lookups.
 
 ---
 ![API Configuration Utility](../images/api_configuration.png)

@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use common_config;
 use std::thread::sleep;
 use std::time::Duration;
 use yara::{Compiler, Rules};
@@ -189,6 +190,9 @@ fn main() {
     let save_txt = matches.get_flag("text");
     let save_md = matches.get_flag("markdown");
     let case = matches.get_one::<String>("case");
+    if let Some(c) = case {
+        common_config::ensure_case_json(c);
+    }
 
     let use_table_display = std::env::var("MZCOUNT_TABLE_DISPLAY")
         .map(|val| val == "1")

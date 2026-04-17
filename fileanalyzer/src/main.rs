@@ -518,6 +518,7 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
     let _ = std::io::stdout().flush();
     if save_output {
         let output_dir = if let Some(ref case) = args.case {
+            common_config::ensure_case_json(case);
             let path = format!("saved_output/cases/{}/fileanalyzer", case);
             std::fs::create_dir_all(&path).expect("Failed to create case output directory");
             std::path::PathBuf::from(path)

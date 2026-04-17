@@ -100,6 +100,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let output_format = output_format.unwrap_or(OutputFormat::Text);
     let case_name = matches.get_one::<String>("case");
+    if let Some(case) = case_name {
+        common_config::ensure_case_json(case);
+    }
     let output_filename = matches.get_one::<String>("output-file");
 
     if is_gui_mode() {

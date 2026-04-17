@@ -2,12 +2,14 @@ mod tshark_panel;
 mod case_modal;
 mod fileminer;
 mod mitre;
+mod tiquery_panel;
 use case_modal::CaseModal;
 // use crate::case_modal::NewCaseModal;
 use crate::case_modal::show_case_modal;
 use mitre::MitreLookupModal;
 use tshark_panel::TsharkPanel;
 use fileminer::{FileMinerPanel};
+use tiquery_panel::TiQueryPanel;
 mod vol3_panel;
 use vol3_panel::{Vol3Panel, Vol3Plugin};
 use egui::TextureOptions;
@@ -113,6 +115,7 @@ struct ToolConfig {
 pub enum ActivePanel {
     Workspace,
     FileMiner,
+    TiQuery,
     None,
 }
 
@@ -148,8 +151,10 @@ pub struct AppState {
     show_config: bool,
     vt_api_key: String,
     mb_api_key: String,
+    otx_api_key: String,
     hide_vt: bool,
     hide_mb: bool,
+    hide_otx: bool,
     save_report: (bool, String),
     custom_args: String,
     workspace_root: std::path::PathBuf,
@@ -174,6 +179,10 @@ pub struct AppState {
     pub fileminer_minimized: bool,
     pub show_mitre_modal: bool,
     pub mitre_modal: MitreLookupModal,
+    pub tiquery_panel: TiQueryPanel,
+    pub tool_save_to_case: bool,
+    pub tool_case_name: String,
+    pub save_to_yara_lib: bool,
 }
 fn resolve_env_vars(s: &str) -> String {
     let replaced = if s.contains("${MALCHELA_ROOT}") {
@@ -221,10 +230,12 @@ impl Default for AppState {
             author_name: String::new(),
             zip_password: String::new(),
             show_config: false,
-            vt_api_key: String::new(),
-            mb_api_key: String::new(),
-            hide_vt: false,
-            hide_mb: false,
+            vt_api_key:  common_config::resolve_api_key("vt").unwrap_or_default(),
+            mb_api_key:  common_config::resolve_api_key("mb").unwrap_or_default(),
+            otx_api_key: common_config::resolve_api_key("otx").unwrap_or_default(),
+            hide_vt: common_config::resolve_api_key("vt").is_some(),
+            hide_mb: common_config::resolve_api_key("mb").is_some(),
+            hide_otx: common_config::resolve_api_key("otx").is_some(),
             save_report: (false, ".txt".to_string()),
             custom_args: String::new(),
             workspace_root: std::env::current_dir().unwrap_or_default(),
@@ -250,6 +261,10 @@ impl Default for AppState {
             // --- MITRE Technique Lookup fields ---
             show_mitre_modal: false,
             mitre_modal: MitreLookupModal::default(),
+            tiquery_panel: TiQueryPanel::default(),
+            tool_save_to_case: false,
+            tool_case_name: String::new(),
+            save_to_yara_lib: false,
         }
     }
 }
@@ -260,6 +275,7 @@ impl AppState {
         // Reset panels and relevant state
         self.workspace.reset();
         self.fileminer_panel.reset_panel();
+        self.tiquery_panel = TiQueryPanel::default();
         // Add additional resets here if needed for other panels
         self.selected_tool = None;
         self.input_path = None;
@@ -345,6 +361,10 @@ impl AppState {
             let selected_format = self.selected_format.clone();
             let author_name = self.author_name.clone();
             let rule_name = self.rule_name.clone();
+
+            let tool_save_to_case = self.tool_save_to_case;
+            let tool_case_name = self.tool_case_name.clone();
+            let save_to_yara_lib = self.save_to_yara_lib;
 
             let allow_overwrite = custom_args.contains("MZHASH_ALLOW_OVERWRITE=1");
             // Resolve environment variables in command and tool_optional_args
@@ -777,6 +797,16 @@ if !is_external {
                     unsafe { std::env::remove_var("MALCHELA_SAVE_OUTPUT") };
                 }
 
+                // Inject --case for tools that support it when save_to_case is checked
+                let case_tools = ["fileanalyzer", "fileminer", "mstrings", "nsrlquery", "strings_to_yara"];
+                if tool_save_to_case
+                    && !tool_case_name.trim().is_empty()
+                    && command.get(0).map(|s| case_tools.contains(&s.as_str())).unwrap_or(false)
+                {
+                    args.push("--case".to_string());
+                    args.push(tool_case_name.trim().to_string());
+                }
+
                 let mut command_builder = {
                     let mut cmd = Command::new(&binary_path);
                     cmd.args(&args);
@@ -786,6 +816,10 @@ if !is_external {
                     // Only set MALCHELA_GUI_MODE=1 if NOT running in workspace mode
                     if !is_workspace_mode {
                         cmd.env("MALCHELA_GUI_MODE", "1");
+                    }
+                    // Signal strings_to_yara to also save to the YARA library
+                    if save_to_yara_lib && command.get(0).map(|s| s == "strings_to_yara").unwrap_or(false) {
+                        cmd.env("MALCHELA_YARA_LIB", "1");
                     }
                     cmd
                 };
@@ -1062,7 +1096,7 @@ impl App for AppState {
 
         // --- BEGIN: Load malchela_logo and assign to self if not already loaded ---
         if self.malchela_logo.is_none() {
-            let logo_bytes = include_bytes!("../../images/malchela.png");
+            let logo_bytes = include_bytes!("../../images/icon.png");
             let logo_image = image::load_from_memory(logo_bytes).expect("Failed to load logo").to_rgba8();
             let logo_size = [logo_image.width() as usize, logo_image.height() as usize];
             let logo_pixels = logo_image.into_vec();
@@ -1238,7 +1272,7 @@ impl App for AppState {
 
         TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                let mut title = "MalChela Analysis Toolkit v3.1.3".to_string();
+                let mut title = "MalChela Analysis Toolkit v3.2".to_string();
                 if !self.edition.trim().is_empty() {
                     title.push_str(&format!(" ({})", self.edition));
                 }
@@ -1432,7 +1466,7 @@ impl App for AppState {
                     }
                     ui.horizontal(|ui| {
                         ui.menu_button(RichText::new("🛠 Configuration").color(STONE_BEIGE), |ui| {
-                            if ui.button("API Keys & Settings").clicked() {
+                            if ui.button("API Keys").clicked() {
                                 self.show_config = true;
                                 ui.close_menu();
                             }
@@ -1488,10 +1522,6 @@ use crate::workspace::render_update_check;
 CentralPanel::default().show(ctx, |ui| {
     // Ensure update check banner renders at the top of CentralPanel
     render_update_check(ui, self);
-    // --- Show New Case Modal if requested ---
-    if self.show_new_case_modal {
-        show_case_modal(ctx, self);
-    }
     // --- Show minimized workspace bar as floating panel in top-right ---
     if self.workspace.is_visible && self.workspace.minimized {
         egui::Window::new("Workspace Minimized")
@@ -1522,13 +1552,12 @@ CentralPanel::default().show(ctx, |ui| {
         panel.ui(ui, ctx, unsafe { &*app_ptr });
         return;
     }
-    // --- Show Case Modal ---
-    // Only show the case modal if it is marked visible.
-    if self.case_modal.visible && !matches!(self.current_panel, ActivePanel::FileMiner) {
-        // Use a safe raw pointer workaround to avoid double mutable borrow:
-        let app_ptr: *mut AppState = self;
-        let case_modal = &mut self.case_modal;
-        case_modal.show(ctx, unsafe { &mut *app_ptr });
+
+    // --- Render TiQuery panel if TiQuery is the current panel ---
+    if self.current_panel == ActivePanel::TiQuery {
+        let case_ref = self.case_name.as_ref();
+        self.tiquery_panel.ui(ui, ctx, case_ref);
+        return;
     }
     {
         let scanned = *self.current_progress.lock().unwrap();
@@ -1957,7 +1986,7 @@ if let Some(tool) = &tool_clone {
                         ui.label("String Source:");
                         if ui.button("Browse").clicked() {
                             if let Some(path) = FileDialog::new().pick_file() {
-                                self.string_source_path = path.display().to_string(); 
+                                self.string_source_path = path.display().to_string();
                             }
                         }
                         if ui.button("Use Scratchpad").clicked() {
@@ -1966,7 +1995,7 @@ if let Some(tool) = &tool_clone {
                             if let Ok(mut file) = File::create(filename) {
                                 let _ = writeln!(file, "{}", content);
                             }
-                            self.string_source_path = filename.to_string(); 
+                            self.string_source_path = filename.to_string();
                         }
                         ui.label(
                             if self.string_source_path == "scratchpad.txt" {
@@ -1978,6 +2007,7 @@ if let Some(tool) = &tool_clone {
                             }
                         );
                     });
+                    ui.checkbox(&mut self.save_to_yara_lib, "Save to YARA Library");
                 } else if tool.command.get(0).map(|s| s == "mzcount").unwrap_or(false) {
                     let mut table_display_mode = self.custom_args.contains("MZCOUNT_TABLE_DISPLAY=1");
                     ui.horizontal(|ui| {
@@ -2330,6 +2360,12 @@ if let Some(tool) = &tool_clone {
                                 }
                             }
                         }
+                        // --- Activate TiQuery panel when tiquery tool is selected ---
+                        if tool.command.get(0).map(|s| s == "tiquery").unwrap_or(false) {
+                            self.current_panel = ActivePanel::TiQuery;
+                            return;
+                        }
+
                         if tool.exec_type.as_deref() == Some("script") || tool.exec_type.as_deref() == Some("binary") {
                             ui.horizontal(|ui| {
                                 ui.label("Arguments:");
@@ -2353,6 +2389,18 @@ if let Some(tool) = &tool_clone {
                                             ui.selectable_value(&mut self.save_report.1, ".json".to_string(), "json");
                                             ui.selectable_value(&mut self.save_report.1, ".md".to_string(), "md");
                                         });
+                                }
+                            });
+                        }
+
+                        let case_tools = ["fileanalyzer", "fileminer", "mstrings", "nsrlquery"];
+                        if case_tools.contains(&tool_name.as_str()) {
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut self.tool_save_to_case, "Save to Case");
+                                if self.tool_save_to_case {
+                                    self.save_report.0 = true;
+                                    ui.label("Case Name:");
+                                    ui.text_edit_singleline(&mut self.tool_case_name);
                                 }
                             });
                         }
@@ -2507,45 +2555,148 @@ if let Some(tool) = &tool_clone {
                     });
             }
 
-            if self.show_config {
-                egui::Window::new("Configuration")
-                    .default_width(400.0)
-                    .open(&mut self.show_config)
-                    .show(ctx, |ui| {
-                        ui.label("VirusTotal API Key:");
-                        let mut vt = self.vt_api_key.clone();
-                        let mut changed_vt = false;
-                        if self.hide_vt {
-                            changed_vt |= ui.add(TextEdit::singleline(&mut vt).password(true)).changed();
-                        } else {
-                            changed_vt |= ui.text_edit_singleline(&mut vt).changed();
-                        }
-                        ui.checkbox(&mut self.hide_vt, "Hide VT Key");
-
-                        if changed_vt && !vt.trim().is_empty() {
-                            self.vt_api_key = vt.trim().to_string();
-                            let _ = std::fs::write("vt-api.txt", &self.vt_api_key);
-                        }
-
-                        ui.separator();
-
-                        ui.label("MalwareBazaar API Key:");
-                        let mut mb = self.mb_api_key.clone();
-                        let mut changed_mb = false;
-                        if self.hide_mb {
-                            changed_mb |= ui.add(TextEdit::singleline(&mut mb).password(true)).changed();
-                        } else {
-                            changed_mb |= ui.text_edit_singleline(&mut mb).changed();
-                        }
-                        ui.checkbox(&mut self.hide_mb, "Hide MB Key");
-
-                        if changed_mb && !mb.trim().is_empty() {
-                            self.mb_api_key = mb.trim().to_string();
-                            let _ = std::fs::write("mb-api.txt", &self.mb_api_key);
-                        }
-                    });
-            }
         });
+
+        // ── Case modals ───────────────────────────────────────────────────────
+        // Rendered OUTSIDE the CentralPanel closure so they work in all panel states
+        // (workspace, FileMiner, TiQuery all early-return from the CentralPanel closure).
+        if self.show_new_case_modal {
+            show_case_modal(ctx, self);
+        }
+        if self.case_modal.visible {
+            let app_ptr: *mut AppState = self;
+            let case_modal = &mut self.case_modal;
+            case_modal.show(ctx, unsafe { &mut *app_ptr });
+        }
+
+        // ── API Keys window ───────────────────────────────────────────────────
+        // Rendered OUTSIDE the CentralPanel closure so it works in all panel states
+        // (including when TiQuery or FileMiner has taken over with an early return).
+        if self.show_config {
+            egui::Window::new("API Keys")
+                .default_width(460.0)
+                .open(&mut self.show_config)
+                .show(ctx, |ui| {
+                    // Helper closure: render one key row
+                    // Returns the (possibly updated) key string.
+                    let key_row = |ui: &mut egui::Ui,
+                                   label: &str,
+                                   id: &str,
+                                   current: &str,
+                                   hide: &mut bool| -> Option<String> {
+                        let configured = !current.is_empty();
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(label).strong());
+                            if configured {
+                                ui.label(RichText::new("✓").color(GREEN).strong());
+                            }
+                        });
+                        ui.label(
+                            RichText::new(format!("  file: api/{}-api.txt", id))
+                                .small()
+                                .color(Color32::from_rgb(120, 120, 120)),
+                        );
+                        let mut val = current.to_string();
+                        let mut changed = false;
+                        ui.horizontal(|ui| {
+                            if *hide {
+                                changed |= ui.add(
+                                    TextEdit::singleline(&mut val)
+                                        .password(true)
+                                        .desired_width(340.0),
+                                ).changed();
+                            } else {
+                                changed |= ui.add(
+                                    TextEdit::singleline(&mut val).desired_width(340.0),
+                                ).changed();
+                            }
+                            ui.checkbox(hide, "Hide");
+                        });
+                        if changed && !val.trim().is_empty() {
+                            let _ = common_config::write_api_key(id, val.trim());
+                            return Some(val.trim().to_string());
+                        }
+                        None
+                    };
+
+                    ui.label(RichText::new("TIER 1 — ACTIVE SOURCES").small().color(LIGHT_CYAN));
+                    ui.separator();
+
+                    let vt_cur = self.vt_api_key.clone();
+                    if let Some(k) = key_row(ui, "VirusTotal", "vt", &vt_cur, &mut self.hide_vt) {
+                        self.vt_api_key = k;
+                    }
+                    ui.add_space(6.0);
+
+                    let mb_cur = self.mb_api_key.clone();
+                    if let Some(k) = key_row(ui, "MalwareBazaar", "mb", &mb_cur, &mut self.hide_mb) {
+                        self.mb_api_key = k;
+                    }
+                    ui.add_space(6.0);
+
+                    let otx_cur = self.otx_api_key.clone();
+                    if let Some(k) = key_row(ui, "AlienVault OTX", "otx", &otx_cur, &mut self.hide_otx) {
+                        self.otx_api_key = k;
+                    }
+                    ui.add_space(10.0);
+
+                    ui.label(RichText::new("ADDITIONAL SOURCES — REGISTRATION REQUIRED").small().color(STONE_BEIGE));
+                    ui.separator();
+
+                    for (id, label) in &[
+                        ("md", "MetaDefender Cloud"),
+                        ("mp", "Malpedia"),
+                        ("ha", "Hybrid Analysis"),
+                        ("mw", "MWDB"),
+                        ("tr", "Triage"),
+                        ("fs", "FileScan.IO"),
+                        ("ms", "Malshare"),
+                    ] {
+                        // Always read fresh from disk via common_config (correct path resolution)
+                        let current = common_config::resolve_api_key(id).unwrap_or_default();
+                        let configured = !current.is_empty();
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(*label).strong());
+                            if configured {
+                                ui.label(RichText::new("✓").color(GREEN).strong());
+                            }
+                        });
+                        ui.label(
+                            RichText::new(format!("  file: api/{}-api.txt", id))
+                                .small()
+                                .color(Color32::from_rgb(120, 120, 120)),
+                        );
+                        // Use egui temp storage for both edit value and hide toggle
+                        let edit_id = egui::Id::new(format!("cfg_key_{}", id));
+                        let hide_id = egui::Id::new(format!("cfg_hide_{}", id));
+                        let mut val: String = ctx.data_mut(|d| {
+                            let stored = d.get_temp::<String>(edit_id);
+                            match stored {
+                                Some(s) if !s.is_empty() => s,
+                                _ => current.clone(),
+                            }
+                        });
+                        let mut hide: bool = ctx.data_mut(|d| d.get_temp::<bool>(hide_id).unwrap_or(configured));
+                        ui.horizontal(|ui| {
+                            if hide {
+                                if ui.add(TextEdit::singleline(&mut val).password(true).desired_width(320.0)).changed() {
+                                    if !val.trim().is_empty() { let _ = common_config::write_api_key(id, val.trim()); }
+                                    ctx.data_mut(|d| d.insert_temp(edit_id, val.clone()));
+                                }
+                            } else {
+                                if ui.add(TextEdit::singleline(&mut val).desired_width(320.0)).changed() {
+                                    if !val.trim().is_empty() { let _ = common_config::write_api_key(id, val.trim()); }
+                                    ctx.data_mut(|d| d.insert_temp(edit_id, val.clone()));
+                                }
+                            }
+                            if ui.checkbox(&mut hide, "Hide").changed() {
+                                ctx.data_mut(|d| d.insert_temp(hide_id, hide));
+                            }
+                        });
+                        ui.add_space(4.0);
+                    }
+                });
+        }
 
         // Modal for Backup / Restore tools.yaml
         if self.show_tools_modal {
@@ -2771,10 +2922,12 @@ fn main() {
         author_name: String::new(),
         zip_password: String::new(),
         show_config: false,
-        vt_api_key: std::fs::read_to_string("vt-api.txt").unwrap_or_default().trim().to_string(),
-        mb_api_key: std::fs::read_to_string("mb-api.txt").unwrap_or_default().trim().to_string(),
+        vt_api_key: std::fs::read_to_string("api/vt-api.txt").unwrap_or_default().trim().to_string(),
+        mb_api_key: std::fs::read_to_string("api/mb-api.txt").unwrap_or_default().trim().to_string(),
+        otx_api_key: std::fs::read_to_string("api/otx-api.txt").unwrap_or_default().trim().to_string(),
         hide_vt: true,
         hide_mb: true,
+        hide_otx: true,
         save_report: (false, ".txt".to_string()),
         custom_args: String::new(),
         workspace_root,
@@ -2796,6 +2949,10 @@ fn main() {
         case_modal: CaseModal::default(),
         show_mitre_modal: false,
         mitre_modal: MitreLookupModal::default(),
+        tiquery_panel: TiQueryPanel::default(),
+        tool_save_to_case: false,
+        tool_case_name: String::new(),
+        save_to_yara_lib: false,
     };
 
     let native_options = eframe::NativeOptions {

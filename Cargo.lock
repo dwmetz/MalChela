@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "MITRE_lookup"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "clap",
  "colored 3.1.1",
@@ -16,13 +16,15 @@ dependencies = [
 
 [[package]]
 name = "MalChelaGUI"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "ansi-parser",
  "chrono",
  "colored 2.2.0",
  "common_config",
  "common_ui",
+ "csv",
+ "dirs",
  "dispatch",
  "eframe",
  "image 0.25.10",
@@ -67,7 +69,7 @@ checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
 
 [[package]]
 name = "about"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "colored 2.2.0",
  "common_ui",
@@ -902,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "cached"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -1260,7 +1262,7 @@ dependencies = [
 
 [[package]]
 name = "combine_yara"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1272,7 +1274,7 @@ dependencies = [
 
 [[package]]
 name = "common_config"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -1280,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "common_ui"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "colored 3.1.1",
  "egui 0.27.2",
@@ -1297,7 +1299,7 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "3.1.3"
+version = "3.2.0"
 
 [[package]]
 name = "console"
@@ -1531,6 +1533,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs-next"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1538,6 +1549,18 @@ checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
 dependencies = [
  "cfg-if",
  "dirs-sys-next",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -1955,8 +1978,9 @@ dependencies = [
 
 [[package]]
 name = "extract_samples"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
+ "common_config",
  "walkdir",
  "which 7.0.3",
 ]
@@ -2007,7 +2031,7 @@ dependencies = [
 
 [[package]]
 name = "fileanalyzer"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -2035,9 +2059,10 @@ dependencies = [
 
 [[package]]
 name = "fileminer"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "clap",
+ "common_config",
  "infer",
  "md5",
  "prettytable",
@@ -2130,12 +2155,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b147ee9d1f6d097cef9ce628cd2ee62288d963e16fb287bd9286455b241382d"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07bbe89c50d7a535e539b8c17bc0b49bdb77747034daa8087407d655f3f7cc1d"
 dependencies = [
  "futures-core",
+ "futures-sink",
 ]
 
 [[package]]
@@ -2143,6 +2184,17 @@ name = "futures-core"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d"
+
+[[package]]
+name = "futures-executor"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf29c38818342a3b26b5b923639e7b1f4a61fc5e76102d4b1981c6dc7a7579d"
+dependencies = [
+ "futures-core",
+ "futures-task",
+ "futures-util",
+]
 
 [[package]]
 name = "futures-io"
@@ -2179,6 +2231,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures-macro"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "futures-sink"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2196,8 +2259,10 @@ version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6"
 dependencies = [
+ "futures-channel",
  "futures-core",
  "futures-io",
+ "futures-macro",
  "futures-sink",
  "futures-task",
  "memchr",
@@ -2604,14 +2669,15 @@ checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
 
 [[package]]
 name = "hashcheck"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "chrono",
+ "common_config",
 ]
 
 [[package]]
 name = "hashit"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3424,26 +3490,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "liblzma"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6033b77c21d1f56deeae8014eb9fbe7bdf1765185a6c508b5ca82eeaed7f899"
-dependencies = [
- "liblzma-sys",
-]
-
-[[package]]
-name = "liblzma-sys"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a60851d15cd8c5346eca4ab8babff585be2ae4bc8097c067291d3ffe2add3b6"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
-]
-
-[[package]]
 name = "libredox"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3511,7 +3557,7 @@ dependencies = [
 
 [[package]]
 name = "malchela"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "colored 2.2.0",
  "common_ui",
@@ -3526,7 +3572,7 @@ dependencies = [
 
 [[package]]
 name = "malhash"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3657,7 +3703,7 @@ dependencies = [
 
 [[package]]
 name = "mismatchminer"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3682,7 +3728,7 @@ dependencies = [
 
 [[package]]
 name = "mstrings"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -3709,13 +3755,14 @@ dependencies = [
 
 [[package]]
 name = "mzcount"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "atty",
  "chrono",
  "clap",
  "clearscreen",
  "colored 2.2.0",
+ "common_config",
  "walkdir",
  "yara",
  "yara-sys",
@@ -3723,7 +3770,7 @@ dependencies = [
 
 [[package]]
 name = "mzhash"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "clap",
  "common_config",
@@ -3892,7 +3939,7 @@ dependencies = [
 
 [[package]]
 name = "nsrlquery"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "chrono",
  "clap",
@@ -4225,6 +4272,12 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "orbclient"
@@ -5014,10 +5067,12 @@ dependencies = [
  "system-configuration 0.5.1",
  "tokio",
  "tokio-native-tls",
+ "tokio-util",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "winreg",
 ]
@@ -5651,7 +5706,7 @@ checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 
 [[package]]
 name = "strings_to_yara"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "common_config",
 ]
@@ -6059,6 +6114,30 @@ checksum = "c8323304221c2a851516f22236c5722a72eaa19749016521d6dff0824447d96d"
 dependencies = [
  "displaydoc",
  "zerovec",
+]
+
+[[package]]
+name = "tiquery"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "clap",
+ "colored 3.1.1",
+ "common_config",
+ "csv",
+ "dirs",
+ "futures",
+ "hex",
+ "indicatif",
+ "md-5",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tokio",
 ]
 
 [[package]]
@@ -6556,6 +6635,19 @@ dependencies = [
  "indexmap",
  "wasm-encoder",
  "wasmparser",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -7625,7 +7717,7 @@ checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
 
 [[package]]
 name = "xmzhash"
-version = "3.1.3"
+version = "3.2.0"
 dependencies = [
  "common_config",
  "indicatif",
@@ -7863,7 +7955,6 @@ dependencies = [
  "getrandom 0.3.4",
  "hmac",
  "indexmap",
- "liblzma",
  "memchr",
  "pbkdf2",
  "ppmd-rust",
@@ -7871,7 +7962,6 @@ dependencies = [
  "time",
  "zeroize",
  "zopfli",
- "zstd",
 ]
 
 [[package]]
@@ -7896,34 +7986,6 @@ dependencies = [
  "crc32fast",
  "log",
  "simd-adler32",
-]
-
-[[package]]
-name = "zstd"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
-dependencies = [
- "zstd-safe",
-]
-
-[[package]]
-name = "zstd-safe"
-version = "7.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f49c4d5f0abb602a93fb8736af2a4f4dd9512e36f7f570d66e65ff867ed3b9d"
-dependencies = [
- "zstd-sys",
-]
-
-[[package]]
-name = "zstd-sys"
-version = "2.0.16+zstd.1.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748"
-dependencies = [
- "cc",
- "pkg-config",
 ]
 
 [[package]]

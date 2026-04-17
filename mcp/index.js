@@ -95,6 +95,28 @@ const TOOLS = [
 
   // Threat Intel
   {
+    name: 'tiquery',
+    category: 'Threat Intel',
+    input_type: 'hash',
+    description:
+      'Multi-source threat intel hash lookup across MalwareBazaar, VirusTotal, ' +
+      'AlienVault OTX, and InQuest Labs. Returns a combined results matrix with ' +
+      'detection counts, malware families, pulse counts, and source links. ' +
+      'Use --json for machine-readable output. Requires API keys in api/*.txt.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hash:    { type: 'string', description: 'MD5, SHA1, or SHA256 hash to query' },
+        sources: {
+          type: 'string',
+          description: 'Comma-separated source IDs to query (mb,vt,otx,iq,os). Default: mb,vt,otx,iq',
+        },
+      },
+      required: ['hash'],
+    },
+  },
+
+  {
     name: 'malhash',
     category: 'Threat Intel',
     input_type: 'hash',
@@ -297,8 +319,13 @@ function buildCommand(toolName, args) {
       }
       return `"${binary}" "${args.folderpath}"`;
     }
-    case 'hash':
+    case 'hash': {
+      if (toolName === 'tiquery') {
+        const srcFlag = args.sources ? ` --sources "${args.sources}"` : '';
+        return `"${binary}" "${args.hash}"${srcFlag} --json`;
+      }
       return `"${binary}" "${args.hash}"`;
+    }
     default:
       throw new Error(`Unknown input_type for tool: ${toolName}`);
   }

@@ -1,4 +1,5 @@
 
+use common_config;
 use eframe::egui::{ScrollArea, Ui, ComboBox, RichText, Color32, Label};
 use eframe::egui::{Layout, Align};
 use crate::AppState;
@@ -88,6 +89,8 @@ pub struct FileMinerPanel {
     pub is_minimized: bool,
     pub has_run: bool,
     pub last_scan_timestamp: String,
+    pub save_to_case: bool,
+    pub panel_case_name: String,
 }
 
 impl Default for FileMinerPanel {
@@ -106,6 +109,8 @@ impl Default for FileMinerPanel {
             has_run: false,
             visible: false,
             last_scan_timestamp: String::new(),
+            save_to_case: false,
+            panel_case_name: String::new(),
         }
     }
 }
@@ -125,6 +130,8 @@ impl FileMinerPanel {
         self.last_scan_timestamp = String::new();
         self.results.clear();
         self.selected_index = None;
+        self.save_to_case = false;
+        self.panel_case_name = String::new();
     }
     
 
@@ -395,6 +402,15 @@ impl FileMinerPanel {
             }
         });
 
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut self.save_to_case, "Save to Case");
+            if self.save_to_case {
+                self.save_report = true;
+                ui.label("Case Name:");
+                ui.text_edit_singleline(&mut self.panel_case_name);
+            }
+        });
+
         ui.add_space(10.0);
 
         if ui.button("Run").clicked() {
@@ -405,7 +421,15 @@ impl FileMinerPanel {
                 let output_format = self.output_format.clone();
                 let show_mismatches_only = self.show_mismatches_only;
                 let pending_output = Arc::clone(&self.pending_output);
-                let current_case = current_case.clone();
+                // Use the panel's own case name when save_to_case is checked; fall back to workspace case
+                let current_case = if self.save_to_case && !self.panel_case_name.trim().is_empty() {
+                    common_config::ensure_case_json(self.panel_case_name.trim());
+                    self.panel_case_name.trim().to_string()
+                } else {
+                    current_case.clone()
+                };
+                let save_to_case = self.save_to_case;
+                let panel_case_name = self.panel_case_name.trim().to_string();
 
                 std::thread::spawn(move || {
                     if let Ok(_cwd) = std::env::current_dir() {
@@ -461,6 +485,14 @@ impl FileMinerPanel {
 
                     if show_mismatches_only {
                         cmd.arg("--mismatch");
+                    }
+
+                    if save_to_case && !panel_case_name.is_empty() {
+                        cmd.arg("--case");
+                        cmd.arg(&panel_case_name);
+                    } else if !current_case.is_empty() {
+                        cmd.arg("--case");
+                        cmd.arg(&current_case);
                     }
 
                     cmd.arg("--no-prompt");

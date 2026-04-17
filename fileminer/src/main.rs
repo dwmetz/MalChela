@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::Path;
+use common_config;
 use sha2::{Sha256, Digest};
 use clap::Parser;
 use serde::Serialize;
@@ -130,6 +131,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let case_name = cli.case.as_deref();
+    if let Some(case) = case_name {
+        common_config::ensure_case_json(case);
+    }
 
     let save_json = cli.json || cli.case.is_some();
 

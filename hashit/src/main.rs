@@ -80,6 +80,7 @@ fn main() {
 
     if save_output {
         let output_dir = if let Some(case_name) = &cli.case {
+            common_config::ensure_case_json(case_name);
             let path = std::path::Path::new("saved_output").join("cases").join(case_name).join("hashit");
             std::fs::create_dir_all(&path).expect("Failed to create case output directory");
             path

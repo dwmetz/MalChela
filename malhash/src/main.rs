@@ -19,15 +19,6 @@ fn write_both<W: Write>(writer: &mut W, stdout: &mut dyn Write, message: &str) {
     writeln!(writer, "{}", message).unwrap();
 }
 
-fn read_api_key(file_path: &str) -> Option<String> {
-    if !std::path::Path::new(file_path).exists() {
-        return None;
-    }
-    std::fs::read_to_string(file_path)
-        .ok()
-        .map(|s| s.trim().to_string())
-}
-
 fn submit_request(url: &str) -> Result<Value, Box<dyn std::error::Error>> {
     let client = Client::new();
     let response = client.get(url).send()?;
@@ -146,8 +137,8 @@ fn main() {
 
     let is_gui = args.len() > 1;
 
-    let vt_api_key = read_api_key("vt-api.txt");
-    let mb_api_key = read_api_key("mb-api.txt");
+    let vt_api_key = common_config::resolve_api_key("vt");
+    let mb_api_key = common_config::resolve_api_key("mb");
 
     if vt_api_key.is_none() || mb_api_key.is_none() {
         if is_gui {
@@ -157,29 +148,29 @@ fn main() {
             process::exit(1);
         } else {
             if vt_api_key.is_none() {
-                println!("vt-api.txt not found. Please enter your VirusTotal API key:");
+                println!("api/vt-api.txt not found. Please enter your VirusTotal API key:");
                 print!("> ");
                 std_stdout().flush().unwrap();
                 let mut key = String::new();
                 stdin().read_line(&mut key).unwrap();
                 let key = key.trim().to_string();
-                fs::write("vt-api.txt", &key).expect("Failed to write vt-api.txt");
+                common_config::write_api_key("vt", &key).expect("Failed to write api/vt-api.txt");
             }
 
             if mb_api_key.is_none() {
-                println!("mb-api.txt not found. Please enter your MalwareBazaar API key:");
+                println!("api/mb-api.txt not found. Please enter your MalwareBazaar API key:");
                 print!("> ");
                 std_stdout().flush().unwrap();
                 let mut key = String::new();
                 stdin().read_line(&mut key).unwrap();
                 let key = key.trim().to_string();
-                fs::write("mb-api.txt", &key).expect("Failed to write mb-api.txt");
+                common_config::write_api_key("mb", &key).expect("Failed to write api/mb-api.txt");
             }
         }
     }
 
-    let vt_api_key = read_api_key("vt-api.txt").unwrap();
-    let mb_api_key = read_api_key("mb-api.txt").unwrap();
+    let vt_api_key = common_config::resolve_api_key("vt").unwrap();
+    let mb_api_key = common_config::resolve_api_key("mb").unwrap();
 
     let hash = args.iter()
         .skip(1)
@@ -201,6 +192,7 @@ fn main() {
             if is_gui_mode() {
                 PathBuf::from(case)
             } else {
+                common_config::ensure_case_json(case);
                 let path = std::path::Path::new("saved_output").join("cases").join(case).join("malhash");
                 std::fs::create_dir_all(&path).expect("Failed to create case output directory");
                 path

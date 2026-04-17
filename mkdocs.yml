@@ -37,7 +37,7 @@ nav:
       - FileMiner: coretools/fileminer.md
       - HashCheck: coretools/hashcheck.md
       - HashIt: coretools/hashit.md
-      - MalHash: coretools/malhash.md
+      - TiQuery: coretools/tiquery.md
       - MStrings: coretools/mstrings.md
       - MITRE Lookup: coretools/mitre_lookup.md
       - MZCount: coretools/mzcount.md      

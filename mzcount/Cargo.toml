@@ -1,6 +1,6 @@
 [package]
 name = "mzcount"
-version = "3.1.3"
+version = "3.2.0"
 edition = "2021"
 
 [dependencies]
@@ -12,3 +12,4 @@ colored = "2" #Or newer
 atty = "0.2.14"
 chrono = "0.4.43"
 clap = "4.5.57"
+common_config = { path = "../common_config" }

@@ -16,7 +16,7 @@
 - Identifies file types using magic byte detection (`infer`)
 - Computes SHA-256 hashes for all files
 - Detects extension mismatches
-- Suggests relevant analysis tools (e.g., FileAnalyzer, mStrings, malhash)
+- Suggests relevant analysis tools (e.g., FileAnalyzer, mStrings, TiQuery)
 - Outputs results in a styled table or optional JSON format
 - Integrates with case management via the `--case` flag
 - Automatically launches in GUI when a folder-based case is created or restored

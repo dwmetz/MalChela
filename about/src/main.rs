@@ -38,7 +38,7 @@ fn main() {
     println!("{}", styled_line("gray", "            https://bakerstreetforensics.com"));
     println!();
     println!("{}", styled_line("rust", "MalChela - A YARA & Malware Analysis Toolkit written in Rust"));
-    println!("{}", styled_line("gray", "Version: 3.1.3"));
+    println!("{}", styled_line("gray", "Version: 3.2.0"));
     println!();
     println!("{}", styled_line("ABOUT", "ABOUT:"));
     println!("{}", styled_line("yellow", "   mal — malware"));
@@ -66,7 +66,7 @@ fn main() {
         format!("  {:<feature_width$}|  {:<description_width$}\n", "MZcount", "Recurse a directory, uses YARA to count MZ, Zip, PDF, other"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "NSRL Hash Lookup", "Query an MD5 or SHA1 hash against NSRL"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Strings to YARA", "Prompts for metadata and strings (text file) to create a YARA rule"),
-        format!("  {:<feature_width$}|  {:<description_width$}\n", "Malware Hash Lookup", "Query a hash value against VirusTotal & Malware Bazaar*"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Threat Intel Query", "Multi-source threat intel hash lookup (MB, VT, OTX, HA, FS, MS, OS and more)*"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "XMZHash", "Recurse a directory, for files without MZ, Zip or PDF header, create hash list"),
 
     );
@@ -74,7 +74,7 @@ fn main() {
     println!("{}", table_string);
 
     println!("{}", styled_line("yellow", ""));
-    println!("{}", styled_line("yellow", "* The Malware Hash Lookup requires an API key for VirusTotal and Malware Bazaar. If unidentified,"));
-    println!("{}", styled_line("yellow", "  MalChela will prompt you to create them the first time you run the malware lookup function."));
+    println!("{}", styled_line("yellow", "* Threat Intel Query requires API keys for some sources."));
+    println!("{}", styled_line("yellow", "  MalChela will prompt you to create them the first time you run the tool."));
     println!("{}", styled_line("white", ""));
 }

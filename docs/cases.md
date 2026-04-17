@@ -29,7 +29,7 @@ saved_output/cases/<case_name>/
 Each case folder includes:
 
 - `case.yaml`: combines metadata, case tracking, and user notes in a single structured file
-- `fileminer/`, `mstrings/`, `malhash/`, etc.: tool-specific output directories
+- `fileminer/`, `mstrings/`, `tiquery/`, etc.: tool-specific output directories
 - `tracking/`: flags for completed tool runs
 
 ## Notes & Tagging

@@ -34,9 +34,9 @@ tools:
   category: "Strings Analysis"
   exec_type: cargo
 
-- name: Malware Hash Lookup
-  description: "Checks hash against VirusTotal and MalwareBazaar"
-  command: ["malhash"]
+- name: Threat Intel Query
+  description: "Multi-source threat intel hash lookup (MB, VT, OTX, MetaDefender, HA, FileScan, Malshare)"
+  command: ["tiquery"]
   input_type: hash
   category: "Threat Intel"
   exec_type: cargo

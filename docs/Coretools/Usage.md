@@ -38,7 +38,7 @@ MalChela supports three main workflows:
 
 Most tools now support a `--case <name>` argument to redirect saved output to a specific case folder under `saved_output/cases/`. Cases must be initiated with either a file or folder as the input. Hash-only workflows can be added to an existing case but cannot start one.
 
-Note: Some tools (e.g., `mstrings`, `fileanalyzer`, `malhash`) require the `-o` flag to trigger output saving—even when `--case` is specified. Others (like `strings_to_yara` or `mzcount`) save automatically when a case is provided. Refer to the Tool Behavior Reference below for details.
+Note: Some tools (e.g., `mstrings`, `fileanalyzer`) require the `-o` flag to trigger output saving—even when `--case` is specified. Others (like `strings_to_yara` or `mzcount`) save automatically when a case is provided. Refer to the Tool Behavior Reference below for details.
 
 ### Output Formats
 
@@ -126,7 +126,6 @@ Save Report
 | fileanalyzer    | file                   | ✅            | ✅                 | Uses YARA + heuristics            |
 | hashit          | file                   | ✅            | ✅                 | Generates hashes                  |
 | hashcheck       | hash and lookup file    | ❌            | ✅                 | Checks files against known hashes |
-| malhash         | hash                   | ✅            | ✅                 | Uses vt-cli + bazaar-cli          |
 | fileminer   | folder                 | ✅            | ✅                 | Identifies mismatches             |
 | mstrings        | file                   | ✅            | ✅                 | Maps strings to MITRE             |
 | mzhash          | folder                 | ✅            | ✅                 | Hashes files with MZ header       |

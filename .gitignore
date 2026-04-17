@@ -10,9 +10,8 @@
 # Scratchpad
 scratchpad.txt
 
-# Secrets
-vt-api.txt
-mb-api.txt
+# API keys
+/api/
 
 # Output folders
 /saved_output/*

@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/terminator-malchela.png"/>
  <p>
  <h1>
-  MalChela v3.1.3
+  MalChela v3.2
  </h1>
   <h4>
       A YARA &amp; Malware Analysis Toolkit written in Rust.
@@ -38,7 +38,7 @@
 | File Miner          | Scans a folder for file type mismatches and metadata |
 | Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
-| Malware Hash Lookup | Queries a hash against VirusTotal and MalwareBazaar for threat intelligence |
+| Threat Intel Query  | Multi-source hash lookup across VirusTotal, MalwareBazaar, OTX, Hybrid Analysis, FileScan.IO, Malshare, MetaDefender, and ObjectiveSee |
 | mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
 | mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
@@ -46,7 +46,7 @@
 | strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
 | xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for non-Windows malware corpus |
 
-**Malware Hash Lookup requires API keys for VirusTotal and MalwareBazaar.  If not configured, MalChela will prompt you to create them the first time you run the malware lookup function.*
+*Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically.*
 
 <h3>About:</h3>
 
@@ -170,8 +170,6 @@ python3 kali_server.py
 ```
 
 Configure `mcp_server.py` with the host's IP and start it. Then point Claude Desktop at `mcp_server.py` as the MCP server.
-
-> 📝 Note: `malhash` accepts a hash string as its argument, not a file path.
 
 See [`mcp/README.md`](mcp/README.md) for full setup and configuration.
 

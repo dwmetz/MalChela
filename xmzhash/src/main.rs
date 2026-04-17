@@ -386,6 +386,9 @@ fn main() {
     }
 
     let case_dir = env::var("MALCHELA_CASE").ok();
+    if let Some(ref case) = case_dir {
+        common_config::ensure_case_json(case);
+    }
     let output_dir = if let Some(case) = case_dir {
         get_output_dir(&format!("cases/{}/xmzhash", case))
     } else {

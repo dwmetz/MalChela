@@ -1,5 +1,5 @@
 <div align="center">
- <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/terminator-malchela.png"/>
+ <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
   MalChela v3.2
@@ -90,6 +90,8 @@ cd MalChela
 chmod +x release.sh
 ./release.sh  # Builds all programs in release mode (recommended)
 ```
+
+If you cloned MalChela before 17-Apr-2026, you may see a diverging branches error when pulling. Run `git fetch origin && git reset --hard origin/main` to resync. This was a one-time history rewrite to remove a large file.
 
 <h3>Run:</h3>
 

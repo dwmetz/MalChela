@@ -10,6 +10,7 @@ pub mod ms;
 pub mod objectivesee;
 pub mod otx;
 pub mod tier2;
+pub mod tr;
 pub mod vt;
 
 pub use fs::FileScan;
@@ -20,6 +21,7 @@ pub use ms::Malshare;
 pub use objectivesee::ObjectiveSee;
 pub use otx::AlienVaultOTX;
 pub use tier2::StubSource;
+pub use tr::Triage;
 pub use vt::VirusTotal;
 
 // ── Result types ─────────────────────────────────────────────────────────────

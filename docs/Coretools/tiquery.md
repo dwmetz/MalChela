@@ -13,6 +13,7 @@ Threat Intel Query (`tiquery`) is a multi-source threat intelligence hash lookup
 | ha  | Hybrid Analysis  | 2    | Yes          |
 | fs  | FileScan.IO      | 2    | Yes          |
 | ms  | Malshare         | 2    | Yes          |
+| tr  | Triage (RF)      | 2    | Yes          |
 | os  | Objective-See    | 2    | No (SHA256 only) |
 
 All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. Pass `--sources` to restrict the query to specific sources.
@@ -99,11 +100,12 @@ api/otx-api.txt
 api/ha-api.txt
 api/fs-api.txt
 api/ms-api.txt
+api/tr-api.txt
 ```
 
 Keys can be managed via the **API Keys** panel in the MalChela GUI (Configuration menu → API Keys) or by placing the key directly in the appropriate file.
 
-See [API Configuration](/Configuration/api-configuration.md) for details.
+See [API Configuration](https://dwmetz.github.io/MalChela/configuration/api-configuration/) for details.
 
 ---
 

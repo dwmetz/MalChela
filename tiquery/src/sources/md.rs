@@ -90,7 +90,8 @@ impl ThreatSource for MetaDefender {
             return SourceResult::not_found(self.short_name());
         }
 
-        let scan = body.get("scan_results").unwrap_or(&Value::Null);
+        let data_id   = body.get("data_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let scan      = body.get("scan_results").unwrap_or(&Value::Null);
         let file_info = body.get("file_info").unwrap_or(&Value::Null);
 
         let total_detected = scan.get("total_detected_avs").and_then(|v| v.as_u64());
@@ -124,7 +125,12 @@ impl ThreatSource for MetaDefender {
             None    => vec![],
         };
 
-        let link = format!("https://metadefender.opswat.com/results/file/{}/regular/overview", sha256_val);
+        // Web UI uses the data_id (base64 scan token), not the raw hash.
+        let link = if !data_id.is_empty() {
+            format!("https://metadefender.opswat.com/results/file/{}/regular/overview", data_id)
+        } else {
+            format!("https://metadefender.opswat.com/results/file/{}/regular/overview", sha256_val)
+        };
 
         SourceResult {
             source:     self.short_name().to_string(),

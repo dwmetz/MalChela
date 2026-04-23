@@ -9,7 +9,7 @@ use futures::future::join_all;
 use hash::HashType;
 use sources::{
     AlienVaultOTX, FileScan, HybridAnalysis, MalwareBazaar, Malshare, MetaDefender, ObjectiveSee,
-    SourceResult, SourceStatus, StubSource, ThreatSource, VirusTotal,
+    SourceResult, SourceStatus, StubSource, ThreatSource, Triage, VirusTotal,
 };
 use std::io::Write as _;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ struct Args {
     /// Hash to query (MD5, SHA1, or SHA256)
     hash: Option<String>,
 
-    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms
+    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms,tr
     /// Default: all sources with a configured API key
     #[arg(short, long, value_delimiter = ',', value_name = "SRC")]
     sources: Option<Vec<String>>,
@@ -69,6 +69,7 @@ const ALL_SOURCE_IDS: &[(&str, bool)] = &[
     ("ha",  true),
     ("fs",  true),
     ("ms",  true),
+    ("tr",  true),
     ("os",  false),
 ];
 
@@ -115,6 +116,7 @@ fn build_sources(ids: &[String], hash_type: HashType, verbose_vt: bool) -> Vec<A
             "ha"  => Arc::new(HybridAnalysis::new(resolve("ha"))),
             "fs"  => Arc::new(FileScan::new(resolve("fs"))),
             "ms"  => Arc::new(Malshare::new(resolve("ms"))),
+            "tr"  => Arc::new(Triage::new(resolve("tr"))),
             "os"  => {
                 if hash_type != HashType::Sha256 {
                     // skip silently — plan spec

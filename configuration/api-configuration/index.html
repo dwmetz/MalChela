@@ -1454,6 +1454,7 @@
 <tr>
 <th>Tool</th>
 <th>Service</th>
+<th>Key File</th>
 <th>Purpose</th>
 </tr>
 </thead>
@@ -1461,53 +1462,86 @@
 <tr>
 <td><code>fileanalyzer</code></td>
 <td>VirusTotal</td>
+<td><code>vt-api.txt</code></td>
 <td>Hash lookup</td>
 </tr>
 <tr>
 <td><code>tiquery</code></td>
 <td>VirusTotal</td>
-<td>Multi-source hash lookup (Tier 1)</td>
+<td><code>vt-api.txt</code></td>
+<td>Hash and URL lookup (Tier 1)</td>
 </tr>
 <tr>
 <td><code>tiquery</code></td>
 <td>MalwareBazaar</td>
+<td><code>mb-api.txt</code></td>
 <td>Multi-source hash lookup (Tier 1)</td>
 </tr>
 <tr>
 <td><code>tiquery</code></td>
 <td>AlienVault OTX</td>
+<td><code>otx-api.txt</code></td>
+<td>Multi-source hash lookup (Tier 1)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>MetaDefender</td>
+<td><code>md-api.txt</code></td>
 <td>Multi-source hash lookup (Tier 1)</td>
 </tr>
 <tr>
 <td><code>tiquery</code></td>
 <td>Hybrid Analysis</td>
+<td><code>ha-api.txt</code></td>
 <td>Multi-source hash lookup (Tier 2)</td>
 </tr>
 <tr>
 <td><code>tiquery</code></td>
 <td>FileScan.IO</td>
+<td><code>fs-api.txt</code></td>
 <td>Multi-source hash lookup (Tier 2)</td>
 </tr>
 <tr>
 <td><code>tiquery</code></td>
 <td>Malshare</td>
+<td><code>ms-api.txt</code></td>
 <td>Multi-source hash lookup (Tier 2)</td>
 </tr>
 <tr>
 <td><code>tiquery</code></td>
-<td>MetaDefender</td>
+<td>Triage</td>
+<td><code>tr-api.txt</code></td>
 <td>Multi-source hash lookup (Tier 2)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>urlscan.io</td>
+<td><code>url-api.txt</code></td>
+<td>URL lookup (optional — raises rate limits)</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>Google Safe Browsing</td>
+<td><code>gsb-api.txt</code></td>
+<td>URL lookup</td>
 </tr>
 </tbody>
 </table>
 <hr />
 <h2 id="where-to-configure">Where to Configure</h2>
-<p>MalChela uses two plain text files to store API keys for its third-party integrations:</p>
-<pre><code>vt-api.txt
-mb-api.txt
+<p>MalChela stores API keys as plain text files in the <code>api/</code> directory of your workspace:</p>
+<pre><code>api/vt-api.txt
+api/mb-api.txt
+api/otx-api.txt
+api/md-api.txt
+api/ha-api.txt
+api/fs-api.txt
+api/ms-api.txt
+api/tr-api.txt
+api/url-api.txt
+api/gsb-api.txt
 </code></pre>
-<p>These files should be placed in the <strong>root of your MalChela workspace</strong>, alongside <code>tools.yaml</code>. Each file should contain a single line with your API key.</p>
-<p>These keys will be read at runtime by tools such as <code>tiquery</code> to enable external lookups.</p>
+<p>Each file should contain a single line with your API key. Keys are read at runtime — tools automatically skip sources whose key file is absent.</p>
 <hr />
 <p><img alt="API Configuration Utility" src="../../images/api_configuration.png" /></p>
 <p><strong>Figure 3.2:</strong> API Configuration Utility</p>

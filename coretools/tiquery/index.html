@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#supported-sources" class="md-skip">
+        <a href="#supported-sources-hash-lookups" class="md-skip">
           Skip to content
         </a>
       
@@ -873,9 +873,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#supported-sources" class="md-nav__link">
+  <a href="#supported-sources-hash-lookups" class="md-nav__link">
     <span class="md-ellipsis">
-      Supported Sources
+      Supported Sources — Hash Lookups
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-sources-url-lookups" class="md-nav__link">
+    <span class="md-ellipsis">
+      Supported Sources — URL Lookups
     </span>
   </a>
   
@@ -921,6 +930,15 @@
   <a href="#bulk-lookup" class="md-nav__link">
     <span class="md-ellipsis">
       Bulk Lookup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gui-input-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      GUI Input Modes
     </span>
   </a>
   
@@ -1404,9 +1422,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#supported-sources" class="md-nav__link">
+  <a href="#supported-sources-hash-lookups" class="md-nav__link">
     <span class="md-ellipsis">
-      Supported Sources
+      Supported Sources — Hash Lookups
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-sources-url-lookups" class="md-nav__link">
+    <span class="md-ellipsis">
+      Supported Sources — URL Lookups
     </span>
   </a>
   
@@ -1457,6 +1484,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#gui-input-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      GUI Input Modes
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1478,9 +1514,10 @@
 
   <h1>TiQuery</h1>
 
-<p>Threat Intel Query (<code>tiquery</code>) is a multi-source threat intelligence hash lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash is known, what family it belongs to, and how widely it has been detected.</p>
+<p>Threat Intel Query (<code>tiquery</code>) is a multi-source threat intelligence lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash or URL is known, what family/category it belongs to, and how widely it has been detected.</p>
+<p><code>tiquery</code> accepts a <strong>file hash</strong> (MD5/SHA1/SHA256), an <strong>http/https URL</strong>, or a <strong>QR code image</strong> as input and automatically routes the query to the appropriate set of sources. In the GUI, the Single Hash tab also includes a <strong>Browse</strong> button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).</p>
 <hr />
-<h3 id="supported-sources">Supported Sources</h3>
+<h3 id="supported-sources-hash-lookups">Supported Sources — Hash Lookups</h3>
 <table>
 <thead>
 <tr>
@@ -1510,10 +1547,10 @@
 <td>Yes</td>
 </tr>
 <tr>
-<td>iq</td>
-<td>InQuest Labs</td>
+<td>md</td>
+<td>MetaDefender</td>
 <td>1</td>
-<td>No</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>ha</td>
@@ -1534,6 +1571,12 @@
 <td>Yes</td>
 </tr>
 <tr>
+<td>tr</td>
+<td>Triage (RF)</td>
+<td>2</td>
+<td>Yes</td>
+</tr>
+<tr>
 <td>os</td>
 <td>Objective-See</td>
 <td>2</td>
@@ -1541,16 +1584,47 @@
 </tr>
 </tbody>
 </table>
-<p>All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. Pass <code>--sources</code> to restrict the query to specific sources.</p>
+<h3 id="supported-sources-url-lookups">Supported Sources — URL Lookups</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Source</th>
+<th>Key Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vt</td>
+<td>VirusTotal (URL API)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>urlscan</td>
+<td>urlscan.io</td>
+<td>Optional (raises rate limits)</td>
+</tr>
+<tr>
+<td>gsb</td>
+<td>Google Safe Browsing</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<p>All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL, only URL-capable sources are queried. Pass <code>--sources</code> to restrict the query to specific sources.</p>
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
-<pre><code class="language-bash"># Basic lookup — queries all sources with a configured API key automatically
+<pre><code class="language-bash"># Hash lookup — queries all hash sources with a configured API key
 tiquery &lt;hash&gt;
 
-# Restrict to specific sources
-tiquery &lt;hash&gt; --sources mb,vt,ha,fs
+# URL lookup — queries VirusTotal (URL), urlscan.io, and Google Safe Browsing
+tiquery https://example.com/path
 
-# Include per-engine VirusTotal detections
+# Restrict to specific sources
+tiquery &lt;hash&gt; --sources mb,vt,md,ha,fs
+tiquery https://example.com --sources vt,urlscan
+
+# Include per-engine VirusTotal detections (hash mode)
 tiquery &lt;hash&gt; --verbose-vt
 
 # Output as JSON
@@ -1567,8 +1641,19 @@ tiquery &lt;hash&gt; -o -t --case Case123
 
 # Download sample from MalwareBazaar (SHA256 only)
 tiquery &lt;hash&gt; -d
+
+# Bulk lookup — process multiple hashes from a file
+tiquery --bulk hashes.txt
+tiquery --bulk hashes.csv --json
+tiquery --bulk hashes.txt --csv
+
+# QR code decode + URL lookup — extract URL from a QR image and query it
+tiquery --qr screenshot.png
+tiquery --qr qr_image.jpg --json
 </code></pre>
-<p>Accepts MD5, SHA1, and SHA256 hashes. If no hash is provided, the tool will prompt interactively.</p>
+<p>Accepts MD5, SHA1, and SHA256 hashes, or any <code>http://</code> / <code>https://</code> URL. If no input is provided, the tool will prompt interactively.</p>
+<p><strong>Bulk mode</strong> reads a <code>.txt</code> or <code>.csv</code> file and extracts all valid MD5/SHA1/SHA256 hashes (one per line, or mixed with other content). Each hash is queried sequentially with a short delay between requests to respect API rate limits. Results are displayed as a table per hash in human mode, or as a JSON array / CSV stream when <code>--json</code> / <code>--csv</code> is specified.</p>
+<p><strong>QR mode</strong> decodes a QR code image (PNG/JPG/GIF/BMP/WebP) and uses the extracted URL as input to the standard URL lookup pipeline. Useful for triaging quishing (QR phishing) samples from emails and screenshots without needing the GUI.</p>
 <hr />
 <h3 id="output">Output</h3>
 <p>Results are presented in a matrix showing source, status, malware family/tags, detection summary, and a reference link:</p>
@@ -1579,7 +1664,7 @@ tiquery &lt;hash&gt; -d
   MB        FOUND         Emotet                  ...            https://bazaar.abuse.ch/sample/...
   VT        FOUND         Trojan.Emotet           58/72          https://virustotal.com/gui/file/...
   OTX       FOUND                                 4 pulses       https://otx.alienvault.com/...
-  IQ        NOT FOUND                                            -
+  MD        NOT FOUND                                            -
 </code></pre>
 <hr />
 <h3 id="saving-output">Saving Output</h3>
@@ -1596,18 +1681,34 @@ tiquery &lt;hash&gt; -d
 <hr />
 <h3 id="api-keys">API Keys</h3>
 <p><code>tiquery</code> uses the same <code>api/</code> key file convention as other MalChela tools. Each source reads from its own file:</p>
-<pre><code>api/vt-api.txt
-api/mb-api.txt
-api/otx-api.txt
-api/ha-api.txt
-api/fs-api.txt
-api/ms-api.txt
+<pre><code>api/vt-api.txt        # VirusTotal (used for both hash and URL lookups)
+api/mb-api.txt        # MalwareBazaar
+api/otx-api.txt       # AlienVault OTX
+api/md-api.txt        # MetaDefender
+api/ha-api.txt        # Hybrid Analysis
+api/fs-api.txt        # FileScan.IO
+api/ms-api.txt        # Malshare
+api/tr-api.txt        # Triage
+api/url-api.txt       # urlscan.io (optional — raises rate limits)
+api/gsb-api.txt       # Google Safe Browsing
 </code></pre>
 <p>Keys can be managed via the <strong>API Keys</strong> panel in the MalChela GUI (Configuration menu → API Keys) or by placing the key directly in the appropriate file.</p>
 <p>See <a href="https://dwmetz.github.io/MalChela/configuration/api-configuration/">API Configuration</a> for details.</p>
 <hr />
 <h3 id="bulk-lookup">Bulk Lookup</h3>
-<p>The MalChela GUI includes a <strong>Bulk Lookup</strong> mode in the TiQuery panel. Point it at a <code>.txt</code> or <code>.csv</code> file containing hashes (one per line, or mixed with other content — the tool extracts valid MD5/SHA1/SHA256 values automatically) and run all lookups in a single operation. Results are displayed in a consolidated grid.</p>
+<p>Bulk lookup processes a <code>.txt</code> or <code>.csv</code> file containing hashes (one per line, or mixed with other content — the tool extracts valid MD5/SHA1/SHA256 values automatically) and runs all lookups in a single operation.</p>
+<p><strong>CLI:</strong> use the <code>--bulk &lt;file&gt;</code> flag (see CLI Syntax above). Results are printed as a table per hash, or as a combined JSON array / CSV when <code>--json</code> / <code>--csv</code> is specified.</p>
+<p><strong>GUI:</strong> the TIquery panel's <strong>Bulk Lookup</strong> tab lets you browse to a file and run all lookups in one click. Results are displayed in a consolidated grid.</p>
+<hr />
+<h3 id="gui-input-modes">GUI Input Modes</h3>
+<p>The MalChela GUI's Threat Intel Query panel offers four input modes, selected via tabs at the top of the panel:</p>
+<ul>
+<li><strong>Single Hash</strong> — paste a hash or click <strong>Browse…</strong> to pick a file; the GUI computes the file's SHA256 and populates the hash field automatically.</li>
+<li><strong>Bulk Lookup</strong> — as described above, for batches of hashes in a file.</li>
+<li><strong>URL</strong> — paste an <code>http://</code> or <code>https://</code> URL to query VirusTotal, urlscan.io, and Google Safe Browsing in parallel.</li>
+<li><strong>QR Code</strong> — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the GUI decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.</li>
+</ul>
+<p>In URL and QR modes, source checkboxes auto-enable based on which API keys are configured, exactly as in hash mode.</p>
 
 
 

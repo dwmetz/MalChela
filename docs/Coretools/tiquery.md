@@ -2,6 +2,14 @@ Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool
 
 `tiquery` accepts a **file hash** (MD5/SHA1/SHA256), an **http/https URL**, or a **QR code image** as input and automatically routes the query to the appropriate set of sources. In the GUI, the Single Hash tab also includes a **Browse** button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).
 
+![TIQuery Hash Lookup](../images/tiquery_hash.png)
+
+<p align="center"><strong>Figure 5.17:</strong> TIQuery Hash Lookup</p>
+
+![TIQuery QR Lookup](../images/tiquery_qr.png)
+
+<p align="center"><strong>Figure 5.18:</strong> TIQuery QR Code Lookup</p>
+
 ---
 
 ### Supported Sources — Hash Lookups

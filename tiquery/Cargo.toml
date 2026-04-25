@@ -25,4 +25,7 @@ indicatif    = "0.17"
 async-trait  = "0.1"
 futures      = "0.3"
 chrono       = "0.4"
+base64       = "0.21"
+image        = "0.25"
+rqrr         = "0.10"
 common_config = { path = "../common_config" }

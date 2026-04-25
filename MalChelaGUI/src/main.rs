@@ -2577,6 +2577,7 @@ if let Some(tool) = &tool_clone {
                 .default_width(460.0)
                 .open(&mut self.show_config)
                 .show(ctx, |ui| {
+                    egui::ScrollArea::vertical().id_source("api_keys_scroll").show(ui, |ui| {
                     // Helper closure: render one key row
                     // Returns the (possibly updated) key string.
                     let key_row = |ui: &mut egui::Ui,
@@ -2619,7 +2620,7 @@ if let Some(tool) = &tool_clone {
                         None
                     };
 
-                    ui.label(RichText::new("TIER 1 — ACTIVE SOURCES").small().color(LIGHT_CYAN));
+                    ui.label(RichText::new("HASH SOURCES — TIER 1").small().color(LIGHT_CYAN));
                     ui.separator();
 
                     let vt_cur = self.vt_api_key.clone();
@@ -2640,7 +2641,7 @@ if let Some(tool) = &tool_clone {
                     }
                     ui.add_space(10.0);
 
-                    ui.label(RichText::new("ADDITIONAL SOURCES — REGISTRATION REQUIRED").small().color(STONE_BEIGE));
+                    ui.label(RichText::new("HASH SOURCES — TIER 2").small().color(STONE_BEIGE));
                     ui.separator();
 
                     for (id, label) in &[
@@ -2695,6 +2696,64 @@ if let Some(tool) = &tool_clone {
                         });
                         ui.add_space(4.0);
                     }
+
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("URL SOURCES").small().color(STONE_BEIGE));
+                    ui.separator();
+
+                    for (id, label, note) in &[
+                        ("url", "urlscan.io",           Some("optional — raises rate limits")),
+                        ("gsb", "Google Safe Browsing", None::<&str>),
+                    ] {
+                        let current = common_config::resolve_api_key(id).unwrap_or_default();
+                        let configured = !current.is_empty();
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(*label).strong());
+                            if configured {
+                                ui.label(RichText::new("✓").color(GREEN).strong());
+                            }
+                            if let Some(n) = note {
+                                ui.label(
+                                    RichText::new(format!("  ({})", n))
+                                        .small()
+                                        .color(Color32::from_rgb(120, 120, 120)),
+                                );
+                            }
+                        });
+                        ui.label(
+                            RichText::new(format!("  file: api/{}-api.txt", id))
+                                .small()
+                                .color(Color32::from_rgb(120, 120, 120)),
+                        );
+                        let edit_id = egui::Id::new(format!("cfg_key_{}", id));
+                        let hide_id = egui::Id::new(format!("cfg_hide_{}", id));
+                        let mut val: String = ctx.data_mut(|d| {
+                            let stored = d.get_temp::<String>(edit_id);
+                            match stored {
+                                Some(s) if !s.is_empty() => s,
+                                _ => current.clone(),
+                            }
+                        });
+                        let mut hide: bool = ctx.data_mut(|d| d.get_temp::<bool>(hide_id).unwrap_or(configured));
+                        ui.horizontal(|ui| {
+                            if hide {
+                                if ui.add(TextEdit::singleline(&mut val).password(true).desired_width(320.0)).changed() {
+                                    if !val.trim().is_empty() { let _ = common_config::write_api_key(id, val.trim()); }
+                                    ctx.data_mut(|d| d.insert_temp(edit_id, val.clone()));
+                                }
+                            } else {
+                                if ui.add(TextEdit::singleline(&mut val).desired_width(320.0)).changed() {
+                                    if !val.trim().is_empty() { let _ = common_config::write_api_key(id, val.trim()); }
+                                    ctx.data_mut(|d| d.insert_temp(edit_id, val.clone()));
+                                }
+                            }
+                            if ui.checkbox(&mut hide, "Hide").changed() {
+                                ctx.data_mut(|d| d.insert_temp(hide_id, hide));
+                            }
+                        });
+                        ui.add_space(4.0);
+                    }
+                    }); // ScrollArea
                 });
         }
 

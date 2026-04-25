@@ -35,6 +35,36 @@ const SOURCES: &[SourceDef] = &[
     SourceDef { id: "ms",  label: "Malshare",         needs_key: true,  tier: 2 },
 ];
 
+// ── URL source registry ────────────────────────────────────────────────────────
+
+struct UrlSourceDef {
+    /// id passed to tiquery's --sources flag
+    id:     &'static str,
+    label:  &'static str,
+    /// api key id to resolve (None = no key required)
+    key_id: Option<&'static str>,
+}
+
+const URL_SOURCES: &[UrlSourceDef] = &[
+    UrlSourceDef { id: "vt",      label: "VirusTotal",           key_id: Some("vt")  },
+    UrlSourceDef { id: "urlscan", label: "urlscan.io",           key_id: None        },
+    UrlSourceDef { id: "gsb",     label: "Google Safe Browsing", key_id: Some("gsb") },
+];
+
+// ── Panel mode (Single Hash / Bulk Lookup / URL) ──────────────────────────────
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    SingleHash,
+    Bulk,
+    Url,
+    Qr,
+}
+
+impl Default for Mode {
+    fn default() -> Self { Mode::SingleHash }
+}
+
 // ── Deserialized result row from `tiquery --json` ─────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]
@@ -118,9 +148,13 @@ struct BulkState {
 #[derive(Clone)]
 pub struct TiQueryPanel {
     pub hash_input: String,
+    pub url_input:  String,
 
     // per-source enabled flags, indexed parallel to SOURCES
     source_enabled: Vec<bool>,
+
+    // per-URL-source enabled flags, indexed parallel to URL_SOURCES
+    url_source_enabled: Vec<bool>,
 
     // ObjectiveSee (macOS malware catalogue)
     pub use_os: bool,
@@ -137,11 +171,15 @@ pub struct TiQueryPanel {
     // Shared state with background thread
     state: Arc<Mutex<QueryState>>,
 
-    // ── Bulk mode ─────────────────────────────────────────────────────────────
-    pub bulk_mode:      bool,
+    // ── Mode (Single Hash / Bulk Lookup / URL / QR) ───────────────────────────
+    pub mode:           Mode,
     bulk_file_path:     Option<String>,
     bulk_hashes:        Vec<String>,
     bulk_state:         Arc<Mutex<BulkState>>,
+
+    // ── QR code decoding ──────────────────────────────────────────────────────
+    qr_image_path:      Option<String>,
+    qr_decode_error:    Option<String>,
 }
 
 impl Default for TiQueryPanel {
@@ -153,25 +191,38 @@ impl Default for TiQueryPanel {
             .map(|s| s.tier == 1 || (!s.needs_key || common_config::resolve_api_key(s.id).is_some()))
             .collect();
 
+        // URL sources: enabled if no key required, or the key is configured
+        let url_source_enabled = URL_SOURCES
+            .iter()
+            .map(|s| match s.key_id {
+                None => true,
+                Some(kid) => common_config::resolve_api_key(kid).is_some(),
+            })
+            .collect();
+
         #[cfg(target_os = "macos")]
         let use_os = true;
         #[cfg(not(target_os = "macos"))]
         let use_os = false;
 
         TiQueryPanel {
-            hash_input:      String::new(),
+            hash_input:         String::new(),
+            url_input:          String::new(),
             source_enabled,
+            url_source_enabled,
             use_os,
-            vt_verbose:      false,
-            download_sample: false,
-            export_csv:      false,
-            save_to_case:    false,
-            case_name:       String::new(),
-            state:           Arc::new(Mutex::new(QueryState::default())),
-            bulk_mode:       false,
-            bulk_file_path:  None,
-            bulk_hashes:     Vec::new(),
-            bulk_state:      Arc::new(Mutex::new(BulkState::default())),
+            vt_verbose:         false,
+            download_sample:    false,
+            export_csv:         false,
+            save_to_case:       false,
+            case_name:          String::new(),
+            state:              Arc::new(Mutex::new(QueryState::default())),
+            mode:               Mode::SingleHash,
+            bulk_file_path:     None,
+            bulk_hashes:        Vec::new(),
+            bulk_state:         Arc::new(Mutex::new(BulkState::default())),
+            qr_image_path:      None,
+            qr_decode_error:    None,
         }
     }
 }
@@ -214,6 +265,15 @@ impl TiQueryPanel {
     }
 
     fn build_sources_arg(&self) -> String {
+        if matches!(self.mode, Mode::Url | Mode::Qr) {
+            let ids: Vec<&str> = URL_SOURCES
+                .iter()
+                .zip(self.url_source_enabled.iter())
+                .filter(|(_, &en)| en)
+                .map(|(s, _)| s.id)
+                .collect();
+            return ids.join(",");
+        }
         let mut ids: Vec<&str> = SOURCES
             .iter()
             .zip(self.source_enabled.iter())
@@ -227,9 +287,17 @@ impl TiQueryPanel {
     // ── Run ─────────────────────────────────────────────────────────────────
 
     pub fn run_query(&self, ctx: egui::Context) {
-        let hash = self.hash_input.trim().to_string();
+        let (hash, is_url) = match self.mode {
+            Mode::Url | Mode::Qr => (self.url_input.trim().to_string(), true),
+            _ => (self.hash_input.trim().to_string(), false),
+        };
         if hash.is_empty() {
-            self.state.lock().unwrap().stderr.push("⚠ Enter a hash before running.".into());
+            let msg = if is_url {
+                "⚠ Enter a URL before running."
+            } else {
+                "⚠ Enter a hash before running."
+            };
+            self.state.lock().unwrap().stderr.push(msg.into());
             return;
         }
 
@@ -255,7 +323,7 @@ impl TiQueryPanel {
         }
 
         let state       = Arc::clone(&self.state);
-        let download    = self.download_sample;
+        let download    = self.download_sample && !is_url;
         let export_csv  = self.export_csv;
         let save_case   = self.save_to_case;
         let case_name   = self.case_name.clone();
@@ -453,18 +521,28 @@ impl TiQueryPanel {
         let running = self.state.lock().unwrap().running;
 
         // ── Header ──────────────────────────────────────────────────────────
+        let input_label = match self.mode {
+            Mode::Url => "url",
+            Mode::Qr  => "qr → url",
+            _         => "hash",
+        };
         ui.label(
-            RichText::new("Selected Tool: Threat Intel Query (Input: hash)")
-                .color(CYAN).strong(),
+            RichText::new(format!(
+                "Selected Tool: Threat Intel Query (Input: {})",
+                input_label
+            ))
+            .color(CYAN).strong(),
         );
-        ui.label(
-            RichText::new("Multi-source hash lookup: MalwareBazaar · VirusTotal · AlienVault OTX · MetaDefender · and more")
-                .color(STONE_BEIGE),
-        );
+        let subtitle = match self.mode {
+            Mode::Url => "Multi-source URL lookup: VirusTotal · urlscan.io · Google Safe Browsing",
+            Mode::Qr  => "QR code decode → URL lookup: VirusTotal · urlscan.io · Google Safe Browsing",
+            _         => "Multi-source hash lookup: MalwareBazaar · VirusTotal · AlienVault OTX · MetaDefender · and more",
+        };
+        ui.label(RichText::new(subtitle).color(STONE_BEIGE));
         ui.add_space(6.0);
 
-        // ── Hash input (single mode only) ────────────────────────────────────
-        if !self.bulk_mode {
+        // ── Input row (hash or URL) ─────────────────────────────────────────
+        if self.mode == Mode::SingleHash {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Hash:").strong());
                 ui.add_enabled_ui(!running, |ui| {
@@ -473,6 +551,26 @@ impl TiQueryPanel {
                             .hint_text("MD5 / SHA1 / SHA256")
                             .desired_width(380.0),
                     );
+                });
+                ui.add_enabled_ui(!running, |ui| {
+                    if ui.button("Browse…")
+                        .on_hover_text("Pick a file and hash it (SHA256)")
+                        .clicked()
+                    {
+                        if let Some(path) = rfd::FileDialog::new().pick_file() {
+                            match hash_file_sha256(&path) {
+                                Ok(h) => {
+                                    self.hash_input = h;
+                                    self.state.lock().unwrap().stderr
+                                        .push(format!("Hashed: {}", path.display()));
+                                }
+                                Err(e) => {
+                                    self.state.lock().unwrap().stderr
+                                        .push(format!("✗ Failed to hash file: {}", e));
+                                }
+                            }
+                        }
+                    }
                 });
                 ui.add_enabled_ui(!running, |ui| {
                     if ui.button(RichText::new("  Run Query  ").color(Color32::BLACK))
@@ -487,44 +585,77 @@ impl TiQueryPanel {
                     ctx.request_repaint_after(std::time::Duration::from_millis(100));
                 }
             });
+        } else if self.mode == Mode::Url {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("URL:").strong());
+                ui.add_enabled_ui(!running, |ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.url_input)
+                            .hint_text("https://example.com/path")
+                            .desired_width(380.0),
+                    );
+                });
+                ui.add_enabled_ui(!running, |ui| {
+                    if ui.button(RichText::new("  Run Query  ").color(Color32::BLACK))
+                        .on_hover_text("Query all enabled URL sources")
+                        .clicked()
+                    {
+                        self.run_query(ctx.clone());
+                    }
+                });
+                if running {
+                    ui.label(RichText::new("⏳  Running…").color(YELLOW).strong());
+                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+                }
+            });
         }
 
-        // ── Mode toggle ──────────────────────────────────────────────────────
+        // ── Mode toggle (4-way) ─────────────────────────────────────────────
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.bulk_mode, false, "Single Hash");
-            ui.selectable_value(&mut self.bulk_mode, true,  "Bulk Lookup");
+            ui.selectable_value(&mut self.mode, Mode::SingleHash, "Single Hash");
+            ui.selectable_value(&mut self.mode, Mode::Bulk,       "Bulk Lookup");
+            ui.selectable_value(&mut self.mode, Mode::Url,        "URL");
+            ui.selectable_value(&mut self.mode, Mode::Qr,         "QR Code");
         });
         ui.add_space(6.0);
 
-        // ── Input area (single vs bulk) ───────────────────────────────────────
-        if self.bulk_mode {
+        // ── Input area for bulk / QR modes ──────────────────────────────────
+        if self.mode == Mode::Bulk {
             self.render_bulk_input(ui, ctx);
+        } else if self.mode == Mode::Qr {
+            self.render_qr_input(ui, ctx);
         }
 
         ui.add_space(8.0);
 
         // ── Source checkboxes ────────────────────────────────────────────────
-        self.render_source_section(ui, 1, "SOURCES — TIER 1 (FREE KEY)");
-        ui.add_space(4.0);
-        self.render_source_section(ui, 2, "SOURCES — TIER 2 (REGISTRATION REQUIRED)");
-        ui.add_space(4.0);
+        if matches!(self.mode, Mode::Url | Mode::Qr) {
+            self.render_url_source_section(ui);
+        } else {
+            self.render_source_section(ui, 1, "SOURCES — TIER 1 (FREE KEY)");
+            ui.add_space(4.0);
+            self.render_source_section(ui, 2, "SOURCES — TIER 2 (REGISTRATION REQUIRED)");
+            ui.add_space(4.0);
 
-        // ObjectiveSee
-        ui.label(RichText::new("MACOS SOURCES (SHA256 ONLY · CACHED)").small().color(AMBER));
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut self.use_os, "");
-            ui.label(RichText::new("ObjectiveSee").color(AMBER));
-            ui.label(RichText::new("  os").color(DIM_GRAY).small());
-            ui.label(RichText::new(format!("  {}", Self::os_cache_info())).color(DIM_GRAY).small());
-        });
+            // ObjectiveSee
+            ui.label(RichText::new("MACOS SOURCES (SHA256 ONLY · CACHED)").small().color(AMBER));
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.use_os, "");
+                ui.label(RichText::new("ObjectiveSee").color(AMBER));
+                ui.label(RichText::new("  os").color(DIM_GRAY).small());
+                ui.label(RichText::new(format!("  {}", Self::os_cache_info())).color(DIM_GRAY).small());
+            });
+        }
 
         ui.add_space(6.0);
 
         // ── Options ──────────────────────────────────────────────────────────
         ui.label(RichText::new("OPTIONS").small().color(DIM_GRAY));
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.download_sample, "Download sample (MB only)");
-            ui.separator();
+            if !matches!(self.mode, Mode::Url | Mode::Qr) {
+                ui.checkbox(&mut self.download_sample, "Download sample (MB only)");
+                ui.separator();
+            }
             ui.checkbox(&mut self.export_csv, "Export CSV");
             ui.separator();
             ui.checkbox(&mut self.save_to_case, "Save to case");
@@ -536,12 +667,24 @@ impl TiQueryPanel {
         ui.add_space(4.0);
 
         // ── Unconfigured sources ─────────────────────────────────────────────
-        let unconfigured: Vec<&str> = SOURCES
-            .iter()
-            .enumerate()
-            .filter(|(i, s)| s.needs_key && self.source_enabled[*i] && !Self::has_key(s.id))
-            .map(|(_, s)| s.label)
-            .collect();
+        let unconfigured: Vec<&str> = if matches!(self.mode, Mode::Url | Mode::Qr) {
+            URL_SOURCES
+                .iter()
+                .enumerate()
+                .filter(|(i, s)| {
+                    self.url_source_enabled[*i]
+                        && matches!(s.key_id, Some(kid) if common_config::resolve_api_key(kid).is_none())
+                })
+                .map(|(_, s)| s.label)
+                .collect()
+        } else {
+            SOURCES
+                .iter()
+                .enumerate()
+                .filter(|(i, s)| s.needs_key && self.source_enabled[*i] && !Self::has_key(s.id))
+                .map(|(_, s)| s.label)
+                .collect()
+        };
 
         if !unconfigured.is_empty() {
             ui.label(RichText::new("UNCONFIGURED SOURCES (KEYS MISSING)").small().color(ORANGE));
@@ -560,7 +703,7 @@ impl TiQueryPanel {
         ui.separator();
 
         // ── Results ──────────────────────────────────────────────────────────
-        if self.bulk_mode {
+        if self.mode == Mode::Bulk {
             // ── Bulk results ─────────────────────────────────────────────────
             let bulk = self.bulk_state.lock().unwrap().clone();
             if bulk.running || !bulk.results.is_empty() || bulk.error.is_some() {
@@ -620,6 +763,69 @@ impl TiQueryPanel {
         }
     }
 
+    fn render_qr_input(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let running = self.state.lock().unwrap().running;
+
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Image:").strong());
+            if let Some(path) = &self.qr_image_path {
+                ui.label(RichText::new(path).color(STONE_BEIGE).monospace());
+            } else {
+                ui.label(RichText::new("No image selected").color(DIM_GRAY));
+            }
+            ui.add_enabled_ui(!running, |ui| {
+                if ui.button("Browse…").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Images", &["png", "jpg", "jpeg", "gif", "bmp", "webp"])
+                        .pick_file()
+                    {
+                        self.qr_decode_error = None;
+                        self.qr_image_path = Some(path.display().to_string());
+                        match decode_qr(&path) {
+                            Ok(decoded) => { self.url_input = decoded; }
+                            Err(e) => {
+                                self.qr_decode_error = Some(e);
+                                self.url_input.clear();
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+        ui.add_space(4.0);
+
+        if let Some(err) = &self.qr_decode_error {
+            ui.label(RichText::new(format!("✗ QR decode failed: {}", err)).color(RED));
+            ui.add_space(4.0);
+        }
+
+        // Decoded URL — editable so the analyst can confirm / edit before submitting
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("URL:").strong());
+            ui.add_enabled_ui(!running, |ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.url_input)
+                        .hint_text("Decoded URL will appear here")
+                        .desired_width(380.0),
+                );
+            });
+            let can_run = !self.url_input.trim().is_empty();
+            ui.add_enabled_ui(!running && can_run, |ui| {
+                if ui.button(RichText::new("  Run Query  ").color(Color32::BLACK))
+                    .on_hover_text("Query all enabled URL sources")
+                    .clicked()
+                {
+                    self.run_query(ctx.clone());
+                }
+            });
+            if running {
+                ui.label(RichText::new("⏳  Running…").color(YELLOW).strong());
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
+        });
+    }
+
     fn render_bulk_input(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let bulk_running = self.bulk_state.lock().unwrap().running;
 
@@ -660,6 +866,37 @@ impl TiQueryPanel {
                 self.run_bulk(ctx.clone());
             }
         });
+    }
+
+    fn render_url_source_section(&mut self, ui: &mut egui::Ui) {
+        ui.label(RichText::new("URL SOURCES").small().color(DIM_GRAY));
+
+        egui::Grid::new("tiquery_url_sources")
+            .num_columns(2)
+            .spacing([20.0, 3.0])
+            .show(ui, |ui| {
+                for (idx, src) in URL_SOURCES.iter().enumerate() {
+                    let avail = match src.key_id {
+                        None => true,
+                        Some(kid) => common_config::resolve_api_key(kid).is_some(),
+                    };
+                    let color = if avail { Color32::WHITE } else { DIM_GRAY };
+
+                    ui.horizontal(|ui| {
+                        ui.add_enabled_ui(avail, |ui| {
+                            ui.checkbox(&mut self.url_source_enabled[idx], "");
+                        });
+                        ui.label(RichText::new(src.label).color(color));
+                        ui.label(RichText::new(format!(" {}", src.id)).color(DIM_GRAY).small());
+                        if src.key_id.is_none() {
+                            ui.label(RichText::new("  (no key required)").small().color(DIM_GRAY));
+                        }
+                    });
+
+                    if (idx + 1) % 2 == 0 { ui.end_row(); }
+                }
+                if URL_SOURCES.len() % 2 != 0 { ui.label(""); ui.end_row(); }
+            });
     }
 
     fn render_source_section(&mut self, ui: &mut egui::Ui, tier: u8, label: &str) {
@@ -830,6 +1067,60 @@ fn build_detail_line(row: &ResultRow) -> String {
     if let Some(t) = &row.file_type  { if !t.is_empty() { parts.push(format!("type: {}", t)); } }
     if let Some(d) = &row.first_seen { if !d.is_empty() { parts.push(format!("first seen: {}", d)); } }
     parts.join("  ·  ")
+}
+
+// ── File hasher (SHA256) ──────────────────────────────────────────────────────
+
+fn hash_file_sha256(path: &std::path::Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 { break; }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect())
+}
+
+// ── QR code decoder ───────────────────────────────────────────────────────────
+
+fn decode_qr(path: &std::path::Path) -> Result<String, String> {
+    let base = image::open(path).map_err(|e| format!("open image: {}", e))?.to_luma8();
+
+    // Try the original first, then progressively upscaled copies (2×, 3×, 4×).
+    // rqrr needs a sufficient module size to lock on; small or bordered QRs
+    // (common in phishing emails) often fail without this.
+    let (w, h) = (base.width(), base.height());
+    let scales: &[u32] = &[1, 2, 3, 4];
+    let mut last_err: Option<String> = None;
+
+    for &s in scales {
+        let candidate = if s == 1 {
+            base.clone()
+        } else {
+            image::imageops::resize(
+                &base,
+                w * s,
+                h * s,
+                image::imageops::FilterType::Lanczos3,
+            )
+        };
+
+        let mut prep = rqrr::PreparedImage::prepare(candidate);
+        let grids = prep.detect_grids();
+        if let Some(grid) = grids.first() {
+            match grid.decode() {
+                Ok((_meta, content)) => return Ok(content.trim().to_string()),
+                Err(e) => last_err = Some(format!("decode: {}", e)),
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| "no QR code detected".to_string()))
 }
 
 // ── Hash file parser ──────────────────────────────────────────────────────────

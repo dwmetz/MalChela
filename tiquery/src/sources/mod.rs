@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub mod fs;
+pub mod gsb;
 pub mod ha;
 pub mod mb;
 pub mod md;
@@ -11,9 +12,11 @@ pub mod objectivesee;
 pub mod otx;
 pub mod tier2;
 pub mod tr;
+pub mod urlscan;
 pub mod vt;
 
 pub use fs::FileScan;
+pub use gsb::GoogleSafeBrowsing;
 pub use ha::HybridAnalysis;
 pub use mb::MalwareBazaar;
 pub use md::MetaDefender;
@@ -22,6 +25,7 @@ pub use objectivesee::ObjectiveSee;
 pub use otx::AlienVaultOTX;
 pub use tier2::StubSource;
 pub use tr::Triage;
+pub use urlscan::UrlScan;
 pub use vt::VirusTotal;
 
 // ── Result types ─────────────────────────────────────────────────────────────

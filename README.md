@@ -38,7 +38,7 @@
 | File Miner          | Scans a folder for file type mismatches and metadata |
 | Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
-| Threat Intel Query  | Multi-source hash lookup across VirusTotal, MalwareBazaar, OTX, Hybrid Analysis, FileScan.IO, Malshare, MetaDefender, and ObjectiveSee |
+| Threat Intel Query  | Multi-source hash **and URL** lookup. Hash sources: VirusTotal, MalwareBazaar, OTX, Hybrid Analysis, FileScan.IO, Malshare, MetaDefender, ObjectiveSee. URL sources: VirusTotal, urlscan.io, Google Safe Browsing. GUI adds file-to-hash and QR code decode → URL lookup. |
 | mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
 | mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |

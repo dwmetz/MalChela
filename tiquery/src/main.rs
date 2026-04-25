@@ -8,8 +8,9 @@ use colored::Colorize;
 use futures::future::join_all;
 use hash::HashType;
 use sources::{
-    AlienVaultOTX, FileScan, HybridAnalysis, MalwareBazaar, Malshare, MetaDefender, ObjectiveSee,
-    SourceResult, SourceStatus, StubSource, ThreatSource, Triage, VirusTotal,
+    AlienVaultOTX, FileScan, GoogleSafeBrowsing, HybridAnalysis, MalwareBazaar, Malshare,
+    MetaDefender, ObjectiveSee, SourceResult, SourceStatus, StubSource, ThreatSource, Triage,
+    UrlScan, VirusTotal,
 };
 use std::io::Write as _;
 use std::sync::Arc;
@@ -17,12 +18,12 @@ use std::sync::Arc;
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
 #[derive(Parser)]
-#[command(name = "tiquery", about = "Multi-source threat intel hash lookup")]
+#[command(name = "tiquery", about = "Multi-source threat intel lookup (hashes and URLs)")]
 struct Args {
-    /// Hash to query (MD5, SHA1, or SHA256)
+    /// Hash (MD5/SHA1/SHA256) or URL to query
     hash: Option<String>,
 
-    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms,tr
+    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms,tr,urlscan,gsb
     /// Default: all sources with a configured API key
     #[arg(short, long, value_delimiter = ',', value_name = "SRC")]
     sources: Option<Vec<String>>,
@@ -54,6 +55,14 @@ struct Args {
     /// Include per-engine VT detections in output
     #[arg(long)]
     verbose_vt: bool,
+
+    /// Bulk hash lookup: read hashes from a file (one per line, or CSV)
+    #[arg(long, value_name = "FILE", conflicts_with = "hash")]
+    bulk: Option<String>,
+
+    /// QR code decode: extract URL from an image and query it
+    #[arg(long, value_name = "IMAGE", conflicts_with = "hash")]
+    qr: Option<String>,
 }
 
 // ── Source registry ───────────────────────────────────────────────────────────
@@ -73,9 +82,32 @@ const ALL_SOURCE_IDS: &[(&str, bool)] = &[
     ("os",  false),
 ];
 
+/// Source IDs used when the input is a URL.
+const URL_SOURCE_IDS: &[(&str, bool)] = &[
+    // (id, needs_key)
+    ("vt",      true),
+    ("urlscan", false),
+    ("gsb",     true),
+];
+
 fn default_source_ids() -> Vec<String> {
     let cfg = config::TiQueryConfig::load().unwrap_or_default();
     ALL_SOURCE_IDS
+        .iter()
+        .filter(|(id, needs_key)| {
+            if !cfg.source_enabled(id) { return false; }
+            if !needs_key { return true; }
+            cfg.source_api_key(id)
+                .or_else(|| common_config::resolve_api_key(id))
+                .is_some()
+        })
+        .map(|(id, _)| id.to_string())
+        .collect()
+}
+
+fn default_url_source_ids() -> Vec<String> {
+    let cfg = config::TiQueryConfig::load().unwrap_or_default();
+    URL_SOURCE_IDS
         .iter()
         .filter(|(id, needs_key)| {
             if !cfg.source_enabled(id) { return false; }
@@ -124,6 +156,8 @@ fn build_sources(ids: &[String], hash_type: HashType, verbose_vt: bool) -> Vec<A
                 }
                 Arc::new(ObjectiveSee::new())
             }
+            "urlscan" => Arc::new(UrlScan::new(resolve("url"))),
+            "gsb"     => Arc::new(GoogleSafeBrowsing::new(resolve("gsb"))),
             other => Arc::new(StubSource::new(other)),
         };
         out.push(src);
@@ -182,9 +216,9 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
-fn output_matrix(hash: &str, hash_type: HashType, results: &[(String, SourceResult)]) {
+fn output_matrix(hash: &str, input_label: &str, results: &[(String, SourceResult)]) {
     println!();
-    println!("  {} {} ({})", "tiquery".cyan().bold(), hash.white(), hash_type.label().dimmed());
+    println!("  {} {} ({})", "tiquery".cyan().bold(), hash.white(), input_label.dimmed());
     println!("{}", separator());
     println!(
         "  {:<COL_SRC$}  {:<COL_STATUS$}  {:<COL_FAMILY$}  {:<COL_DET$}  {}",
@@ -283,9 +317,9 @@ fn output_csv(results: &[(String, SourceResult)]) -> Result<()> {
     Ok(())
 }
 
-fn output_text(hash: &str, hash_type: HashType, results: &[(String, SourceResult)]) -> String {
+fn output_text(hash: &str, input_label: &str, results: &[(String, SourceResult)]) -> String {
     let mut out = String::new();
-    out.push_str(&format!("tiquery results for: {} ({})\n", hash, hash_type.label()));
+    out.push_str(&format!("tiquery results for: {} ({})\n", hash, input_label));
     out.push_str(&"─".repeat(60));
     out.push('\n');
     for (name, r) in results {
@@ -299,6 +333,133 @@ fn output_text(hash: &str, hash_type: HashType, results: &[(String, SourceResult
     out
 }
 
+// ── Bulk / QR helpers ─────────────────────────────────────────────────────────
+
+fn is_hash(s: &str) -> bool {
+    matches!(s.len(), 32 | 40 | 64) && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+fn parse_hash_file(path: &str) -> Result<Vec<String>> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path, e))?;
+    let mut seen = std::collections::HashSet::new();
+    let mut hashes = Vec::new();
+    for line in content.lines() {
+        for token in line.split(|c: char| c.is_whitespace() || c == ',') {
+            let h = token.trim().to_lowercase();
+            if is_hash(&h) && seen.insert(h.clone()) {
+                hashes.push(h);
+            }
+        }
+    }
+    Ok(hashes)
+}
+
+fn decode_qr_file(path: &str) -> Result<String, String> {
+    let base = image::open(path)
+        .map_err(|e| format!("Failed to open image: {}", e))?
+        .to_luma8();
+    let (w, h) = (base.width(), base.height());
+    let mut last_err: Option<String> = None;
+    for s in [1u32, 2, 3, 4] {
+        let candidate = if s == 1 {
+            base.clone()
+        } else {
+            image::imageops::resize(&base, w * s, h * s, image::imageops::FilterType::Lanczos3)
+        };
+        let mut prep = rqrr::PreparedImage::prepare(candidate);
+        let grids = prep.detect_grids();
+        if let Some(grid) = grids.first() {
+            match grid.decode() {
+                Ok((_meta, content)) => return Ok(content.trim().to_string()),
+                Err(e) => last_err = Some(format!("decode: {}", e)),
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| "no QR code detected".to_string()))
+}
+
+async fn run_bulk(file_path: &str, args: &Args) -> Result<()> {
+    let hashes = parse_hash_file(file_path)?;
+    if hashes.is_empty() {
+        eprintln!("No valid hashes found in {}", file_path);
+        std::process::exit(1);
+    }
+
+    eprintln!("Processing {} hashes from {}", hashes.len(), file_path);
+
+    let mut all_results: Vec<(String, Vec<(String, SourceResult)>)> = Vec::new();
+
+    for (i, hash) in hashes.iter().enumerate() {
+        let hash_type = HashType::detect(hash);
+        if hash_type == HashType::Unknown {
+            eprintln!("[{}/{}] Skipping invalid hash: {}", i + 1, hashes.len(), hash);
+            continue;
+        }
+
+        let short = if hash.len() > 16 { format!("{}…", &hash[..16]) } else { hash.clone() };
+        eprintln!("[{}/{}] Querying: {} ({})", i + 1, hashes.len(), short, hash_type.label());
+
+        let source_ids = args.sources.clone().unwrap_or_else(default_source_ids);
+        let sources = build_sources(&source_ids, hash_type, args.verbose_vt);
+
+        let futures: Vec<_> = sources.into_iter().map(|src| {
+            let h = hash.clone();
+            async move {
+                let name = src.short_name().to_string();
+                let result = src.query(&h).await;
+                (name, result)
+            }
+        }).collect();
+
+        let mut results = join_all(futures).await;
+        results.sort_by_key(|(name, _)| {
+            source_ids.iter().position(|s| s.to_uppercase() == *name).unwrap_or(99)
+        });
+
+        if !args.json && !args.csv {
+            println!("\n[{}/{}]", i + 1, hashes.len());
+            output_matrix(hash, &hash_type.label().to_string(), &results);
+        }
+
+        all_results.push((hash.clone(), results));
+
+        if i + 1 < hashes.len() {
+            tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+        }
+    }
+
+    if args.json {
+        let arr: Vec<serde_json::Value> = all_results.iter().map(|(hash, results)| {
+            let res_arr: Vec<serde_json::Value> = results.iter()
+                .map(|(_, r)| serde_json::to_value(r).unwrap_or_default())
+                .collect();
+            serde_json::json!({"hash": hash, "results": res_arr})
+        }).collect();
+        println!("{}", serde_json::to_string_pretty(&arr).unwrap_or_default());
+    } else if args.csv {
+        let mut wtr = csv::Writer::from_writer(std::io::stdout());
+        wtr.write_record(["hash", "source", "status", "family", "detections", "file_name", "file_type", "first_seen", "link"])?;
+        for (hash, results) in &all_results {
+            for (name, r) in results {
+                let status = r.status.as_ref().map(|s| status_label(s)).unwrap_or_default();
+                wtr.write_record([
+                    hash.as_str(), name.as_str(), &status,
+                    r.family.as_deref().unwrap_or(""),
+                    r.detections.as_deref().unwrap_or(""),
+                    r.file_name.as_deref().unwrap_or(""),
+                    r.file_type.as_deref().unwrap_or(""),
+                    r.first_seen.as_deref().unwrap_or(""),
+                    r.link.as_deref().unwrap_or(""),
+                ])?;
+            }
+        }
+        wtr.flush()?;
+    }
+
+    Ok(())
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 #[tokio::main]
@@ -308,28 +469,57 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    // Resolve hash from argument or interactive prompt
-    let hash = match args.hash {
-        Some(ref h) => h.trim().to_lowercase(),
-        None => {
-            print!("Enter hash to query: ");
-            std::io::stdout().flush()?;
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-            input.trim().to_lowercase()
+    // Bulk mode: read hashes from a file and query each one
+    if let Some(ref path) = args.bulk.clone() {
+        return run_bulk(path, &args).await;
+    }
+
+    // Resolve hash from argument, QR image, or interactive prompt
+    let raw_input = if let Some(ref img_path) = args.qr {
+        match decode_qr_file(img_path) {
+            Ok(url) => {
+                eprintln!("QR decoded: {}", url);
+                url
+            }
+            Err(e) => {
+                eprintln!("Error: QR decode failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        match args.hash {
+            Some(ref h) => h.trim().to_string(),
+            None => {
+                print!("Enter hash or URL to query: ");
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                input.trim().to_string()
+            }
         }
     };
 
-    let hash_type = HashType::detect(&hash);
-    if hash_type == HashType::Unknown {
-        eprintln!("Error: unrecognized hash (expected 32/40/64 hex chars for MD5/SHA1/SHA256)");
-        std::process::exit(1);
-    }
+    // Detect whether the input is a URL or a hash
+    let is_url = raw_input.starts_with("http://") || raw_input.starts_with("https://");
+    let (hash, hash_type, input_label) = if is_url {
+        (raw_input.clone(), HashType::Unknown, "URL".to_string())
+    } else {
+        let lower = raw_input.to_lowercase();
+        let ht = HashType::detect(&lower);
+        if ht == HashType::Unknown {
+            eprintln!("Error: unrecognized input (expected MD5/SHA1/SHA256 hash or http/https URL)");
+            std::process::exit(1);
+        }
+        let label = ht.label().to_string();
+        (lower, ht, label)
+    };
 
-    // Determine source IDs: explicit --sources flag, or auto-detect all configured sources
+    // Determine source IDs: explicit --sources flag, or auto-detect based on input type
     let source_ids: Vec<String> = args
         .sources
-        .unwrap_or_else(default_source_ids);
+        .unwrap_or_else(|| {
+            if is_url { default_url_source_ids() } else { default_source_ids() }
+        });
 
     // If ObjectiveSee is requested and hash is SHA256, warm the cache sequentially first
     if source_ids.iter().any(|s| s == "os") && hash_type == HashType::Sha256 {
@@ -378,7 +568,7 @@ async fn main() -> Result<()> {
     } else if args.csv {
         output_csv(&results)?;
     } else {
-        output_matrix(&hash, hash_type, &results);
+        output_matrix(&hash, &input_label, &results);
 
         // Per-engine VT detections (verbose mode)
         if args.verbose_vt {
@@ -404,7 +594,7 @@ async fn main() -> Result<()> {
 
         // Optionally save text report
         if args.output && args.text {
-            let text = output_text(&hash, hash_type, &results);
+            let text = output_text(&hash, &input_label, &results);
             let output_dir = if let Some(ref case) = args.case {
                 let p = std::path::Path::new("saved_output")
                     .join("cases")

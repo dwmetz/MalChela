@@ -19,7 +19,8 @@ def run_tshark(pcap_path, raw_csv_path):
         subprocess.run(tshark_command, stdout=out_file, check=True)
 
 def convert_timestamps(raw_csv_path, final_csv_path):
-    with open(raw_csv_path, "r", newline="", encoding="utf-8") as infile,          open(final_csv_path, "w", newline="", encoding="utf-8") as outfile:
+    with open(raw_csv_path, "r", newline="", encoding="utf-8") as infile, \
+         open(final_csv_path, "w", newline="", encoding="utf-8") as outfile:
 
         reader = csv.reader(infile)
         writer = csv.writer(outfile)
@@ -42,25 +43,38 @@ def zip_csv(output_csv_path, zip_path):
         zipf.write(output_csv_path, arcname=Path(output_csv_path).name)
 
 def main():
-    import os
     import sys
+    import shutil
 
     if len(sys.argv) > 1:
-        pcap_path = sys.argv[1]
+        pcap_path = Path(sys.argv[1])
         print(f"📁 Using provided PCAP path: {pcap_path}")
     else:
-        pcap_path = input("Enter the full path to the PCAP file: ").strip()
+        pcap_path = Path(input("Enter the full path to the PCAP file: ").strip())
 
-    if not Path(pcap_path).exists():
+    if not pcap_path.exists():
         print("❌ Error: File not found.")
         return
 
-    raw_csv_path = "output_raw.csv"
-    final_csv_path = "output_final.csv"
-    zip_path = "output_final.zip"
+    # Optional: ensure tshark is available
+    if not shutil.which("tshark"):
+        print("❌ Error: tshark not found in PATH.")
+        return
+
+    # ✅ Create output directory if it doesn't exist
+    output_dir = Path.cwd() / "saved_output" / "tshark_to_csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    raw_csv_path = output_dir / "output_raw.csv"
+    final_csv_path = output_dir / "output_final.csv"
+    zip_path = output_dir / "output_final.zip"
 
     print("🔍 Running TShark...")
-    run_tshark(pcap_path, raw_csv_path)
+    try:
+        run_tshark(pcap_path, raw_csv_path)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ TShark failed: {e}")
+        return
 
     print("🕒 Converting timestamps...")
     convert_timestamps(raw_csv_path, final_csv_path)
@@ -69,7 +83,7 @@ def main():
     zip_csv(final_csv_path, zip_path)
 
     print(f"✅ Done! Zipped file created: {zip_path}")
-    print(f"📁 Saved to: {Path(zip_path).resolve()}")
+    print(f"📁 Saved to: {zip_path.resolve()}")
 
 if __name__ == "__main__":
     main()

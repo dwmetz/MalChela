@@ -66,7 +66,7 @@ fn main() {
         format!("  {:<feature_width$}|  {:<description_width$}\n", "MZcount", "Recurse a directory, uses YARA to count MZ, Zip, PDF, other"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "NSRL Hash Lookup", "Query an MD5 or SHA1 hash against NSRL"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Strings to YARA", "Prompts for metadata and strings (text file) to create a YARA rule"),
-        format!("  {:<feature_width$}|  {:<description_width$}\n", "Threat Intel Query", "Multi-source hash & URL lookup (VT, MB, OTX, urlscan.io, GSB, +more). QR decode in GUI.*"),
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Threat Intel Query", "Multi-source hash, URL and QR code lookup (VT, MB, OTX, urlscan.io, GSB, +more)"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "XMZHash", "Recurse a directory, for files without MZ, Zip or PDF header, create hash list"),
 
     );

@@ -273,7 +273,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         std::process::exit(1);
                     }
                     let mut args: Vec<String> = vec![];
-                    if tool_name == "malhash" {
+                    if tool_name == "tiquery" {
                         args.push(selected_file.sha256.clone());
                     } else if tool_name == "nsrlquery" {
                         args.push(selected_file.md5.clone());
@@ -381,11 +381,11 @@ fn analyze_directory(
             if file_type.contains("portable-executable") {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
-                suggested_tools.push(("malhash".into(), "malhash".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type == "Unknown" && file_size > 10_000 {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
-                suggested_tools.push(("malhash".into(), "malhash".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             }
 

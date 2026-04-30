@@ -62,6 +62,13 @@ tools:
   category: "Utilities"
   exec_type: cargo
 
+- name: Hash Check
+  description: "Check a hash value against a lookup file"
+  command: ["hashcheck"]
+  input_type: file
+  category: "Corpus"
+  exec_type: cargo
+  
 - name: File Analyzer
   description: "Parses file metadata and checks YARA rules"
   command: ["fileanalyzer"]
@@ -73,21 +80,21 @@ tools:
   description: "Generates multiple hashes for a single file"
   command: ["hashit"]
   input_type: file
-  category: "Hashing Tools"
+  category: "Utilities"
   exec_type: cargo
 
 - name: MZHash
   description: "Generates hash set and lookup table for folder contents with MZ headers"
   command: ["mzhash"]
   input_type: folder
-  category: "Hashing Tools"
+  category: "Corpus"
   exec_type: cargo
 
 - name: MZcount
   description: "Counts file types within a directory"
   command: ["mzcount"]
   input_type: folder
-  category: "Hashing Tools"
+  category: "Corpus"
   exec_type: cargo
 
 - name: NSRL Hash Lookup
@@ -108,7 +115,7 @@ tools:
   description: "Generates hash set and lookup table for folder contents with non-MZ headers"
   command: ["xmzhash"]
   input_type: folder
-  category: "Hashing Tools"
+  category: "Corpus"
   exec_type: cargo
 
 # - name: PCAP to CSV (.zip)

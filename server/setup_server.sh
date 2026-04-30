@@ -140,6 +140,8 @@ EOF
 echo -e "  ${GR}✓ Written to $CONFIG${NC}"
 echo ""
 
+chmod +x "$SCRIPT_DIR/start_server.sh"
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo -e "${OR}  Configuration complete:${NC}"
 echo -e "  MalChela root : ${CY}$MALCHELA_ROOT${NC}"

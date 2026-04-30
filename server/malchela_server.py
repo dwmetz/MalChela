@@ -36,9 +36,9 @@ def _load_config() -> dict:
     Falls back to environment variables, then built-in defaults.
     Priority: config file > environment variables > defaults.
     """
-    # Built-in defaults — work out of the box if script lives in project root
+    # Built-in defaults — self-locate relative to this script's parent (the repo root)
     defaults = {
-        "malchela_root": str(_SCRIPT_DIR),
+        "malchela_root": str(_SCRIPT_DIR.parent),
         "browser_root":  str(Path.home()),
         "port":          8675,
     }
@@ -58,6 +58,9 @@ def _load_config() -> dict:
         try:
             with open(_CONFIG_FILE) as f:
                 file_cfg = yaml.safe_load(f) or {}
+            # "auto" means self-locate relative to this script
+            if file_cfg.get("malchela_root") in (None, "auto", ""):
+                file_cfg.pop("malchela_root", None)
             cfg.update({k: v for k, v in file_cfg.items() if v is not None})
             print(f"[MalChela Server] Loaded config from {_CONFIG_FILE}")
         except Exception as e:

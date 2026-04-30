@@ -2,22 +2,13 @@
 # server_config.yaml — MalChela Remote API Server Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# Place this file in the MalChela project root alongside malchela_server.py.
-# Edit the values below to match your environment.
+# malchela_root: set to "auto" to self-locate (recommended — works for any clone path),
+#   or set to an absolute path to pin to a specific location.
 #
-# Platform examples:
+#   auto  → uses the directory containing server/ (the repo root)
+#   /home/remnux/tools/MalChela  → explicit path override
 #
-#   Kali / Raspberry Pi (Toby):
-#     malchela_root: /home/dwmetz/tools/MalChela
-#     browser_root:  /home/dwmetz
-#
-#   REMnux / Ubuntu:
-#     malchela_root: /home/remnux/tools/MalChela
-#     browser_root:  /home/remnux
-#
-#   macOS:
-#     malchela_root: /Users/dmetz/tools/MalChela
-#     browser_root:  /Users/dmetz
+# browser_root: the root directory shown in the file browser (usually your home dir).
 #
 # Environment variable overrides (useful for Docker or CI):
 #   MALCHELA_ROOT         — overrides malchela_root
@@ -26,7 +17,7 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-malchela_root: /Users/dmetz/tools/MalChela
+malchela_root: auto
 browser_root:  /Users/dmetz
 port: 8675
 tool_paths:

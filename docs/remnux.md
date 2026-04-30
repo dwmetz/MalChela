@@ -12,14 +12,14 @@ REMnux Mode is a configuration profile that aligns MalChela’s behavior with th
 
 This mode is manually enabled by selecting **“Load REMnux”** from the tools.yaml Configuration Panel in the web interface. Once selected, a REMnux-specific `tools.yaml` file is loaded and remains active until you replace it with another configuration.
 
-![Enabling REMnux mode](images/load_remnux.png)
+![Enabling REMnux mode](images/yaml_configurator.png)
 
 <p align="left"><strong>Figure 7.1:</strong> Enabling REMnux mode</p>
 
-> Note: Whenever you change the tools.yaml, you need to restart the web interface for it to take effect.
+> Note: Whenever you change the tools.yaml, you can use the "Reload Sidebar" button to update the tool listings in the sidebar.
 
 ---
-![REMnux Mode](images/remnux_mode_gui.png)
+![REMnux Mode](images/remnux_mode_pwa.png)
 
 <p align="center"><strong>Figure 7.2:</strong> MalChela in REMnux Mode </p>
 
@@ -36,7 +36,7 @@ The following tools will appear in the web interface when REMnux Mode is enabled
 | binwalk  | Scan binary files for embedded files               | `binwalk`   |
 | capa     | Detects capabilities in binaries via rules         | `capa`      |
 | FLOSS    | Extract obfuscated strings from binaries           | `floss`     |
-| radare2  | Scan binary files                                  | `/usr/bin/r2 -i` |
+
 
 ---
 

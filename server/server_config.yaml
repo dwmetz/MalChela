@@ -18,7 +18,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 malchela_root: auto
-browser_root:  /Users/dmetz
+browser_root:  /Users/username
 port: 8675
 tool_paths:
-  - /Users/dmetz/tools/capa
+

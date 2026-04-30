@@ -1586,14 +1586,14 @@
 <h2 id="how-remnux-mode-works">How REMnux Mode Works</h2>
 <p>REMnux Mode is a configuration profile that aligns MalChela’s behavior with the REMnux malware analysis distribution. It adjusts paths, tool definitions, and web interface presentation to match the REMnux environment.</p>
 <p>This mode is manually enabled by selecting <strong>“Load REMnux”</strong> from the tools.yaml Configuration Panel in the web interface. Once selected, a REMnux-specific <code>tools.yaml</code> file is loaded and remains active until you replace it with another configuration.</p>
-<p><img alt="Enabling REMnux mode" src="../images/load_remnux.png" /></p>
+<p><img alt="Enabling REMnux mode" src="../images/yaml_configurator.png" /></p>
 <p align="left"><strong>Figure 7.1:</strong> Enabling REMnux mode</p>
 
 <blockquote>
-<p>Note: Whenever you change the tools.yaml, you need to restart the web interface for it to take effect.</p>
+<p>Note: Whenever you change the tools.yaml, you can use the "Reload Sidebar" button to update the tool listings in the sidebar.</p>
 </blockquote>
 <hr />
-<p><img alt="REMnux Mode" src="../images/remnux_mode_gui.png" /></p>
+<p><img alt="REMnux Mode" src="../images/remnux_mode_pwa.png" /></p>
 <p align="center"><strong>Figure 7.2:</strong> MalChela in REMnux Mode </p>
 
 <hr />
@@ -1623,11 +1623,6 @@
 <td>FLOSS</td>
 <td>Extract obfuscated strings from binaries</td>
 <td><code>floss</code></td>
-</tr>
-<tr>
-<td>radare2</td>
-<td>Scan binary files</td>
-<td><code>/usr/bin/r2 -i</code></td>
 </tr>
 </tbody>
 </table>

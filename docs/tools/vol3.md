@@ -8,7 +8,7 @@ MalChela integrates support for **Volatility 3**, a powerful memory forensics fr
 
 ## Integration Overview
 
-Volatility 3 is available in MalChela as an enhanced third-party tool. The GUI provides a dedicated interface for selecting plugins, supplying arguments, and reviewing results — all within a structured panel that mimics the CLI workflow but adds quality-of-life improvements like:
+Volatility 3 is available in MalChela as an enhanced third-party tool. The web interface provides a dedicated interface for selecting plugins, supplying arguments, and reviewing results — all within a structured panel that mimics the CLI workflow but adds quality-of-life improvements like:
 
 - Live search and categorized plugin reference
 - Plugin-specific argument helpers
@@ -43,7 +43,7 @@ To use Volatility 3 within MalChela:
 
 ## tools.yaml Configuration
 
-To use Volatility 3 with the GUI launcher, ensure the correct `command` value is defined in your `tools.yaml` configuration. Depending on your environment, the binary may be installed under different names or locations.
+To use Volatility 3 with the web interface launcher, ensure the correct `command` value is defined in your `tools.yaml` configuration. Depending on your environment, the binary may be installed under different names or locations.
 
 Two common examples:
 
@@ -82,7 +82,7 @@ Make sure that the specified binary path or command is accessible in your system
 
 ## Output and Reports
 
-All plugin results are streamed to the GUI console with formatting preserved. Where supported, plugins that produce dumped files will output to a user-specified folder.
+All plugin results are streamed to the web interface console with formatting preserved. Where supported, plugins that produce dumped files will output to a user-specified folder.
 
 ---
 

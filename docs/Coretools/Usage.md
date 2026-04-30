@@ -23,10 +23,11 @@ MalChela supports three main workflows:
 ./target/release/malchela
 ```
 
-### MalChela GUI Launcher
+### MalChela Web Interface
 ```bash
-./target/release/MalChelaGUI
+python server/malchela_server.py
 ```
+Then open your browser to `http://localhost:8675`.
 
 ## CLI Usage Notes
 
@@ -68,30 +69,27 @@ cargo run -p mstrings — path/to/file — -o -j
 
 
 
-## GUI Usage Notes
+## Web Interface Notes
 
 
-### GUI Features Summary
+### Web Interface Features Summary
 
 - Categorized tool list with input type detection (file, folder, hash)
 - Arguments textbox and dynamic path browser
 - Console output with ANSI coloring
-- Save Report checkbox toggles `-o` flag
 - Status bar displays CLI-equivalent command
 - Alphabetical sorting of tools within categories
-- Tool descriptions are now shown alongside tool names
-- Saved reports are cleaned of internal formatting tags like [green], [reset], etc.
+- Tool descriptions shown alongside tool names
 
-- Cases must be created from a file or folder. Hashes can be used later but do not initiate new cases.
 
-### GUI Walkthrough
+### Web Interface Walkthrough
 
 Layout
 
-- Top Bar: Title and status
+- Top Bar: Title and Toolkit Menu
 - Left Panel: Tool categories and selections
 - Center Panel: Dynamic tool input options
-- Bottom Panel: Console output
+- Console Panel: Output display
 
 Running Tools
 
@@ -106,17 +104,16 @@ Save Report
 - Formats:
 >- .txt		Analyst-readable summary
 >- .json	Machine-parsable, structured output
->- .md 		Shareable in tickets, wikis, etc. .txt, .json, .md
+>- .md 		Shareable in tickets, wikis, etc.
 >- Location: saved_output/<tool>/report_<timestamp>.<ext> (only one file is generated per run)
-		
 
 
-### Scratchpad  
+### Notebook
 
 - An integrated notepad for recording strings, indicators or notes
 - Supports saving as text, markdown and YAML formats
 - Integrated “Open in VS Code” button for saved notes
-- Any line starting with `hash:` is ignored when using the Scratchpad as a source for String_to_Yara to generate YARA rules
+- Any line starting with `hash:` is ignored when using the Notebook as a source for String_to_Yara to generate YARA rules
 
 ## Tool Behavior Reference
 | Tool            | Input Type             | Supports `-o` | Prompts if Missing | Notes                             |

@@ -4,11 +4,7 @@
 
 ![File Miner](../images/fileminer.png)
 
-<p align="center"><strong>Figure 5.6.1:</strong> File Miner</p>
-
-![File Miner with Subtool Output](../images/fileminer_with_subtool_output.png)
-
-<p align="center"><strong>Figure 5.6.2:</strong> File Miner with Subtool Output</p>
+<p align="center"><strong>Figure 5.6:</strong> File Miner</p>
 
 
 ## Function Overview
@@ -19,9 +15,9 @@
 - Suggests relevant analysis tools (e.g., FileAnalyzer, mStrings, TiQuery)
 - Outputs results in a styled table or optional JSON format
 - Integrates with case management via the `--case` flag
-- Automatically launches in GUI when a folder-based case is created or restored
-- Results populate an interactive table in the GUI
-- Users can launch suggested tools on a per-file basis directly from the GUI
+- Automatically launches in the web interface when a folder-based case is created or restored
+- Results populate an interactive table in the web interface
+- Users can launch suggested tools on a per-file basis directly from the web interface
 
 ## CLI Usage
 
@@ -35,7 +31,7 @@ cargo run -p fileminer -- [OPTIONS] [DIR]
 |----------------------------|-----------------------------------------------------------------------------|
 | `DIR`                      | Directory to analyze. Optional — will prompt if not supplied.             |
 | `--json`                   | Save results to JSON. Defaults to `fileminer_output.json` unless `--output` is used. |
-| `--output <filename>`      | Overrides the default output file name. Used internally by the GUI.       |
+| `--output <filename>`      | Overrides the default output file name. Used internally by the web interface.       |
 | `--case <case-name>`       | Saves output under `saved_output/<case-name>/fileminer/`. Also passes case name to downstream tools. |
 | `-m`, `--mismatches-only`  | Only display entries with extension mismatches.                            |
 
@@ -58,9 +54,9 @@ cargo run -p fileminer -- /path/to/files -m
 cargo run -p fileminer -- /path/to/files --case suspicious_usb -m
 ```
 
-## GUI Usage Notes
+## Web Interface Notes
 
-- When a new case is created or restored using a folder, FileMiner runs automatically in the GUI.
+- When a new case is created or restored using a folder, FileMiner runs automatically in the web interface.
 - Results are saved under `saved_output/cases/<case-name>/fileminer/`.
 - FileMiner displays an interactive table of results with suggested tools per file.
-- Suggested tools can be launched directly from within the GUI results panel.
+- Suggested tools can be launched directly from within the web interface results panel.

@@ -76,6 +76,6 @@ pip install olefile
 
 **Notes:**
 
-- The GUI ensures correct argument order: `python oledump.py <input_file>`
+- The web interface ensures correct argument order: `python oledump.py <input_file>`
 - `command` points to the Python interpreter
 - `optional_args` contains the path to the script

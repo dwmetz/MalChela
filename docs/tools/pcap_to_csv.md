@@ -13,7 +13,7 @@ Timestamps in the CSV output are converted into a human-readable ISO 8601 format
 
 
 
-This script is included in the MalChela repository under `Utilities/`, and is referenced in `tools.yaml` but commented out by default. Uncomment the entry in `tools.yaml` to enable it in the GUI.
+This script is included in the MalChela repository under `Utilities/`, and is referenced in `tools.yaml` but commented out by default. Uncomment the entry in `tools.yaml` to enable it in the web interface.
 
 Requirements:
 

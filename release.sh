@@ -10,7 +10,7 @@ else
   BUILD_CMD="cargo build --release -p"
 fi
 
-for tool in malchela fileminer mstrings hashit hashcheck mzcount mzhash xmzhash combine_yara strings_to_yara malhash nsrlquery extract_samples about fileanalyzer MITRE_lookup tiquery MalChelaGUI; do
+for tool in malchela fileminer mstrings hashit hashcheck mzcount mzhash xmzhash combine_yara strings_to_yara nsrlquery extract_samples about fileanalyzer MITRE_lookup tiquery; do
   echo "Building release for $tool..."
   $BUILD_CMD "$tool"
 done

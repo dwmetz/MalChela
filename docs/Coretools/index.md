@@ -1,7 +1,7 @@
 
-![MalChela GUI](../images/malchela_screenshot.png)
+![MalChela web interface](../images/malchela_screenshot.png)
 
-<p align="center"><strong>Figure 5.1:</strong> MalChela GUI</p>
+<p align="center"><strong>Figure 5.1:</strong> MalChela Web Interface</p>
 
 ![MalChela CLI](../images/malchela_cli_screenshot.png)
 
@@ -31,11 +31,11 @@
     <tr><td>MZcount</td><td>Recurse a directory, uses YARA to count MZ, Zip, PDF, other</td></tr>
     <tr><td>NSRL Query</td><td>Query a MD5 or SHA1 hash against NSRL</td></tr>
     <tr><td>Strings to YARA</td><td>Prompts for metadata and strings (text file) to create a YARA rule</td></tr>
-    <tr><td>Threat Intel Query</td><td>Multi-source hash and URL lookup. Hash: VT, MB, OTX, HA, FileScan, Malshare, MetaDefender, ObjectiveSee. URL: VT, urlscan.io, Google Safe Browsing. GUI supports file-to-hash and QR code decode.*</td></tr>
+    <tr><td>Threat Intel Query</td><td>Multi-source hash and URL lookup. Hash: VT, MB, OTX, HA, FileScan, Malshare, MetaDefender, ObjectiveSee. URL: VT, urlscan.io, Google Safe Browsing. Web interface supports file-to-hash and QR code decode.*</td></tr>
     <tr><td>XMZHash</td><td>Recurse a directory, for files without MZ, Zip or PDF header, create hash list and lookup table</td></tr>
   </tbody>
 </table>
 
 <p style="text-align: center;">
-  <strong>*Threat Intel Query supports optional API keys for its sources.</strong> Keys can be managed via the API Keys panel in the MalChela GUI or by placing them in the <code>api/</code> directory. Sources without configured keys are skipped automatically.
+  <strong>*Threat Intel Query supports optional API keys for its sources.</strong> Keys can be managed via the API Keys panel in the MalChela web interface or by placing them in the <code>api/</code> directory. Sources without configured keys are skipped automatically.
 </p>

@@ -1,6 +1,6 @@
 {
   "name": "malchela",
-  "version": "3.2",
+  "version": "4.0",
   "description": "MalChela malware analysis toolkit — exposes file analysis, string extraction, hash lookup, NSRL queries, and directory scanning to Claude via MCP. Built for DFIR analysts and malware researchers.",
   "author": {
     "name": "Doug Metz",

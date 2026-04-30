@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# server_config.yaml — MalChela Remote API Server Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Place this file in the MalChela project root alongside malchela_server.py.
+# Edit the values below to match your environment.
+#
+# Platform examples:
+#
+#   Kali / Raspberry Pi (Toby):
+#     malchela_root: /home/dwmetz/tools/MalChela
+#     browser_root:  /home/dwmetz
+#
+#   REMnux / Ubuntu:
+#     malchela_root: /home/remnux/tools/MalChela
+#     browser_root:  /home/remnux
+#
+#   macOS:
+#     malchela_root: /Users/dmetz/tools/MalChela
+#     browser_root:  /Users/dmetz
+#
+# Environment variable overrides (useful for Docker or CI):
+#   MALCHELA_ROOT         — overrides malchela_root
+#   MALCHELA_BROWSER_ROOT — overrides browser_root
+#   MALCHELA_PORT         — overrides port
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+malchela_root: /Users/dmetz/tools/MalChela
+browser_root:  /Users/dmetz
+port: 8675
+tool_paths:
+  - /Users/dmetz/tools/capa

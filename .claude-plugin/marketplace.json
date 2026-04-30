@@ -15,7 +15,7 @@
         "repo": "dwmetz/MalChela"
       },
       "description": "Exposes MalChela's full malware analysis suite to Claude: file analysis (hashes, entropy, PE metadata, YARA, VirusTotal), string extraction with MITRE ATT&CK mapping, hash lookups against VirusTotal and MalwareBazaar, NSRL known-good queries, and directory scanning for file type anomalies.",
-      "version": "3.2",
+      "version": "4.0",
       "author": {
         "name": "Doug Metz",
         "email": "dwmetz@gmail.com"

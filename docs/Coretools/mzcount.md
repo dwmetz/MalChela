@@ -1,13 +1,8 @@
 MZcount recursively scans a directory and counts the number of files that match key signatures like MZ (Windows executables), ZIP, PDF, and others. It uses lightweight YARA rules to classify files by type, giving a quick overview of the content breakdown within a dataset. Results can be displayed in either a detailed per-file view or a clean summary table, depending on your analysis needs.
 
-![MZCount Table View](../images/mzcount_table.png)
+![MZCount](../images/mzcount.png)
 
-<p align="center"><strong>Figure 5.12.1:</strong> MZCount Table View</p>
-
-![MZCount Detail View](../images/mzcount_detail.png)
-
-<p align="center"><strong>Figure 5.12.2:</strong> MZCount Detail View</p>
-
+<p align="center"><strong>Figure 5.12:</strong> MZCount</p>
 
 
 ---

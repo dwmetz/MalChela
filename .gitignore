@@ -16,6 +16,10 @@ scratchpad.txt
 # Output folders
 /saved_output/*
 
+# Uploads and server-generated backups
+/uploads/*
+/server/backups/*
+
 # YARA rules
 /yara_rules/*.yar
 /yara_rules/*.yara

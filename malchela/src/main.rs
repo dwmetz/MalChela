@@ -16,8 +16,9 @@ struct Koans {
 }
 
 fn load_random_koan() -> String {
-    std::fs::read_to_string("MalChelaGUI/koans/crabby_koans.yaml")
+    find_workspace_root()
         .ok()
+        .and_then(|root| std::fs::read_to_string(root.join("assets/koans/crabby_koans.yaml")).ok())
         .and_then(|content| serde_yaml::from_str::<Koans>(&content).ok())
         .and_then(|k| k.koans.choose(&mut rand::rng()).cloned())
         .unwrap_or_else(|| "🦀 No koan today.".to_string())
@@ -124,7 +125,7 @@ fn print_banner() {
     println!("{}", crab_art.red());
     println!("        {}", "    https://bakerstreetforensics.com".truecolor(110, 130, 140));
     println!();
-    println!("        {}", "    MalChela Analysis Toolkit v3.2".yellow());
+    println!("        {}", "    MalChela Analysis Toolkit v4.0".yellow());
     println!();
 }
 

@@ -40,4 +40,4 @@ Otherwise, results are saved to:
 saved_output/mstrings/
 ```
 
-> The MITRE Lookup feature is only available in the GUI version of mStrings.
+> The MITRE Lookup feature is only available in the web interface version of mStrings.

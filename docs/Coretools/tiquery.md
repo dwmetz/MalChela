@@ -1,6 +1,6 @@
 Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash or URL is known, what family/category it belongs to, and how widely it has been detected.
 
-`tiquery` accepts a **file hash** (MD5/SHA1/SHA256), an **http/https URL**, or a **QR code image** as input and automatically routes the query to the appropriate set of sources. In the GUI, the Single Hash tab also includes a **Browse** button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).
+`tiquery` accepts a **file hash** (MD5/SHA1/SHA256), an **http/https URL**, or a **QR code image** as input and automatically routes the query to the appropriate set of sources. In the web interface, the Single Hash tab also includes a **Browse** button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).
 
 ![TIQuery Hash Lookup](../images/tiquery_hash.png)
 
@@ -83,7 +83,7 @@ Accepts MD5, SHA1, and SHA256 hashes, or any `http://` / `https://` URL. If no i
 
 **Bulk mode** reads a `.txt` or `.csv` file and extracts all valid MD5/SHA1/SHA256 hashes (one per line, or mixed with other content). Each hash is queried sequentially with a short delay between requests to respect API rate limits. Results are displayed as a table per hash in human mode, or as a JSON array / CSV stream when `--json` / `--csv` is specified.
 
-**QR mode** decodes a QR code image (PNG/JPG/GIF/BMP/WebP) and uses the extracted URL as input to the standard URL lookup pipeline. Useful for triaging quishing (QR phishing) samples from emails and screenshots without needing the GUI.
+**QR mode** decodes a QR code image (PNG/JPG/GIF/BMP/WebP) and uses the extracted URL as input to the standard URL lookup pipeline. Useful for triaging quishing (QR phishing) samples from emails and screenshots without needing the web interface.
 
 ---
 
@@ -141,7 +141,7 @@ api/url-api.txt       # urlscan.io (optional — raises rate limits)
 api/gsb-api.txt       # Google Safe Browsing
 ```
 
-Keys can be managed via the **API Keys** panel in the MalChela GUI (Configuration menu → API Keys) or by placing the key directly in the appropriate file.
+Keys can be managed via the **API Keys** panel in the MalChela web interface (Configuration menu → API Keys) or by placing the key directly in the appropriate file.
 
 See [API Configuration](https://dwmetz.github.io/MalChela/configuration/api-configuration/) for details.
 
@@ -153,17 +153,17 @@ Bulk lookup processes a `.txt` or `.csv` file containing hashes (one per line, o
 
 **CLI:** use the `--bulk <file>` flag (see CLI Syntax above). Results are printed as a table per hash, or as a combined JSON array / CSV when `--json` / `--csv` is specified.
 
-**GUI:** the TIquery panel's **Bulk Lookup** tab lets you browse to a file and run all lookups in one click. Results are displayed in a consolidated grid.
+**Web interface:** the TIquery panel's **Bulk Lookup** tab lets you browse to a file and run all lookups in one click. Results are displayed in a consolidated grid.
 
 ---
 
-### GUI Input Modes
+### Web Interface Input Modes
 
-The MalChela GUI's Threat Intel Query panel offers four input modes, selected via tabs at the top of the panel:
+The MalChela web interface's Threat Intel Query panel offers four input modes, selected via tabs at the top of the panel:
 
-- **Single Hash** — paste a hash or click **Browse…** to pick a file; the GUI computes the file's SHA256 and populates the hash field automatically.
+- **Single Hash** — paste a hash or click **Browse…** to pick a file; the web interface computes the file's SHA256 and populates the hash field automatically.
 - **Bulk Lookup** — as described above, for batches of hashes in a file.
 - **URL** — paste an `http://` or `https://` URL to query VirusTotal, urlscan.io, and Google Safe Browsing in parallel.
-- **QR Code** — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the GUI decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.
+- **QR Code** — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the web interface decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.
 
 In URL and QR modes, source checkboxes auto-enable based on which API keys are configured, exactly as in hash mode.

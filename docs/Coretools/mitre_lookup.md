@@ -22,7 +22,7 @@ This panel supports live search by **technique ID** (e.g., `T1059`) or **keyword
 - Save lookups for later reference or save to a Case
 - Markdown formatting for MITRE reports for inclusion in forensics reports
 
-## Accessing from the MalChela GUI:
+## Accessing from the MalChela Web Interface:
 
 - Select **MITRE Lookup** in the left-hand **Toolbox** menu
 - Use the input field at the top of the modal to enter a keyword or technique ID (e.g., `T1059` or `registry`)

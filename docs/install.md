@@ -14,7 +14,7 @@ sudo apt install openssl libssl-dev clang yara libyara-dev pkg-config build-esse
 
 These are required for:
 - YARA and YARA-X support
-- Building Rust crates that link to native libraries (e.g., GUI dependencies)
+- Building Rust crates that link to native libraries (e.g., TShark/glib)
 - TShark integration (via GTK/glib)
 - `ssdeep` is used for fuzzy hashing in tools like `fileanalyzer`. If not installed, fuzzy hash results may be unavailable.
 
@@ -40,10 +40,10 @@ chmod +x release.sh
 ./release.sh
 ```
 
-This will compile every core tool and generate optimized release binaries under `target/release/`. This is especially useful before first use of the GUI or case features, which rely on prebuilt binaries.
+This will compile every core tool and generate optimized release binaries under `target/release/`. This is especially useful before first use of the web interface or case features, which rely on prebuilt binaries.
 
-> ⚠️ Using `--release` is highly recommended to ensure optimal performance and avoid unexpected behavior when launching tools from the GUI.
+> ⚠️ Using `--release` is highly recommended to ensure optimal performance and avoid unexpected behavior when launching tools from the web interface.
 ### Windows Notes
 
 	•	Best experience via WSL2
-	•	GUI is not supported natively on Windows
+	•	The web interface is accessible via any browser on Windows (WSL2 recommended for running the server)

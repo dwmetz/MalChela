@@ -1,26 +1,26 @@
 
 ## Tool Configuration
 
-MalChela uses a central `tools.yaml` file to define which tools appear in the GUI, along with their launch method, input types, categories, and optional arguments. This YAML-driven approach allows full control without editing source code.
+MalChela uses a central `tools.yaml` file to define which tools appear in the web interface, along with their launch method, input types, categories, and optional arguments. This YAML-driven approach allows full control without editing source code.
 
 ### Key Fields in Each Tool Entry
 
 | Field         | Purpose                                                          |
 |---------------|------------------------------------------------------------------|
 | name          | Internal and display name of the tool                            |
-| description   | Shown in GUI for clarity                                         |
+| description   | Shown in web interface for clarity                                         |
 | command       | How the tool is launched (binary path or interpreter)           |
 | exec_type     | One of `cargo`, `binary`, or `script`                            |
 | input_type    | One of `file`, `folder`, or `hash`                               |
 | file_position | Controls argument ordering                                       |
 | optional_args | Additional CLI arguments passed to the tool                      |
-| category      | Grouping used in the GUI left panel                              |
+| category      | Grouping used in the web interface left panel                              |
 
 > ⚠️ All fields except `optional_args` are required.
 
 ## Swapping Configs: REMnux Mode and Beyond
 
-MalChela supports easy switching between tool configurations via the GUI.
+MalChela supports easy switching between tool configurations via the web interface.
 
 ![YAML Config Tool](../images/yaml_configurator.png)
 
@@ -30,7 +30,7 @@ To switch:
 
 - Open the **Configuration Panel**
 - Use **“Select tools.yaml”** to point to a different config
-- Restart the GUI or reload tools
+- Restart the web interface or reload tools
 
 This allows forensic VMs like REMnux to use a tailored toolset while keeping your default config untouched.
 
@@ -47,7 +47,7 @@ This allows forensic VMs like REMnux to use a tailored toolset while keeping you
 
 ## Backing Up and Restoring tool.yaml
 
-The MalChela GUI provides built-in functionality to back up and restore your `tools.yaml` configuration file.
+The MalChela web interface provides built-in functionality to back up and restore your `tools.yaml` configuration file.
 
 ### Backup
 

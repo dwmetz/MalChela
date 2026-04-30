@@ -42,11 +42,11 @@ Each file should contain a single line with your API key. Keys are read at runti
 ---
 ![API Configuration Utility](../images/api_configuration.png)
 
-**Figure 3.2:** API Configuration Utility
+**Figure 4.0:** API Configuration Utility
 
 ## Managing Your Keys with the Configuration Utility
 
-The MalChela GUI includes a built-in Configuration Panel that lets you easily **Create or update API key files** without opening a text editor.
+The MalChela web interface includes a built-in Configuration Panel that lets you easily **Create or update API key files** without opening a text editor.
 
 Look for the **API Key Management** section in the Configuration Panel. Changes take effect immediately and persist across sessions.
 

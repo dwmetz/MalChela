@@ -122,7 +122,6 @@ pub fn ensure_case_json(case_name: &str) {
     if json_path.exists() {
         return;
     }
-    // Minimal metadata matching CaseMetadata in MalChelaGUI workspace.rs.
     // Built by hand to avoid pulling serde_json into common_config.
     let escaped = case_name.replace('\\', "\\\\").replace('"', "\\\"");
     let skeleton = format!(

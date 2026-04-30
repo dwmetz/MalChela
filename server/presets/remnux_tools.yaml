@@ -241,14 +241,6 @@ tools:
   category: "File Analysis"
   exec_type: script
 
-- name: radare2
-  description: "Scan binary files"
-  command: ["/usr/bin/r2 -i"]
-  input_type: "file"
-  file_position: "last"
-  category: "File Analysis"
-  exec_type: script
-
 - name: Volatility 3
   description: "Memory analysis using Volatility 3"
   command: ["vol3"]

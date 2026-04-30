@@ -8,15 +8,15 @@ MalChela includes built-in support for running in **REMnux Mode**, a configurati
 
 ## How REMnux Mode Works
 
-REMnux Mode is a configuration profile that aligns MalChela’s behavior with the REMnux malware analysis distribution. It adjusts paths, tool definitions, and GUI presentation to match the REMnux environment.
+REMnux Mode is a configuration profile that aligns MalChela’s behavior with the REMnux malware analysis distribution. It adjusts paths, tool definitions, and web interface presentation to match the REMnux environment.
 
-This mode is manually enabled by selecting **“Load REMnux”** from the tools.yaml Configuration Panel in the GUI. Once selected, a REMnux-specific `tools.yaml` file is loaded and remains active until you replace it with another configuration.
+This mode is manually enabled by selecting **“Load REMnux”** from the tools.yaml Configuration Panel in the web interface. Once selected, a REMnux-specific `tools.yaml` file is loaded and remains active until you replace it with another configuration.
 
 ![Enabling REMnux mode](images/load_remnux.png)
 
 <p align="left"><strong>Figure 7.1:</strong> Enabling REMnux mode</p>
 
-> Note: Whenever you change the tools.yaml, you need to restart the GUI for it to take effect.
+> Note: Whenever you change the tools.yaml, you need to restart the web interface for it to take effect.
 
 ---
 ![REMnux Mode](images/remnux_mode_gui.png)
@@ -27,7 +27,7 @@ This mode is manually enabled by selecting **“Load REMnux”** from the tools.
 
 ## Preconfigured Tools in REMnux Mode
 
-The following tools will appear in the GUI when REMnux Mode is enabled. Each is preconfigured with known-good paths for the REMnux environment:
+The following tools will appear in the web interface when REMnux Mode is enabled. Each is preconfigured with known-good paths for the REMnux environment:
 
 ### File Analysis
 
@@ -108,7 +108,7 @@ The following tools will appear in the GUI when REMnux Mode is enabled. Each is 
 Although REMnux Mode provides sane defaults, you can still:
 
 - Override tool entries in `tools.yaml`
-- Add new third-party tools via the GUI or YAML
+- Add new third-party tools via the web interface or YAML
 - Use the Configuration Panel to backup/restore your configuration
 
 ---

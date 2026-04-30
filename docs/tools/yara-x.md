@@ -42,7 +42,7 @@ To use YARA-X within MalChela tools, update your `tools.yaml` with the following
 
 - Place your YARA rules in the `yara_rules` folder within the workspace.
 - YARA-X supports recursive includes and extended features; ensure your rules are compatible.
-- The MalChela GUI and CLI will invoke YARA-X when configured as above, providing faster scans and improved detection.
+- The MalChela web interface and CLI will invoke YARA-X when configured as above, providing faster scans and improved detection.
 
 ## Tips
 

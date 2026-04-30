@@ -20,7 +20,7 @@
       <td><img src="images/malchela_cli_screenshot.png" style="height:280px; width:auto;"></td>
     </tr>
     <tr>
-      <td align="center"><strong>GUI View</strong></td>
+      <td align="center"><strong>PWA View</strong></td>
       <td align="center"><strong>CLI View</strong></td>
     </tr>
   </table>
@@ -95,15 +95,31 @@ If you cloned MalChela before 17-Apr-2026, you may see a diverging branches erro
 
 <h3>Run:</h3>
 
+#### PWA (recommended):
+
+On first run, execute the setup script after building the binaries:
+
+```
+cd server
+./setup-server.sh
+```
+
+Then start the server:
+
+```
+./start-server.sh
+```
+
+The PWA will be accessible from any browser on the local network.
+
+#### CLI:
+
 ```
 ./target/release/malchela
 ```
 
-or
+The CLI is retained for scripting and automation use cases.
 
-```
-./target/release/MalChelaGUI
-```
 
 ℹ️ It is recommended to build and run MalChela in `--release` mode to ensure GUI and subtools function optimally.
 
@@ -111,14 +127,16 @@ or
 
 ---
 
-### Case Management (v3.0)
+### Case Management
 
-MalChela v3.0 introduces a full-featured case system:
+MalChela includes a full-featured case system:
 
-- Track files, tools run, and notes under a unified `case.yaml`
-- Auto-save tool output under `saved_output/cases/<case-name>/`
-- Integrated tagging, search, and scratchpad with VS Code support
-- Seamless case loading and archiving in GUI mode
+- Cases no longer require starting with a file or folder — any tool result can be saved to a case
+- Create a new case from within a running tool session
+- Output saved under saved_output/cases/<case-name>/
+- Integrated tagging, search, and status (open/closed)
+- Seamless case loading and archiving
+
 
 ---
 

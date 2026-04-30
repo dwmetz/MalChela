@@ -1328,15 +1328,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#ios-26-development-panic" class="md-nav__link">
-    <span class="md-ellipsis">
-      iOS 26 Development Panic
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1387,15 +1378,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#ios-26-development-panic" class="md-nav__link">
-    <span class="md-ellipsis">
-      iOS 26 Development Panic
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1424,21 +1406,11 @@
 <p>MalChela is designed to be cross-platform but has some current limitations:</p>
 <ul>
 <li>The <strong>CLI</strong> runs well on macOS, Linux, and WSL environments.</li>
-<li>The <strong>GUI</strong> is supported on macOS and Linux. It may also work under WSLg on Windows 11, but this is not officially tested.</li>
+<li>The <strong>web interface</strong> runs on any platform with a browser. Start the server with <code>python server/malchela_server.py</code> and open <code>http://localhost:8675</code>.</li>
 <li>File paths must use <strong>POSIX-style formatting</strong> (e.g., <code>/home/user/file.txt</code>). Windows-style paths are not supported.</li>
-<li>If the <code>exec_type</code> field is missing or misconfigured in <code>tools.yaml</code>, GUI execution may fail or behave incorrectly.</li>
-<li>The <code>category</code> field in <code>tools.yaml</code> no longer impacts GUI execution behavior—it is only used for grouping in the interface.</li>
+<li>If the <code>exec_type</code> field is missing or misconfigured in <code>tools.yaml</code>, web interface execution may fail or behave incorrectly.</li>
+<li>The <code>category</code> field in <code>tools.yaml</code> no longer impacts web interface execution behavior—it is only used for grouping in the interface.</li>
 </ul>
-<h2 id="ios-26-development-panic">iOS 26 Development Panic</h2>
-<p>If you're running iOS 26 beta and encounter a runtime panic like the following:</p>
-<pre><code>thread 'main' panicked at /Users/you/.cargo/registry/src/index.crates.io-*/icrate-0.0.4/.../NSEnumerator.rs:6:1: invalid message send ...
-</code></pre>
-<p>This is due to stricter signature checks in the Apple SDK when running in debug mode. The panic does <strong>not</strong> occur in release mode builds.</p>
-<p>To avoid the crash, build and run in release mode:</p>
-<pre><code class="language-bash">cargo build --release
-./target/release/MalChelaGUI
-</code></pre>
-<p>This issue does not affect normal usage or distribution of the application. Debug mode remains usable for building, but the GUI should be run from a release build on affected platforms.</p>
 
 
 

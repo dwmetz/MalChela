@@ -1504,7 +1504,7 @@
 <p>MalChela integrates support for <strong>Volatility 3</strong>, a powerful memory forensics framework. This tool enables analysts to examine memory dumps for signs of compromise, persistence mechanisms, and malicious activity.</p>
 <hr />
 <h2 id="integration-overview">Integration Overview</h2>
-<p>Volatility 3 is available in MalChela as an enhanced third-party tool. The GUI provides a dedicated interface for selecting plugins, supplying arguments, and reviewing results — all within a structured panel that mimics the CLI workflow but adds quality-of-life improvements like:</p>
+<p>Volatility 3 is available in MalChela as an enhanced third-party tool. The web interface provides a dedicated interface for selecting plugins, supplying arguments, and reviewing results — all within a structured panel that mimics the CLI workflow but adds quality-of-life improvements like:</p>
 <ul>
 <li>Live search and categorized plugin reference</li>
 <li>Plugin-specific argument helpers</li>
@@ -1529,7 +1529,7 @@
 </ul>
 <hr />
 <h2 id="toolsyaml-configuration">tools.yaml Configuration</h2>
-<p>To use Volatility 3 with the GUI launcher, ensure the correct <code>command</code> value is defined in your <code>tools.yaml</code> configuration. Depending on your environment, the binary may be installed under different names or locations.</p>
+<p>To use Volatility 3 with the web interface launcher, ensure the correct <code>command</code> value is defined in your <code>tools.yaml</code> configuration. Depending on your environment, the binary may be installed under different names or locations.</p>
 <p>Two common examples:</p>
 <pre><code class="language-yaml">- name: Volatility 3
   description: &quot;Memory analysis using Volatility 3&quot;
@@ -1560,7 +1560,7 @@
 </ul>
 <hr />
 <h2 id="output-and-reports">Output and Reports</h2>
-<p>All plugin results are streamed to the GUI console with formatting preserved. Where supported, plugins that produce dumped files will output to a user-specified folder.</p>
+<p>All plugin results are streamed to the web interface console with formatting preserved. Where supported, plugins that produce dumped files will output to a user-specified folder.</p>
 <hr />
 <h2 id="known-limitations">Known Limitations</h2>
 <ul>

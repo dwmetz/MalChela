@@ -846,9 +846,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gui-usage-notes" class="md-nav__link">
+  <a href="#web-interface-notes" class="md-nav__link">
     <span class="md-ellipsis">
-      GUI Usage Notes
+      Web Interface Notes
     </span>
   </a>
   
@@ -1443,9 +1443,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gui-usage-notes" class="md-nav__link">
+  <a href="#web-interface-notes" class="md-nav__link">
     <span class="md-ellipsis">
-      GUI Usage Notes
+      Web Interface Notes
     </span>
   </a>
   
@@ -1475,10 +1475,7 @@
 <p><strong>Note:</strong> <code>FileMiner</code> replaces the deprecated <code>MismatchMiner</code>.</p>
 <p><strong>FileMiner</strong> is a command-line tool that recursively scans a directory to analyze files by magic bytes and hash, identifying mismatches between file extensions and true types. It is useful for forensic triage, anomaly detection, and preparing follow-up analysis using other tools in the MalChela suite.</p>
 <p><img alt="File Miner" src="../../images/fileminer.png" /></p>
-<p align="center"><strong>Figure 5.6.1:</strong> File Miner</p>
-
-<p><img alt="File Miner with Subtool Output" src="../../images/fileminer_with_subtool_output.png" /></p>
-<p align="center"><strong>Figure 5.6.2:</strong> File Miner with Subtool Output</p>
+<p align="center"><strong>Figure 5.6:</strong> File Miner</p>
 
 <h2 id="function-overview">Function Overview</h2>
 <ul>
@@ -1488,9 +1485,9 @@
 <li>Suggests relevant analysis tools (e.g., FileAnalyzer, mStrings, TiQuery)</li>
 <li>Outputs results in a styled table or optional JSON format</li>
 <li>Integrates with case management via the <code>--case</code> flag</li>
-<li>Automatically launches in GUI when a folder-based case is created or restored</li>
-<li>Results populate an interactive table in the GUI</li>
-<li>Users can launch suggested tools on a per-file basis directly from the GUI</li>
+<li>Automatically launches in the web interface when a folder-based case is created or restored</li>
+<li>Results populate an interactive table in the web interface</li>
+<li>Users can launch suggested tools on a per-file basis directly from the web interface</li>
 </ul>
 <h2 id="cli-usage">CLI Usage</h2>
 <pre><code class="language-sh">cargo run -p fileminer -- [OPTIONS] [DIR]
@@ -1514,7 +1511,7 @@
 </tr>
 <tr>
 <td><code>--output &lt;filename&gt;</code></td>
-<td>Overrides the default output file name. Used internally by the GUI.</td>
+<td>Overrides the default output file name. Used internally by the web interface.</td>
 </tr>
 <tr>
 <td><code>--case &lt;case-name&gt;</code></td>
@@ -1542,12 +1539,12 @@ cargo run -p fileminer -- /path/to/files -m
 # Combine all
 cargo run -p fileminer -- /path/to/files --case suspicious_usb -m
 </code></pre>
-<h2 id="gui-usage-notes">GUI Usage Notes</h2>
+<h2 id="web-interface-notes">Web Interface Notes</h2>
 <ul>
-<li>When a new case is created or restored using a folder, FileMiner runs automatically in the GUI.</li>
+<li>When a new case is created or restored using a folder, FileMiner runs automatically in the web interface.</li>
 <li>Results are saved under <code>saved_output/cases/&lt;case-name&gt;/fileminer/</code>.</li>
 <li>FileMiner displays an interactive table of results with suggested tools per file.</li>
-<li>Suggested tools can be launched directly from within the GUI results panel.</li>
+<li>Suggested tools can be launched directly from within the web interface results panel.</li>
 </ul>
 
 

@@ -1484,7 +1484,7 @@
 </code></pre>
 <p>These are required for:
 - YARA and YARA-X support
-- Building Rust crates that link to native libraries (e.g., GUI dependencies)
+- Building Rust crates that link to native libraries (e.g., TShark/glib)
 - TShark integration (via GTK/glib)
 - <code>ssdeep</code> is used for fuzzy hashing in tools like <code>fileanalyzer</code>. If not installed, fuzzy hash results may be unavailable.</p>
 <h3 id="clone-the-repository">Clone the Repository</h3>
@@ -1501,13 +1501,13 @@ cargo build -p fileanalyzer --release # Build an individual tool in release mode
 <pre><code class="language-bash">chmod +x release.sh
 ./release.sh
 </code></pre>
-<p>This will compile every core tool and generate optimized release binaries under <code>target/release/</code>. This is especially useful before first use of the GUI or case features, which rely on prebuilt binaries.</p>
+<p>This will compile every core tool and generate optimized release binaries under <code>target/release/</code>. This is especially useful before first use of the web interface or case features, which rely on prebuilt binaries.</p>
 <blockquote>
-<p>⚠️ Using <code>--release</code> is highly recommended to ensure optimal performance and avoid unexpected behavior when launching tools from the GUI.</p>
+<p>⚠️ Using <code>--release</code> is highly recommended to ensure optimal performance and avoid unexpected behavior when launching tools from the web interface.</p>
 </blockquote>
 <h3 id="windows-notes">Windows Notes</h3>
 <pre><code>•   Best experience via WSL2
-•   GUI is not supported natively on Windows
+•   The web interface is accessible via any browser on Windows (WSL2 recommended for running the server)
 </code></pre>
 
 

@@ -1502,7 +1502,7 @@
 
   <h1>tools.yaml</h1>
 
-<p>MalChela uses a central <code>tools.yaml</code> file to define which tools appear in the GUI, along with their launch method, input types, categories, and optional arguments. This YAML-driven approach allows full control without editing source code.</p>
+<p>MalChela uses a central <code>tools.yaml</code> file to define which tools appear in the web interface, along with their launch method, input types, categories, and optional arguments. This YAML-driven approach allows full control without editing source code.</p>
 <h3 id="key-fields-in-each-tool-entry">Key Fields in Each Tool Entry</h3>
 <table>
 <thead>
@@ -1518,7 +1518,7 @@
 </tr>
 <tr>
 <td>description</td>
-<td>Shown in GUI for clarity</td>
+<td>Shown in web interface for clarity</td>
 </tr>
 <tr>
 <td>command</td>
@@ -1542,7 +1542,7 @@
 </tr>
 <tr>
 <td>category</td>
-<td>Grouping used in the GUI left panel</td>
+<td>Grouping used in the web interface left panel</td>
 </tr>
 </tbody>
 </table>
@@ -1550,14 +1550,14 @@
 <p>⚠️ All fields except <code>optional_args</code> are required.</p>
 </blockquote>
 <h2 id="swapping-configs-remnux-mode-and-beyond">Swapping Configs: REMnux Mode and Beyond</h2>
-<p>MalChela supports easy switching between tool configurations via the GUI.</p>
+<p>MalChela supports easy switching between tool configurations via the web interface.</p>
 <p><img alt="YAML Config Tool" src="../../images/yaml_configurator.png" /></p>
 <p><strong>Figure 3.1:</strong> YAML Config Tool – Tool entry shown in table and form</p>
 <p>To switch:</p>
 <ul>
 <li>Open the <strong>Configuration Panel</strong></li>
 <li>Use <strong>“Select tools.yaml”</strong> to point to a different config</li>
-<li>Restart the GUI or reload tools</li>
+<li>Restart the web interface or reload tools</li>
 </ul>
 <p>This allows forensic VMs like REMnux to use a tailored toolset while keeping your default config untouched.</p>
 <blockquote>
@@ -1570,7 +1570,7 @@
 <li>For tools installed via <code>pipx</code>, reference the binary path directly in <code>command</code></li>
 </ul>
 <h2 id="backing-up-and-restoring-toolyaml">Backing Up and Restoring tool.yaml</h2>
-<p>The MalChela GUI provides built-in functionality to back up and restore your <code>tools.yaml</code> configuration file.</p>
+<p>The MalChela web interface provides built-in functionality to back up and restore your <code>tools.yaml</code> configuration file.</p>
 <h3 id="backup">Backup</h3>
 <p>To create a backup of your current <code>tools.yaml</code>:</p>
 <ul>

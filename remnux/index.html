@@ -1584,13 +1584,13 @@
 <p>MalChela includes built-in support for running in <strong>REMnux Mode</strong>, a configuration designed specifically for seamless operation within the REMnux malware analysis distribution.</p>
 <hr />
 <h2 id="how-remnux-mode-works">How REMnux Mode Works</h2>
-<p>REMnux Mode is a configuration profile that aligns MalChela’s behavior with the REMnux malware analysis distribution. It adjusts paths, tool definitions, and GUI presentation to match the REMnux environment.</p>
-<p>This mode is manually enabled by selecting <strong>“Load REMnux”</strong> from the tools.yaml Configuration Panel in the GUI. Once selected, a REMnux-specific <code>tools.yaml</code> file is loaded and remains active until you replace it with another configuration.</p>
+<p>REMnux Mode is a configuration profile that aligns MalChela’s behavior with the REMnux malware analysis distribution. It adjusts paths, tool definitions, and web interface presentation to match the REMnux environment.</p>
+<p>This mode is manually enabled by selecting <strong>“Load REMnux”</strong> from the tools.yaml Configuration Panel in the web interface. Once selected, a REMnux-specific <code>tools.yaml</code> file is loaded and remains active until you replace it with another configuration.</p>
 <p><img alt="Enabling REMnux mode" src="../images/load_remnux.png" /></p>
 <p align="left"><strong>Figure 7.1:</strong> Enabling REMnux mode</p>
 
 <blockquote>
-<p>Note: Whenever you change the tools.yaml, you need to restart the GUI for it to take effect.</p>
+<p>Note: Whenever you change the tools.yaml, you need to restart the web interface for it to take effect.</p>
 </blockquote>
 <hr />
 <p><img alt="REMnux Mode" src="../images/remnux_mode_gui.png" /></p>
@@ -1598,7 +1598,7 @@
 
 <hr />
 <h2 id="preconfigured-tools-in-remnux-mode">Preconfigured Tools in REMnux Mode</h2>
-<p>The following tools will appear in the GUI when REMnux Mode is enabled. Each is preconfigured with known-good paths for the REMnux environment:</p>
+<p>The following tools will appear in the web interface when REMnux Mode is enabled. Each is preconfigured with known-good paths for the REMnux environment:</p>
 <h3 id="file-analysis">File Analysis</h3>
 <table>
 <thead>
@@ -1782,7 +1782,7 @@
 <p>Although REMnux Mode provides sane defaults, you can still:</p>
 <ul>
 <li>Override tool entries in <code>tools.yaml</code></li>
-<li>Add new third-party tools via the GUI or YAML</li>
+<li>Add new third-party tools via the web interface or YAML</li>
 <li>Use the Configuration Panel to backup/restore your configuration</li>
 </ul>
 <hr />

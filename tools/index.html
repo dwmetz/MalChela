@@ -1339,7 +1339,7 @@
 <blockquote>
 <p>Tools now require <code>exec_type</code> (e.g., <code>cargo</code>, <code>binary</code>, <code>script</code>) to define how they are launched, and <code>file_position</code> to clarify argument order when needed.</p>
 </blockquote>
-<p>To integrate a new tool into the GUI, ensure the tool:
+<p>To integrate a new tool into the web interface, ensure the tool:
 - Accepts CLI arguments in the form <code>toolname [args] [input]</code>
 - Outputs results to stdout
 - Is installed and available in <code>$PATH</code></p>
@@ -1347,13 +1347,13 @@
   description: “Short summary of tool purpose”
   command: [“toolname”]
   input_type: file  # or folder or hash
-  category: “File Analysis”  # or other GUI category
+  category: “File Analysis”  # or other web interface category
   optional_args: []
   exec_type: binary  # or cargo / script
   file_position: last  # or first, if required
 </code></pre>
 <blockquote>
-<p>You can switch to a prebuilt <code>tools.yaml</code> for REMnux mode via the GUI configuration panel — useful for quick setup in forensic VMs.</p>
+<p>You can switch to a prebuilt <code>tools.yaml</code> for REMnux mode via the web interface configuration panel — useful for quick setup in forensic VMs.</p>
 </blockquote>
 
 

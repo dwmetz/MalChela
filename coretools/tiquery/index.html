@@ -936,9 +936,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gui-input-modes" class="md-nav__link">
+  <a href="#web-interface-input-modes" class="md-nav__link">
     <span class="md-ellipsis">
-      GUI Input Modes
+      Web Interface Input Modes
     </span>
   </a>
   
@@ -1485,9 +1485,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gui-input-modes" class="md-nav__link">
+  <a href="#web-interface-input-modes" class="md-nav__link">
     <span class="md-ellipsis">
-      GUI Input Modes
+      Web Interface Input Modes
     </span>
   </a>
   
@@ -1515,11 +1515,11 @@
   <h1>TiQuery</h1>
 
 <p>Threat Intel Query (<code>tiquery</code>) is a multi-source threat intelligence lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash or URL is known, what family/category it belongs to, and how widely it has been detected.</p>
-<p><code>tiquery</code> accepts a <strong>file hash</strong> (MD5/SHA1/SHA256), an <strong>http/https URL</strong>, or a <strong>QR code image</strong> as input and automatically routes the query to the appropriate set of sources. In the GUI, the Single Hash tab also includes a <strong>Browse</strong> button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).</p>
-<p><img alt="TIQuery Hash Lookup" src="../../images/tiquery_hash.png" /></p>
+<p><code>tiquery</code> accepts a <strong>file hash</strong> (MD5/SHA1/SHA256), an <strong>http/https URL</strong>, or a <strong>QR code image</strong> as input and automatically routes the query to the appropriate set of sources. In the web interface, the Single Hash tab also includes a <strong>Browse</strong> button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).</p>
+<p><img alt="TIQuery Hash Lookup" src="../images/tiquery_hash.png" /></p>
 <p align="center"><strong>Figure 5.17:</strong> TIQuery Hash Lookup</p>
 
-<p><img alt="TIQuery QR Lookup" src="../../images/tiquery_qr.png" /></p>
+<p><img alt="TIQuery QR Lookup" src="../images/tiquery_qr.png" /></p>
 <p align="center"><strong>Figure 5.18:</strong> TIQuery QR Code Lookup</p>
 
 <hr />
@@ -1659,7 +1659,7 @@ tiquery --qr qr_image.jpg --json
 </code></pre>
 <p>Accepts MD5, SHA1, and SHA256 hashes, or any <code>http://</code> / <code>https://</code> URL. If no input is provided, the tool will prompt interactively.</p>
 <p><strong>Bulk mode</strong> reads a <code>.txt</code> or <code>.csv</code> file and extracts all valid MD5/SHA1/SHA256 hashes (one per line, or mixed with other content). Each hash is queried sequentially with a short delay between requests to respect API rate limits. Results are displayed as a table per hash in human mode, or as a JSON array / CSV stream when <code>--json</code> / <code>--csv</code> is specified.</p>
-<p><strong>QR mode</strong> decodes a QR code image (PNG/JPG/GIF/BMP/WebP) and uses the extracted URL as input to the standard URL lookup pipeline. Useful for triaging quishing (QR phishing) samples from emails and screenshots without needing the GUI.</p>
+<p><strong>QR mode</strong> decodes a QR code image (PNG/JPG/GIF/BMP/WebP) and uses the extracted URL as input to the standard URL lookup pipeline. Useful for triaging quishing (QR phishing) samples from emails and screenshots without needing the web interface.</p>
 <hr />
 <h3 id="output">Output</h3>
 <p>Results are presented in a matrix showing source, status, malware family/tags, detection summary, and a reference link:</p>
@@ -1698,21 +1698,21 @@ api/tr-api.txt        # Triage
 api/url-api.txt       # urlscan.io (optional — raises rate limits)
 api/gsb-api.txt       # Google Safe Browsing
 </code></pre>
-<p>Keys can be managed via the <strong>API Keys</strong> panel in the MalChela GUI (Configuration menu → API Keys) or by placing the key directly in the appropriate file.</p>
+<p>Keys can be managed via the <strong>API Keys</strong> panel in the MalChela web interface (Configuration menu → API Keys) or by placing the key directly in the appropriate file.</p>
 <p>See <a href="https://dwmetz.github.io/MalChela/configuration/api-configuration/">API Configuration</a> for details.</p>
 <hr />
 <h3 id="bulk-lookup">Bulk Lookup</h3>
 <p>Bulk lookup processes a <code>.txt</code> or <code>.csv</code> file containing hashes (one per line, or mixed with other content — the tool extracts valid MD5/SHA1/SHA256 values automatically) and runs all lookups in a single operation.</p>
 <p><strong>CLI:</strong> use the <code>--bulk &lt;file&gt;</code> flag (see CLI Syntax above). Results are printed as a table per hash, or as a combined JSON array / CSV when <code>--json</code> / <code>--csv</code> is specified.</p>
-<p><strong>GUI:</strong> the TIquery panel's <strong>Bulk Lookup</strong> tab lets you browse to a file and run all lookups in one click. Results are displayed in a consolidated grid.</p>
+<p><strong>Web interface:</strong> the TIquery panel's <strong>Bulk Lookup</strong> tab lets you browse to a file and run all lookups in one click. Results are displayed in a consolidated grid.</p>
 <hr />
-<h3 id="gui-input-modes">GUI Input Modes</h3>
-<p>The MalChela GUI's Threat Intel Query panel offers four input modes, selected via tabs at the top of the panel:</p>
+<h3 id="web-interface-input-modes">Web Interface Input Modes</h3>
+<p>The MalChela web interface's Threat Intel Query panel offers four input modes, selected via tabs at the top of the panel:</p>
 <ul>
-<li><strong>Single Hash</strong> — paste a hash or click <strong>Browse…</strong> to pick a file; the GUI computes the file's SHA256 and populates the hash field automatically.</li>
+<li><strong>Single Hash</strong> — paste a hash or click <strong>Browse…</strong> to pick a file; the web interface computes the file's SHA256 and populates the hash field automatically.</li>
 <li><strong>Bulk Lookup</strong> — as described above, for batches of hashes in a file.</li>
 <li><strong>URL</strong> — paste an <code>http://</code> or <code>https://</code> URL to query VirusTotal, urlscan.io, and Google Safe Browsing in parallel.</li>
-<li><strong>QR Code</strong> — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the GUI decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.</li>
+<li><strong>QR Code</strong> — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the web interface decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.</li>
 </ul>
 <p>In URL and QR modes, source checkboxes auto-enable based on which API keys are configured, exactly as in hash mode.</p>
 

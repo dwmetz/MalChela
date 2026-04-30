@@ -655,7 +655,7 @@
           <li class="md-nav__item">
   <a href="#tagging" class="md-nav__link">
     <span class="md-ellipsis">
-      Tagging:
+      Tagging
     </span>
   </a>
   
@@ -664,7 +664,7 @@
           <li class="md-nav__item">
   <a href="#search" class="md-nav__link">
     <span class="md-ellipsis">
-      Search:
+      Search
     </span>
   </a>
   
@@ -676,18 +676,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#archiving-restoring-cases" class="md-nav__link">
+  <a href="#archiving-cases" class="md-nav__link">
     <span class="md-ellipsis">
-      Archiving &amp; Restoring Cases
+      Archiving Cases
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#case-aware-tool-tracking" class="md-nav__link">
+  <a href="#importing-cases" class="md-nav__link">
     <span class="md-ellipsis">
-      Case-Aware Tool Tracking
+      Importing Cases
     </span>
   </a>
   
@@ -1459,7 +1459,7 @@
           <li class="md-nav__item">
   <a href="#tagging" class="md-nav__link">
     <span class="md-ellipsis">
-      Tagging:
+      Tagging
     </span>
   </a>
   
@@ -1468,7 +1468,7 @@
           <li class="md-nav__item">
   <a href="#search" class="md-nav__link">
     <span class="md-ellipsis">
-      Search:
+      Search
     </span>
   </a>
   
@@ -1480,18 +1480,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#archiving-restoring-cases" class="md-nav__link">
+  <a href="#archiving-cases" class="md-nav__link">
     <span class="md-ellipsis">
-      Archiving &amp; Restoring Cases
+      Archiving Cases
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#case-aware-tool-tracking" class="md-nav__link">
+  <a href="#importing-cases" class="md-nav__link">
     <span class="md-ellipsis">
-      Case-Aware Tool Tracking
+      Importing Cases
     </span>
   </a>
   
@@ -1527,65 +1527,62 @@
 
 <h1 id="416-case-management">4.16 Case Management</h1>
 <p>The Cases feature in MalChela v4.0 introduces a structured way to manage analysis sessions, organize tool results, and preserve analyst notes for long-term reference. Each case acts as a container for a specific file or folder input, and captures relevant metadata, tool output, and custom annotations.</p>
+<p>Cases are managed entirely through the web interface, which is launched by running:</p>
+<pre><code class="language-sh">python server/malchela_server.py
+</code></pre>
 <p><img alt="Case Management" src="../images/case_management.png" /></p>
 <p align="center"><strong>Figure 4.1:</strong> Case Management</p>
 
 <h2 id="creating-a-case">Creating a Case</h2>
-<p>A case can be created by providing:</p>
-<ul>
-<li>A file (e.g. suspicious binary)</li>
-<li>A folder (directory of unknown files e.g. Tshark export http objects)</li>
-</ul>
+<p>A case can be created from the New Case menu, or by selecting 'Save to Case' in any tool.</p>
 <p><img alt="New Case" src="../images/new_case.png" /></p>
 <p align="center"><strong>Figure 4.2:</strong> New Case</p>
 
 <p>After choosing the input, assign a descriptive case name. The web interface will automatically create a new folder under:</p>
 <pre><code>saved_output/cases/&lt;case_name&gt;/
 </code></pre>
+<p>When a <strong>folder</strong> is used as the case input, FileMiner runs automatically and populates an interactive results table. Suggested tools can be launched on a per-file basis directly from the FileMiner results panel.</p>
 <h2 id="case-contents">Case Contents</h2>
 <p>Each case folder includes:</p>
 <ul>
-<li><code>case.yaml</code>: combines metadata, case tracking, and user notes in a single structured file</li>
-<li><code>fileminer/</code>, <code>mstrings/</code>, <code>tiquery/</code>, etc.: tool-specific output directories</li>
-<li><code>tracking/</code>: flags for completed tool runs</li>
+<li><code>case.yaml</code> — combines metadata, case tracking, and user notes in a single structured file</li>
+<li><code>fileminer/</code>, <code>mstrings/</code>, <code>tiquery/</code>, etc. — tool-specific output directories</li>
 </ul>
 <h2 id="notes-tagging">Notes &amp; Tagging</h2>
-<p>The scratchpad allows users to record notes, label items with tags, and track investigative context across sessions.</p>
+<p>The Notebook allows users to record notes, label items with tags, and track investigative context across sessions.</p>
 <ul>
 <li>Notes can include plain text, YAML fragments, or markdown.</li>
 </ul>
-<h3 id="tagging">Tagging:</h3>
+<h3 id="tagging">Tagging</h3>
 <ul>
 <li>Any word prefixed with <code>#</code> (e.g., <code>#malware</code>, <code>#tshark</code>) becomes a tag.</li>
-<li>These tags will appear in the Workspace panel under the current case.</li>
+<li>Tags appear in the Workspace panel under the current case.</li>
 <li>Tags help organize and filter case context.</li>
 </ul>
-<h3 id="search">Search:</h3>
+<h3 id="search">Search</h3>
+<p>From the Case modal, you can search across:</p>
 <ul>
-<li>From the Case Modal, you can search across:</li>
 <li>All saved tool outputs</li>
 <li>Notes contents</li>
-<li>Tags (by prefixing with <code>#</code>)</li>
 </ul>
 <p><img alt="Searching Cases" src="../images/case_search.png" /></p>
 <p align="center"><strong>Figure 4.3:</strong> Searching Cases</p>
 
-<h2 id="archiving-restoring-cases">Archiving &amp; Restoring Cases</h2>
+<h2 id="archiving-cases">Archiving Cases</h2>
 <p>Cases can be archived into a <code>.zip</code> file using the web interface's <strong>Archive Case</strong> feature. This creates a portable snapshot that includes all metadata, notes, and tool outputs.</p>
-<p>To restore a case:</p>
-<ul>
+<p>Archives are saved to:</p>
+<pre><code>saved_output/case_archives/
+</code></pre>
+<h2 id="importing-cases">Importing Cases</h2>
+<p>To restore a previously archived case:</p>
+<ol>
 <li>Open the web interface</li>
-<li>Use <strong>Restore Case</strong></li>
-<li>Select a <code>.zip</code> archive containing a valid <code>case.json</code></li>
-</ul>
-<p>The case will be rehydrated into the <code>saved_output/cases/</code> directory and appear in the workspace.</p>
-<h2 id="case-aware-tool-tracking">Case-Aware Tool Tracking</h2>
-<p>Tools launched from the workspace automatically write output into the active case's subfolder and register a tracking file to avoid redundant execution.</p>
-<p><img alt="Example Case" src="../images/case_example.png" /></p>
-<p align="center"><strong>Figure 4.4:</strong> Example Case</p>
-
+<li>Use <strong>Import Case</strong></li>
+<li>Select a <code>.zip</code> archive from <code>saved_output/case_archives/</code> (or provide the full path to any valid case archive)</li>
+</ol>
+<p>The case will be extracted into <code>saved_output/cases/</code> and appear in the workspace. If a case with the same name already exists, you will be prompted to confirm overwrite.</p>
 <h2 id="summary">Summary</h2>
-<p>Cases enable consistent, organized forensic workflows across sessions and machines. Whether you're triaging suspicious files, running multi-tool pipelines, or collaborating across systems, the Cases feature ensures nothing is lost.</p>
+<p>Cases enable consistent, organized forensic workflows across sessions and machines. Whether you're triaging suspicious files, running multi-tool pipelines, or preserving findings for reporting, the Cases feature ensures nothing is lost.</p>
 
 
 

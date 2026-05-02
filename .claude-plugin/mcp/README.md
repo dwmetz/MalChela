@@ -90,16 +90,37 @@ For background on how this fits into the broader MalChela + AI workflow, see the
 
 ## API Key Setup
 
-MalChela reads API keys from two plain text files in the project root:
+MalChela reads API keys from plain text files in the `api/` subdirectory of the MalChela project root. All keys are optional but required for their respective lookups. These files are excluded from version control via `.gitignore`.
+
+**Hash Sources — Tier 1**
 
 | File | Service |
 |---|---|
-| `vt-api.txt` | [VirusTotal](https://www.virustotal.com) — free tier sufficient |
-| `mb-api.txt` | [MalwareBazaar](https://bazaar.abuse.ch) — free, no key required for basic queries |
+| `vt-api.txt` | [VirusTotal](https://www.virustotal.com) |
+| `mb-api.txt` | [MalwareBazaar](https://bazaar.abuse.ch) |
+| `otx-api.txt` | [AlienVault OTX](https://otx.alienvault.com) |
 
-These files are already listed in `.gitignore` and will never be committed to the repository.
+**Hash Sources — Tier 2**
 
-The easiest way to set them up is via MalChela's built-in config tool, run from the MalChela root:
+| File | Service |
+|---|---|
+| `md-api.txt` | [MetaDefender Cloud](https://metadefender.opswat.com) |
+| `mp-api.txt` | [Malpedia](https://malpedia.caad.fkie.fraunhofer.de) |
+| `ha-api.txt` | [Hybrid Analysis](https://hybrid-analysis.com) |
+| `mw-api.txt` | [MWDB](https://mwdb.cert.pl) |
+| `tr-api.txt` | [Triage](https://tria.ge) |
+| `fs-api.txt` | [FileScan.IO](https://www.filescan.io) |
+| `ms-api.txt` | [Malshare](https://malshare.com) |
+| `iq-api.txt` | [InQuest Labs](https://labs.inquest.net) |
+
+**URL Sources**
+
+| File | Service |
+|---|---|
+| `url-api.txt` | [urlscan.io](https://urlscan.io) |
+| `gsb-api.txt` | [Google Safe Browsing](https://safebrowsing.google.com) |
+
+The easiest way to configure keys is via MalChela's built-in config tool:
 
 ```bash
 cd /path/to/MalChela
@@ -109,8 +130,7 @@ cargo run -p config
 Alternatively, create them manually:
 
 ```bash
-echo "your-virustotal-api-key" > vt-api.txt
-echo "your-malwarebazaar-api-key" > mb-api.txt
+echo "your-api-key" > /path/to/MalChela/api/vt-api.txt
 ```
 
 ---

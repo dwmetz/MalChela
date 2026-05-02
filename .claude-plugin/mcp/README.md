@@ -1,3 +1,76 @@
+## Prerequisites
+
+Before installing the MalChela Claude Code plugin, the following must be in place
+on your local machine:
+
+### 1. Clone and build MalChela
+```bash
+git clone https://github.com/dwmetz/MalChela.git
+cd MalChela
+./release.sh
+```
+This compiles all MalChela tools to `target/release/`. Requires Rust, YARA, and
+platform dependencies — see the main [MalChela README](https://github.com/dwmetz/MalChela#readme)
+for full build requirements.
+
+### 2. Set MALCHELA_DIR
+Set the environment variable to the root of your local MalChela installation:
+
+```bash
+# Add to your shell profile (~/.zshrc, ~/.bashrc, etc.)
+export MALCHELA_DIR=/path/to/MalChela
+```
+
+### 3. Configure API keys
+Place your API key files in `$MALCHELA_DIR/api/`. All keys are optional but
+required for their respective lookups:
+
+**Hash Sources — Tier 1**
+
+| File | Service |
+|------|---------|
+| `vt-api.txt` | VirusTotal |
+| `mb-api.txt` | MalwareBazaar |
+| `otx-api.txt` | AlienVault OTX |
+
+**Hash Sources — Tier 2**
+
+| File | Service |
+|------|---------|
+| `md-api.txt` | MetaDefender Cloud |
+| `mp-api.txt` | Malpedia |
+| `ha-api.txt` | Hybrid Analysis |
+| `mw-api.txt` | MWDB |
+| `tr-api.txt` | Triage |
+| `fs-api.txt` | FileScan.IO |
+| `ms-api.txt` | Malshare |
+| `iq-api.txt` | InQuest Labs |
+
+**URL Sources**
+
+| File | Service |
+|------|---------|
+| `url-api.txt` | urlscan.io |
+| `gsb-api.txt` | Google Safe Browsing |
+
+MalChela will prompt you on first run if a required key is missing.
+
+### 4. Install the plugin
+
+**Via Anthropic community marketplace:**
+```bash
+claude plugin marketplace add anthropics/claude-plugins-community
+claude plugin install malchela@claude-community
+```
+
+**Via self-hosted marketplace:**
+```bash
+claude plugin marketplace add dwmetz/MalChela
+claude plugin install malchela@malchela-marketplace
+```
+
+---
+
 # MalChela MCP Server
 
 This directory contains the Node.js MCP (Model Context Protocol) server that exposes MalChela's malware analysis tools directly to Claude Desktop. Once configured, Claude has persistent, structured access to MalChela's full analysis suite without any manual briefing or context-pasting each session.

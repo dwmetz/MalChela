@@ -24,7 +24,7 @@
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/index.js"],
       "env": {
-        "MALCHELA_DIR": "${CLAUDE_PLUGIN_ROOT}"
+        "MALCHELA_DIR": "${MALCHELA_DIR}"
       }
     }
   }

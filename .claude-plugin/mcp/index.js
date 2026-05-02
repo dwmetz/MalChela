@@ -29,7 +29,13 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
-const MALCHELA_DIR = process.env.MALCHELA_DIR || '/Users/dmetz/GitHub/MalChela';
+const MALCHELA_DIR = process.env.MALCHELA_DIR || (() => {
+  throw new Error(
+    'MALCHELA_DIR environment variable is not set.\n' +
+    'Set it to the root of your local MalChela installation.\n' +
+    'Example: export MALCHELA_DIR=/home/user/MalChela'
+  );
+})();
 const RELEASE_DIR  = `${MALCHELA_DIR}/target/release`;
 const TIMEOUT_MS   = 60000;
 
@@ -364,8 +370,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       timeout: TIMEOUT_MS,
       env: {
         ...process.env,
-        VT_API_KEY: process.env.VT_API_KEY || '',
-        MB_API_KEY: process.env.MB_API_KEY || '',
       },
     });
 

@@ -591,27 +591,29 @@ async fn main() -> Result<()> {
                 }
             }
         }
+    }
 
-        // Optionally save text report
-        if args.output && args.text {
-            let text = output_text(&hash, &input_label, &results);
-            let output_dir = if let Some(ref case) = args.case {
-                let p = std::path::Path::new("saved_output")
-                    .join("cases")
-                    .join(case)
-                    .join("tiquery");
-                std::fs::create_dir_all(&p)?;
-                p
-            } else {
-                let p = common_config::get_output_dir("tiquery");
-                std::fs::create_dir_all(&p)?;
-                p
-            };
-            let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-            let path = output_dir.join(format!("report_{}.txt", ts));
-            std::fs::write(&path, &text)?;
-            println!("Report saved to: {}", path.display());
-        }
+    // Save text report — runs regardless of output format (--json, --csv, or matrix).
+    // This allows the MCP server to request --json for machine-readable output while
+    // still writing a human-readable text report to the case folder via -o -t.
+    if args.output && args.text {
+        let text = output_text(&hash, &input_label, &results);
+        let output_dir = if let Some(ref case) = args.case {
+            let p = std::path::Path::new("saved_output")
+                .join("cases")
+                .join(case)
+                .join("tiquery");
+            std::fs::create_dir_all(&p)?;
+            p
+        } else {
+            let p = common_config::get_output_dir("tiquery");
+            std::fs::create_dir_all(&p)?;
+            p
+        };
+        let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let path = output_dir.join(format!("report_{}.txt", ts));
+        std::fs::write(&path, &text)?;
+        eprintln!("Report saved to: {}", path.display());
     }
 
     // ── MB download (SHA256 only) ─────────────────────────────────────────────

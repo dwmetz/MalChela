@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#1a1a1a">
 <title>MalChela Analysis Toolkit</title>
 <link rel="manifest" href="manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/dwmetz/MalChela/main/assets/malchela_icon.png">
 <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/dwmetz/MalChela/main/assets/malchela_icon.png">
 <style>
@@ -458,6 +459,31 @@
   .out-yellow  { color: var(--yellow); }
   .out-dim     { color: var(--text-dim); }
   .out-header  { color: var(--cyan); font-weight: 600; }
+
+  /* Markdown rendered output */
+  #output-content.md-view {
+    white-space: normal;
+    word-break: normal;
+  }
+  .md-body { color: var(--text-primary); font-family: inherit; }
+  .md-body h1, .md-body h2, .md-body h3, .md-body h4 { color: var(--cyan); margin: 1em 0 0.4em; font-weight: 600; }
+  .md-body h1 { font-size: 1.4em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  .md-body h2 { font-size: 1.2em; }
+  .md-body h3 { font-size: 1.05em; }
+  .md-body p  { margin: 0.5em 0; }
+  .md-body a  { color: var(--orange); }
+  .md-body code { background: var(--bg-input); color: var(--green); padding: 1px 5px; border-radius: 3px; font-size: 0.95em; }
+  .md-body pre { background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 10px; overflow-x: auto; white-space: pre; word-break: normal; }
+  .md-body pre code { background: none; padding: 0; }
+  .md-body blockquote { border-left: 3px solid var(--cyan-dim); margin: 0.5em 0; padding: 0.2em 0.8em; color: var(--text-dim); }
+  .md-body ul, .md-body ol { padding-left: 1.5em; margin: 0.4em 0; }
+  .md-body li { margin: 0.2em 0; }
+  .md-body table { border-collapse: collapse; width: 100%; margin: 0.6em 0; }
+  .md-body th { background: var(--bg-input); color: var(--cyan); border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+  .md-body td { border: 1px solid var(--border); padding: 4px 10px; }
+  .md-body hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+  .md-body strong { color: var(--text-primary); font-weight: 600; }
+  .md-body em { color: var(--text-dim); }
 
   #output-placeholder {
     display: flex;
@@ -3205,6 +3231,7 @@ function renderColorizedOutput(text) {
 
 function setOutput(html) {
   const el = document.getElementById('output-content');
+  el.classList.remove('md-view');
   el.innerHTML = html;
   el.scrollTop = 0;
 }
@@ -3877,7 +3904,14 @@ async function viewCaseFile(caseName, filename, e) {
       document.getElementById('tool-command').textContent = '';
       document.getElementById('tool-input').innerHTML = '';
       lastOutput = data.content;
-      renderColorizedOutput(data.content);
+      const ext = filename.split('.').pop().toLowerCase();
+      if (ext === 'md') {
+        renderMarkdownOutput(data.content);
+      } else if (ext === 'json') {
+        renderJsonOutput(data.content);
+      } else {
+        renderColorizedOutput(data.content);
+      }
     } else {
       showToast('Could not load file: ' + data.error, 'error');
     }
@@ -4959,12 +4993,36 @@ async function viewFileContent(path, name) {
     });
     if (data.success) {
       lastOutput = data.content;
-      renderColorizedOutput(data.content);
+      const ext = name.split('.').pop().toLowerCase();
+      if (ext === 'md') {
+        renderMarkdownOutput(data.content);
+      } else if (ext === 'json') {
+        renderJsonOutput(data.content);
+      } else {
+        renderColorizedOutput(data.content);
+      }
     } else {
       setOutput(`<span class="out-red">Error: ${escHtml(data.error)}</span>`);
     }
   } catch(e) {
     setOutput(`<span class="out-red">Network error: ${escHtml(e.message)}</span>`);
+  }
+}
+
+function renderMarkdownOutput(text) {
+  const el = document.getElementById('output-content');
+  el.classList.add('md-view');
+  el.innerHTML = `<div class="md-body">${marked.parse(text)}</div>`;
+  el.scrollTop = 0;
+}
+
+function renderJsonOutput(text) {
+  document.getElementById('output-content').classList.remove('md-view');
+  try {
+    const pretty = JSON.stringify(JSON.parse(text), null, 2);
+    setOutput(`<span class="out-default" style="white-space:pre-wrap">${escHtml(pretty)}</span>`);
+  } catch {
+    renderColorizedOutput(text);
   }
 }
 

@@ -14,9 +14,7 @@
  *       "command": "node",
  *       "args": ["/Users/dmetz/mcp-malchela/index.js"],
  *       "env": {
- *         "MALCHELA_DIR": "/Users/dmetz/GitHub/MalChela",
- *         "VT_API_KEY": "your-vt-key",
- *         "MB_API_KEY": "your-mb-key"
+ *         "MALCHELA_DIR": "/Users/dmetz/GitHub/MalChela"
  *       }
  *     }
  *   }
@@ -27,7 +25,10 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { execSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
+
+// Session-level case state — null until the user selects a case
+let currentCase = null;
 
 const MALCHELA_DIR = process.env.MALCHELA_DIR || (() => {
   throw new Error(
@@ -41,6 +42,27 @@ const TIMEOUT_MS   = 60000;
 
 // ── Tool definitions — sourced directly from tools.yaml ──────────────────────
 const TOOLS = [
+
+  // Case Management
+  {
+    name: 'set_case',
+    category: 'Case Management',
+    input_type: 'meta',
+    description:
+      'Set the active investigation case for this session. All subsequent tool output ' +
+      'will be automatically saved to the case directory on disk. Call this once at the ' +
+      'start of a session, before running any analysis tools.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        case_name: {
+          type: 'string',
+          description: 'Case name to activate or create (e.g. "ransomware-jan-2025", "incident-42")',
+        },
+      },
+      required: ['case_name'],
+    },
+  },
 
   // File Analysis
   {
@@ -117,23 +139,6 @@ const TOOLS = [
           type: 'string',
           description: 'Comma-separated source IDs to query (mb,vt,otx,iq,os). Default: mb,vt,otx,iq',
         },
-      },
-      required: ['hash'],
-    },
-  },
-
-  {
-    name: 'malhash',
-    category: 'Threat Intel',
-    input_type: 'hash',
-    description:
-      'Queries a hash against both VirusTotal and MalwareBazaar. Returns detection ' +
-      'ratio, AV verdicts, first/last seen dates, and sample metadata. ' +
-      'Requires VT_API_KEY env var; MB_API_KEY optional.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        hash: { type: 'string', description: 'MD5, SHA1, or SHA256 hash to query' },
       },
       required: ['hash'],
     },
@@ -315,6 +320,9 @@ function buildCommand(toolName, args) {
 
   switch (tool.input_type) {
     case 'file': {
+      if (currentCase) {
+        return `"${binary}" "${args.filepath}" --case "${currentCase}" -o -t`;
+      }
       const out = args.output ? ` -o "${args.output}"` : '';
       return `"${binary}" "${args.filepath}"${out}`;
     }
@@ -326,11 +334,12 @@ function buildCommand(toolName, args) {
       return `"${binary}" "${args.folderpath}"`;
     }
     case 'hash': {
+      const caseFlag = currentCase ? ` --case "${currentCase}" -o -t` : '';
       if (toolName === 'tiquery') {
         const srcFlag = args.sources ? ` --sources "${args.sources}"` : '';
-        return `"${binary}" "${args.hash}"${srcFlag} --json`;
+        return `"${binary}" "${args.hash}"${srcFlag} --json${caseFlag}`;
       }
-      return `"${binary}" "${args.hash}"`;
+      return `"${binary}" "${args.hash}"${caseFlag}`;
     }
     default:
       throw new Error(`Unknown input_type for tool: ${toolName}`);
@@ -359,6 +368,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return {
       content: [{ type: 'text', text: `Unknown tool: ${name}` }],
       isError: true,
+    };
+  }
+
+  // Handle set_case — no binary execution, just update session state
+  if (name === 'set_case') {
+    currentCase = args.case_name;
+    return {
+      content: [{
+        type: 'text',
+        text: `Case set to "${currentCase}". All tool output will be saved to saved_output/cases/${currentCase}/. You may now run analysis tools.`,
+      }],
+    };
+  }
+
+  // First analysis tool call — no case selected yet, prompt for selection
+  if (currentCase === null) {
+    const casesDir = `${MALCHELA_DIR}/saved_output/cases`;
+    let existingCases = [];
+    try {
+      existingCases = readdirSync(casesDir)
+        .filter(f => { try { return statSync(`${casesDir}/${f}`).isDirectory(); } catch { return false; } });
+    } catch { /* directory may not exist yet */ }
+
+    const caseList = existingCases.length > 0
+      ? `Existing cases: ${existingCases.join(', ')}`
+      : 'No existing cases found.';
+
+    return {
+      content: [{
+        type: 'text',
+        text: [
+          'CASE_SELECTION_REQUIRED',
+          caseList,
+          '',
+          `Ask the user: "Which case should I save results to? ${caseList} Or enter a new case name to create one."`,
+          'Then call set_case with the chosen name, and re-run the analysis tool.',
+        ].join('\n'),
+      }],
     };
   }
 

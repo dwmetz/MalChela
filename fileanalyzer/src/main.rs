@@ -322,7 +322,16 @@ async fn main() {
             let line = styled_line("highlight", &format!("PE parse error: {}", e));
             println!("{}", line);
             writeln!(temp_file, "{}", plain_text(&line)).ok();
-            return;
+            // Non-PE files (MSI, OLE, scripts, etc.) fail PE parsing but should
+            // still complete the save path. Return a zeroed-out PEInfo so the
+            // report struct below can be built and written to disk.
+            pe_parser::PEInfo {
+                compile_time: String::new(),
+                sections: vec![],
+                imports: vec![],
+                exports: vec![],
+                summary: String::new(),
+            }
         }
     };
 

@@ -52,6 +52,10 @@ struct Args {
     #[arg(short = 't', long)]
     text: bool,
 
+    /// Save as Markdown
+    #[arg(short = 'm', long)]
+    markdown: bool,
+
     /// Include per-engine VT detections in output
     #[arg(long)]
     verbose_vt: bool,
@@ -333,6 +337,36 @@ fn output_text(hash: &str, input_label: &str, results: &[(String, SourceResult)]
     out
 }
 
+fn output_markdown(hash: &str, input_label: &str, results: &[(String, SourceResult)]) -> String {
+    let mut md = String::new();
+    md.push_str("# TI Query Report\n\n");
+    md.push_str(&format!("| Field | Value |\n|-------|-------|\n"));
+    md.push_str(&format!("| Input | `{}` |\n", hash));
+    md.push_str(&format!("| Type | {} |\n\n", input_label));
+    md.push_str("## Results\n\n");
+    md.push_str("| Source | Status | Family / Tags | Detections | Link |\n");
+    md.push_str("|--------|--------|---------------|------------|------|\n");
+    for (name, r) in results {
+        let status = r.status.as_ref().map(|s| status_label(s)).unwrap_or_default();
+        let family = {
+            let f = r.family.as_deref().unwrap_or("");
+            let t = if !r.tags.is_empty() { r.tags.join(", ") } else { String::new() };
+            if !f.is_empty() && !t.is_empty() { format!("{} [{}]", f, t) }
+            else if !f.is_empty() { f.to_string() }
+            else { t }
+        };
+        let det = r.detections.as_deref().unwrap_or("");
+        let link = r.link.as_deref().unwrap_or("-");
+        let link_cell = if link != "-" { format!("[link]({})", link) } else { "-".to_string() };
+        md.push_str(&format!(
+            "| {} | {} | {} | {} | {} |\n",
+            name, status, family, det, link_cell
+        ));
+    }
+    md.push('\n');
+    md
+}
+
 // ── Bulk / QR helpers ─────────────────────────────────────────────────────────
 
 fn is_hash(s: &str) -> bool {
@@ -593,11 +627,15 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Save text report — runs regardless of output format (--json, --csv, or matrix).
+    // Save report — runs regardless of output format (--json, --csv, or matrix).
     // This allows the MCP server to request --json for machine-readable output while
-    // still writing a human-readable text report to the case folder via -o -t.
-    if args.output && args.text {
-        let text = output_text(&hash, &input_label, &results);
+    // still writing a human-readable report to the case folder via -o -t or -o -m.
+    if args.output && (args.text || args.markdown) {
+        let (content, ext) = if args.markdown {
+            (output_markdown(&hash, &input_label, &results), "md")
+        } else {
+            (output_text(&hash, &input_label, &results), "txt")
+        };
         let output_dir = if let Some(ref case) = args.case {
             let p = std::path::Path::new("saved_output")
                 .join("cases")
@@ -611,8 +649,8 @@ async fn main() -> Result<()> {
             p
         };
         let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let path = output_dir.join(format!("report_{}.txt", ts));
-        std::fs::write(&path, &text)?;
+        let path = output_dir.join(format!("report_{}.{}", ts, ext));
+        std::fs::write(&path, &content)?;
         eprintln!("Report saved to: {}", path.display());
     }
 

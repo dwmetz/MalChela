@@ -533,13 +533,8 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
             "txt"
         } else if args.json {
             "json"
-        } else if args.markdown {
-            "md"
         } else {
-            let warn = styled_line("yellow", "Output format required. Use -t, -j, or -m with -o.");
-            println!("\n{}", warn);
-            writeln!(temp_file, "\n{}", warn).ok();
-            return;
+            "md"
         };
 
         let report = FileAnalysisReport {
@@ -598,8 +593,55 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
             }
             "md" => {
                 use std::io::Write;
-                temp_file.flush().expect("Failed to flush temp file before saving report");
-                fs::copy(&temp_path, &output_file_path).expect("Failed to save markdown report");
+                let mut md = String::new();
+                md.push_str("# File Analysis Report\n\n");
+                md.push_str(&format!("**File:** `{}`  \n", file_path));
+                md.push_str(&format!("**SHA-256:** `{}`\n\n", report.sha256));
+                md.push_str("## File Properties\n\n");
+                md.push_str("| Property | Value |\n|----------|-------|\n");
+                md.push_str(&format!("| File Type | {} |\n", report.file_type));
+                md.push_str(&format!("| Entropy | {:.4} |\n", report.entropy));
+                md.push_str(&format!("| Packed | {} |\n", report.packed));
+                md.push_str(&format!("| Digitally Signed | {} |\n", if report.signed { "Yes" } else { "No" }));
+                if let Some(ref ct) = report.compile_time {
+                    if !ct.is_empty() {
+                        md.push_str(&format!("| Compile Time | {} |\n", ct));
+                    }
+                }
+                if let Some(ref ih) = report.imphash {
+                    if !ih.is_empty() {
+                        md.push_str(&format!("| Imphash | `{}` |\n", ih));
+                    }
+                }
+                md.push_str("\n## VirusTotal\n\n");
+                md.push_str(&format!("{}\n", report.vt_result));
+                if !report.yara_matches.is_empty() {
+                    md.push_str("\n## YARA Matches\n\n");
+                    for m in &report.yara_matches {
+                        md.push_str(&format!("- {}\n", m));
+                    }
+                }
+                if !report.suspicious_imports.is_empty() {
+                    md.push_str("\n## Suspicious Imports\n\n");
+                    for i in &report.suspicious_imports {
+                        md.push_str(&format!("- `{}`\n", i));
+                    }
+                }
+                if !report.uncommon_sections.is_empty() {
+                    md.push_str("\n## Uncommon PE Sections\n\n");
+                    for s in &report.uncommon_sections {
+                        md.push_str(&format!("- {}\n", s));
+                    }
+                }
+                if report.suspicious_compile_time {
+                    md.push_str("\n> **Warning:** Suspicious compile time detected.\n");
+                }
+                if let Some(ref meta) = report.metadata {
+                    md.push_str("\n## Metadata\n\n");
+                    md.push_str(&format!("{}\n", meta));
+                }
+                let mut file = File::create(&output_file_path).expect("Failed to create markdown report");
+                file.write_all(md.as_bytes()).expect("Failed to write markdown report");
                 println!("\n{}\n", styled_line("green", &format!("Markdown report saved to: {}", output_file_path.display())));
             }
             _ => {

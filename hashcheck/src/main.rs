@@ -14,13 +14,8 @@ fn main() {
             "txt"
         } else if args.contains(&"-j".to_string()) {
             "json"
-        } else if args.contains(&"-m".to_string()) {
+        } else if args.contains(&"-m".to_string()) || save {
             "md"
-        } else if save {
-            println!("\nOutput format required. Use -t, -j, or -m with -o.");
-            println!();
-            println!("Output was not saved.");
-            return;
         } else {
             ""
         };

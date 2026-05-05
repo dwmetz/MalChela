@@ -194,6 +194,72 @@ def _strip_cli_noise(output: str) -> str:
     return '\n'.join(cleaned)
 
 
+def _strip_color_tags(text: str) -> str:
+    """Remove [color_name] prefixes emitted by common_ui::styled_line."""
+    import re
+    return re.sub(
+        r'^\[(?:green|red|yellow|stone|highlight|highlight_hash|NOTE|cyan|orange|dim)\]',
+        '',
+        text,
+        flags=re.MULTILINE,
+    )
+
+
+def _register_cli_case_output(tool: str, case_name: str, target: str,
+                               fmt: str, window_secs: int = 30) -> None:
+    """
+    After a CLI run with --case, find the newly written output file and
+    register it in case.yaml so the case browser picks it up.
+    """
+    import time
+    case_dir = CASES_DIR / case_name
+    tool_dir = case_dir / tool
+    if not tool_dir.exists():
+        return
+
+    cutoff = time.time() - window_secs
+    new_files = sorted(
+        [f for f in tool_dir.iterdir()
+         if f.is_file() and f.stat().st_mtime >= cutoff],
+        key=lambda f: f.stat().st_mtime,
+    )
+    if not new_files:
+        return
+
+    latest    = new_files[-1]
+    filename  = latest.name
+    rel_path  = f"{tool}/{filename}"
+    ts_str    = datetime.now().isoformat()
+
+    yaml_file = case_dir / "case.yaml"
+    if yaml_file.exists():
+        with open(yaml_file) as fh:
+            meta = yaml.safe_load(fh) or {}
+    else:
+        meta = {
+            "name":        case_name,
+            "created":     ts_str,
+            "description": "",
+            "tags":        [],
+            "status":      "open",
+            "files":       [],
+        }
+
+    files = meta.get("files", [])
+    if not any(e.get("path") == rel_path for e in files):
+        files.append({
+            "filename":  filename,
+            "path":      rel_path,
+            "tool":      tool,
+            "target":    target,
+            "timestamp": ts_str,
+        })
+        meta["files"]    = files
+        meta["modified"] = ts_str
+        with open(yaml_file, "w") as fh:
+            yaml.dump(meta, fh, default_flow_style=False)
+
+
 def safe_path(raw: str) -> Optional[Path]:
     """
     Resolve and jail-check a path against BROWSER_ROOT.
@@ -734,14 +800,27 @@ def list_uploads():
 
 # ── Tool Endpoints ────────────────────────────────────────────────────────────
 
+_FMT_FLAG = {"txt": "-t", "md": "-m", "json": "-j"}
+
 @app.route("/tools/fileanalyzer", methods=["POST"])
 def fileanalyzer():
     """Analyze a file for hashes, entropy, PE structure, YARA matches, VirusTotal status."""
-    data = request.json or {}
-    path = safe_path(data.get("path", ""))
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
     if not path:
         return jsonify({"success": False, "error": "Invalid or missing path"}), 400
-    return jsonify(run_binary("fileanalyzer", [str(path)]))
+    args = [str(path)]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("fileanalyzer", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("fileanalyzer", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
 
 
 @app.route("/tools/fileminer", methods=["POST"])
@@ -942,23 +1021,45 @@ def _cells_to_row(cells: list) -> Optional[dict]:
 @app.route("/tools/hashit", methods=["POST"])
 def hashit():
     """Generate MD5, SHA1, SHA256 hashes for a single file."""
-    data = request.json or {}
-    path = safe_path(data.get("path", ""))
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
     if not path:
         return jsonify({"success": False, "error": "Invalid or missing path"}), 400
-    return jsonify(run_binary("hashit", [str(path)]))
+    args = [str(path)]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("hashit", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("hashit", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
 
 
 @app.route("/tools/hashcheck", methods=["POST"])
 def hashcheck():
     """Check if a hash exists in a provided hash set file. Args: hashset hash"""
-    data = request.json or {}
-    hash_value = data.get("hash", "").strip()
-    hashset = safe_path(data.get("hashset", ""))
+    data        = request.json or {}
+    hash_value  = data.get("hash", "").strip()
+    hashset     = safe_path(data.get("hashset", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
     if not hash_value or not hashset:
         return jsonify({"success": False, "error": "Missing hash or hashset path"}), 400
     # CLI: hashcheck ./hashes.tsv <hash>  — hashset first, then hash
-    return jsonify(run_binary("hashcheck", [str(hashset), hash_value]))
+    args = [str(hashset), hash_value]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("hashcheck", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("hashcheck", case_name, hash_value, save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
 
 
 @app.route("/tools/malhash", methods=["POST"])
@@ -974,11 +1075,22 @@ def malhash():
 @app.route("/tools/mstrings", methods=["POST"])
 def mstrings():
     """Extract strings, map to MITRE ATT&CK, identify IOCs."""
-    data = request.json or {}
-    path = safe_path(data.get("path", ""))
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
     if not path:
         return jsonify({"success": False, "error": "Invalid or missing path"}), 400
-    return jsonify(run_binary("mstrings", [str(path)], timeout=180))
+    args = [str(path)]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("mstrings", args, timeout=180)
+    if case_name and result.get("success"):
+        _register_cli_case_output("mstrings", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
 
 
 @app.route("/tools/mzhash", methods=["POST"])
@@ -1001,11 +1113,24 @@ def mzhash():
 @app.route("/tools/mzcount", methods=["POST"])
 def mzcount():
     """Recursively count files by format in a directory."""
-    data = request.json or {}
-    path = safe_path(data.get("path", ""))
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    # mzcount supports txt (-t) and md (-m) only; map json to md
+    if save_format not in ("txt", "md"):
+        save_format = "md"
     if not path:
         return jsonify({"success": False, "error": "Invalid or missing path"}), 400
-    return jsonify(run_binary("mzcount", [str(path)]))
+    args = [str(path)]
+    if case_name:
+        fmt_flag = "-t" if save_format == "txt" else "-m"
+        args += ["-o", fmt_flag, "--case", case_name]
+    result = run_binary("mzcount", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("mzcount", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
 
 
 @app.route("/tools/xmzhash", methods=["POST"])
@@ -1028,11 +1153,22 @@ def xmzhash():
 @app.route("/tools/nsrlquery", methods=["POST"])
 def nsrlquery():
     """Query an MD5 hash against the NSRL database."""
-    data = request.json or {}
-    hash_value = data.get("hash", "").strip()
+    data        = request.json or {}
+    hash_value  = data.get("hash", "").strip()
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
     if not hash_value:
         return jsonify({"success": False, "error": "Missing hash"}), 400
-    return jsonify(run_binary("nsrlquery", [hash_value]))
+    args = [hash_value]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("nsrlquery", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("nsrlquery", case_name, hash_value, save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
 
 
 @app.route("/tools/combine_yara", methods=["POST"])
@@ -1182,6 +1318,9 @@ def tiquery():
 
     if sources:
         args += ["--sources", sources]
+
+    if output_fmt in ("json", "csv"):
+        args.append(f"--{output_fmt}")
 
     # Run — for bulk mode track progress by watching stderr line count
     if bulk_path:
@@ -1861,16 +2000,26 @@ def save_to_case(case_name):
     filepath  = tool_dir / filename
     rel_path  = f"{tool}/{filename}"
 
+    clean_output = _strip_color_tags(output)
     if fmt == "json":
         import json as json_mod
         content = json_mod.dumps({
             "tool": tool, "target": target,
-            "timestamp": timestamp, "output": output
+            "timestamp": timestamp, "output": clean_output
         }, indent=2)
     elif fmt == "md":
-        content = f"# {tool} Report\n\n**Target:** `{target}`  \n**Timestamp:** {timestamp}\n\n---\n\n```\n{output}\n```\n"
+        tool_title = tool.replace("_", " ").title()
+        content = (
+            f"# {tool_title} Report\n\n"
+            f"| Field | Value |\n|-------|-------|\n"
+            f"| Target | `{target}` |\n"
+            f"| Tool | {tool} |\n"
+            f"| Timestamp | {timestamp} |\n\n"
+            f"---\n\n"
+            f"```\n{clean_output}\n```\n"
+        )
     else:
-        content = f"Tool: {tool}\nTarget: {target}\nTimestamp: {timestamp}\n{'─'*60}\n{output}\n"
+        content = f"Tool: {tool}\nTarget: {target}\nTimestamp: {timestamp}\n{'─'*60}\n{clean_output}\n"
 
     filepath.write_text(content)
 

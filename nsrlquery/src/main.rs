@@ -92,13 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    if save_output && output_format.is_none() {
-        println!("Error: --output (-o) was specified but no format flag (-t, -j, or -m) was provided.");
-        println!("Please specify one of: --text (-t), --json (-j), or --markdown (-m).");
-        return Ok(());
-    }
-
-    let output_format = output_format.unwrap_or(OutputFormat::Text);
+    let output_format = output_format.unwrap_or(OutputFormat::Markdown);
     let case_name = matches.get_one::<String>("case");
     if let Some(case) = case_name {
         common_config::ensure_case_json(case);
@@ -321,40 +315,75 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             std::fs::create_dir_all(&base_output_dir)?;
             match output_format {
-                OutputFormat::Text | OutputFormat::Markdown => {
+                OutputFormat::Text => {
                     fs::write(&output_path, &report)?;
+                }
+                OutputFormat::Markdown => {
+                    let mut md = String::new();
+                    md.push_str("# NSRL Hash Lookup\n\n");
+                    md.push_str(&format!("**Hash ({}):** `{}`\n\n", hash_type.to_uppercase(), hash));
+                    md.push_str("## Results\n\n");
+                    md.push_str("| Field | Value |\n|-------|-------|\n");
+                    if let Some(v) = json.get("FileName").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| File Name | {} |\n", v));
+                    }
+                    if let Some(v) = json.get("FileSize").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| File Size | {} bytes |\n", v));
+                    }
+                    if let Some(v) = json.get("MD5").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| MD5 | `{}` |\n", v));
+                    }
+                    if let Some(v) = json.get("SHA-1").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| SHA-1 | `{}` |\n", v));
+                    }
+                    if let Some(v) = json.get("SHA-256").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| SHA-256 | `{}` |\n", v));
+                    }
+                    if let Some(v) = json.get("mimetype").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| MIME Type | {} |\n", v));
+                    }
+                    if let Some(product) = json.get("ProductCode") {
+                        if let Some(name) = product.get("ProductName").and_then(|v| v.as_str()) {
+                            if let Some(ver) = product.get("ProductVersion").and_then(|v| v.as_str()) {
+                                md.push_str(&format!("| Product | {} v{} |\n", name, ver));
+                            } else {
+                                md.push_str(&format!("| Product | {} |\n", name));
+                            }
+                        }
+                    }
+                    if let Some(v) = json.get("PackageName").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| Package | {} |\n", v));
+                    }
+                    if let Some(os) = json.get("OpSystemCode") {
+                        if let Some(name) = os.get("OpSystemName").and_then(|v| v.as_str()) {
+                            md.push_str(&format!("| OS | {} |\n", name));
+                        }
+                    }
+                    if let Some(v) = json.get("hashlookup:trust").and_then(|v| v.as_u64()) {
+                        md.push_str(&format!("| Trust Score | {} |\n", v));
+                    }
+                    if let Some(v) = json.get("SSDEEP").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| SSDEEP | `{}` |\n", v));
+                    }
+                    if let Some(v) = json.get("TLSH").and_then(|v| v.as_str()) {
+                        md.push_str(&format!("| TLSH | `{}` |\n", v));
+                    }
+                    fs::write(&output_path, md)?;
                 }
                 OutputFormat::Json => {
                     fs::write(&output_path, serde_json::to_string_pretty(&json)?)?;
                 }
             }
+            let format_label = match output_format {
+                OutputFormat::Text => "Text",
+                OutputFormat::Json => "JSON",
+                OutputFormat::Markdown => "Markdown",
+            };
             if is_gui_mode() {
-                println!(
-                    "{}\n",
-                    styled_line(
-                        "green",
-                        &format!(
-                            "{} report was saved to: {}",
-                            match output_format {
-                                OutputFormat::Text => "Text",
-                                OutputFormat::Json => "JSON",
-                                OutputFormat::Markdown => "Markdown",
-                            },
-                            output_path.display()
-                        )
-                    )
-                );
+                println!("{}\n", styled_line("green", &format!("{} report was saved to: {}", format_label, output_path.display())));
                 println!("{}", styled_line("green", "File write operation completed successfully."));
             } else {
-                println!(
-                    "{} report was saved to: {}",
-                    match output_format {
-                        OutputFormat::Text => "Text",
-                        OutputFormat::Json => "JSON",
-                        OutputFormat::Markdown => "Markdown",
-                    },
-                    output_path.display()
-                );
+                println!("{} report was saved to: {}", format_label, output_path.display());
                 println!("File write operation completed successfully.");
             }
         }
@@ -399,8 +428,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             std::fs::create_dir_all(&base_output_dir)?;
             match output_format {
-                OutputFormat::Text | OutputFormat::Markdown => {
+                OutputFormat::Text => {
                     fs::write(&output_path, &report)?;
+                }
+                OutputFormat::Markdown => {
+                    let md = format!(
+                        "# NSRL Hash Lookup\n\n**Hash ({}):** `{}`\n\n**Result:** Hash not found in the NSRL database.\n",
+                        hash_type.to_uppercase(), hash
+                    );
+                    fs::write(&output_path, md)?;
                 }
                 OutputFormat::Json => {
                     fs::write(&output_path, serde_json::to_string_pretty(&serde_json::json!({
@@ -410,33 +446,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }))?)?;
                 }
             }
+            let format_label = match output_format {
+                OutputFormat::Text => "Text",
+                OutputFormat::Json => "JSON",
+                OutputFormat::Markdown => "Markdown",
+            };
             if is_gui_mode() {
-                println!(
-                    "{}\n",
-                    styled_line(
-                        "yellow",
-                        &format!(
-                            "{} report was saved to: {}",
-                            match output_format {
-                                OutputFormat::Text => "Text",
-                                OutputFormat::Json => "JSON",
-                                OutputFormat::Markdown => "Markdown",
-                            },
-                            output_path.display()
-                        )
-                    )
-                );
+                println!("{}\n", styled_line("yellow", &format!("{} report was saved to: {}", format_label, output_path.display())));
                 println!("{}", styled_line("yellow", "File write operation completed."));
             } else {
-                println!(
-                    "{} report was saved to: {}",
-                    match output_format {
-                        OutputFormat::Text => "Text",
-                        OutputFormat::Json => "JSON",
-                        OutputFormat::Markdown => "Markdown",
-                    },
-                    output_path.display()
-                );
+                println!("{} report was saved to: {}", format_label, output_path.display());
                 println!("File write operation completed.");
             }
         }

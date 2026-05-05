@@ -237,12 +237,8 @@ fn main() {
                 println!("No files were scanned. Please check your directory.");
             }
 
-            if save_output {
-                if !(save_txt || save_md) {
-                    println!("\nPlease specify an output format: -t for text, -m for markdown.");
-                    return;
-                }
-            }
+            // When -o is given with no format flag, default to markdown
+            let save_md = save_md || (save_output && !save_txt);
 
             if save_txt {
                 let out_dir = if let Some(case) = case {

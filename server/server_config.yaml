@@ -1,24 +1,7 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# server_config.yaml — MalChela Remote API Server Configuration
-# ─────────────────────────────────────────────────────────────────────────────
-#
-# malchela_root: set to "auto" to self-locate (recommended — works for any clone path),
-#   or set to an absolute path to pin to a specific location.
-#
-#   auto  → uses the directory containing server/ (the repo root)
-#   /home/remnux/tools/MalChela  → explicit path override
-#
-# browser_root: the root directory shown in the file browser (usually your home dir).
-#
-# Environment variable overrides (useful for Docker or CI):
-#   MALCHELA_ROOT         — overrides malchela_root
-#   MALCHELA_BROWSER_ROOT — overrides browser_root
-#   MALCHELA_PORT         — overrides port
-#
-# ─────────────────────────────────────────────────────────────────────────────
-
-malchela_root: auto
-browser_root:  /Users/username
+malchela_root: /Users/dmetz/tools/MalChela
+browser_root:  /Users/dmetz
 port: 8675
 tool_paths:
-
+  - /usr/local/bin
+  - /Users/dmetz/.local/bin
+  - /opt/homebrew/bin

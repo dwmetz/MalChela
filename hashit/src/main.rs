@@ -95,12 +95,8 @@ fn main() {
             "txt"
         } else if cli.json {
             "json"
-        } else if cli.markdown {
-            "md"
         } else {
-            println!("\n{}", styled_line("yellow", "Output format required. Use -t, -j, or -m with -o."));
-            println!("{}", styled_line("stone", "Output was not saved."));
-            return;
+            "md"
         };
 
         match format {

@@ -478,13 +478,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "json"
         } else if markdown {
             "md"
-        } else if matches.contains_id("case") {
-            "txt"
         } else {
-            println!("\nOutput format required. Use -t, -j, or -m with -o.");
-            println!();
-            println!("Output was not saved.");
-            return Ok(());
+            "md"
         };
 
         let custom_name = matches.get_one::<String>("output-file").map(|s| s.as_str());
@@ -492,39 +487,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Build the report content (reuse printed table and IOCs)
         let mut report_buffer = String::new();
 
+        let detection_count = mstrings.matches.iter().filter(|m| m.rule_name.is_some()).count();
+
         // Add file and hash metadata at the top of the report
         if format == "md" {
-            report_buffer.push_str(&format!("- **File**: `{}`\n", file_path_copy));
-            report_buffer.push_str(&format!("- **SHA256**: `{}`\n\n", sha256));
+            report_buffer.push_str("# mStrings Analysis Report\n\n");
+            report_buffer.push_str(&format!("**File:** `{}`  \n", file_path_copy));
+            report_buffer.push_str(&format!("**SHA256:** `{}`  \n", sha256));
+            report_buffer.push_str(&format!("**Detections:** {}  \n\n", detection_count));
         } else {
             report_buffer.push_str(&format!("File: {}\n", file_path_copy));
             report_buffer.push_str(&format!("SHA256: {}\n\n", sha256));
         }
 
-        // Add summary
-        report_buffer.push_str(&format!("{} unique detections matched.\n\n", mstrings.matches.iter().filter(|m| m.rule_name.is_some()).count()));
+        // Add summary for non-md
+        if format != "md" {
+            report_buffer.push_str(&format!("{} unique detections matched.\n\n", detection_count));
+        }
 
-        // Add table content (for .txt, use the same stringified/formatting as console)
+        // Add table content
         if format == "txt" {
             report_buffer.push_str(&format!("{}\n\n", table_str));
         } else if format == "md" {
-            // For markdown, re-generate table with markdown style if desired, or just reuse.
-            report_buffer.push_str(&format!("{}\n\n", table_str));
+            let mut md_table = TabledTable::new(&display_matches);
+            md_table
+                .with(Style::markdown())
+                .with(Modify::new(Columns::new(0..)).with(Alignment::left()));
+            report_buffer.push_str("## Detections\n\n");
+            report_buffer.push_str(&format!("{}\n\n", md_table.to_string()));
         }
 
         // Add IOCs
         if !fs_iocs.is_empty() {
-            report_buffer.push_str("POTENTIAL FILESYSTEM IOCs:\n");
-            for ioc in &fs_iocs {
-                report_buffer.push_str(&format!("{}\n", ioc));
+            if format == "md" {
+                report_buffer.push_str("## Potential Filesystem IOCs\n\n");
+                for ioc in &fs_iocs {
+                    report_buffer.push_str(&format!("- `{}`\n", ioc));
+                }
+            } else {
+                report_buffer.push_str("POTENTIAL FILESYSTEM IOCs:\n");
+                for ioc in &fs_iocs {
+                    report_buffer.push_str(&format!("{}\n", ioc));
+                }
             }
             report_buffer.push('\n');
         }
 
         if !net_iocs.is_empty() {
-            report_buffer.push_str("POTENTIAL NETWORK IOCs:\n");
-            for ioc in &net_iocs {
-                report_buffer.push_str(&format!("{}\n", ioc));
+            if format == "md" {
+                report_buffer.push_str("## Potential Network IOCs\n\n");
+                for ioc in &net_iocs {
+                    report_buffer.push_str(&format!("- `{}`\n", ioc));
+                }
+            } else {
+                report_buffer.push_str("POTENTIAL NETWORK IOCs:\n");
+                for ioc in &net_iocs {
+                    report_buffer.push_str(&format!("{}\n", ioc));
+                }
             }
             report_buffer.push('\n');
         }

@@ -1599,10 +1599,14 @@
 
 const DEFAULT_SERVER = 'http://localhost:8675';
 let serverUrl   = localStorage.getItem('malchela_server') || DEFAULT_SERVER;
-let currentTool = null;
-let lastOutput  = '';
-let lastTarget  = '';
-let lastRows    = [];  // FileMiner rows for mismatch re-filter
+let currentTool    = null;
+let lastOutput     = '';
+let lastTarget     = '';
+let lastRows       = [];  // FileMiner rows for mismatch re-filter
+let lastReSaveBody = null; // Last run body for CLI tools (used by manual save-to-case)
+
+// Tools whose server endpoints accept case_name/save_format and invoke CLI-native saves
+const CLI_SAVE_TOOLS = new Set(['fileanalyzer','hashit','hashcheck','mstrings','nsrlquery','mzcount']);
 let activeCase  = localStorage.getItem('malchela_active_case') || null;
 let browserCallback = null;
 let browserSelected = null;
@@ -2223,7 +2227,7 @@ function caseSelector() {
       <select id="case-format-select" style="display:none;background:var(--bg-input);border:1px solid var(--border-light);
         border-radius:3px;color:var(--text-dim);font-family:var(--font-mono);font-size:10px;padding:3px 5px">
         <option value="txt">TXT</option>
-        <option value="md">MD</option>
+        <option value="md" selected>MD</option>
         <option value="json">JSON</option>
       </select>
     </div>`;
@@ -2595,11 +2599,24 @@ async function runTool(btnEl) {
     target = path;
   }
 
+  // Store body for potential manual re-save via CLI-native path
+  if (CLI_SAVE_TOOLS.has(currentTool)) lastReSaveBody = { ...body };
+
+  // Inject case/format into body so the CLI saves the report natively (before the API call)
+  const saveChk     = document.getElementById('chk-save-case');
+  const caseDropdown = document.getElementById('case-dropdown');
+  const selectedCase = caseDropdown?.value || activeCase;
+  if (saveChk?.checked && selectedCase && CLI_SAVE_TOOLS.has(currentTool) && isCargo) {
+    body.case_name   = selectedCase;
+    body.save_format = document.getElementById('case-format-select')?.value || 'md';
+  }
+
   // Update UI
   if (btn) { btn.textContent = 'Running…'; btn.classList.add('running'); btn.disabled = true; }
   setOutput('<span class="out-dim">Running ' + tool.title + '…</span>\n');
   lastTarget = target;
 
+  let cliSavedToCase = false;
   try {
     const data = await api(tool.endpoint, {
       method: 'POST',
@@ -2609,6 +2626,7 @@ async function runTool(btnEl) {
     if (data.success) {
       stopTiqueryProgressPolling();
       lastOutput = data.output || '';
+      cliSavedToCase = data.saved_to_case || false;
       const stderr = data.stderr || '';
       // Tool-specific structured renderers
       if (currentTool === 'fileminer' && data.rows?.length) {
@@ -2644,14 +2662,15 @@ async function runTool(btnEl) {
   }
 
   // Auto save to case if checked and case selected
-  const saveChk = document.getElementById('chk-save-case');
-  const caseDropdown = document.getElementById('case-dropdown');
-  const selectedCase = caseDropdown?.value || activeCase;
   if (saveChk?.checked && selectedCase && lastOutput) {
-    const prevCase = activeCase;
-    activeCase = selectedCase;
-    await doSaveToCase(false);
-    activeCase = prevCase;
+    if (cliSavedToCase) {
+      showToast(`Saved to case: ${selectedCase}`, 'success');
+    } else {
+      const prevCase = activeCase;
+      activeCase = selectedCase;
+      await doSaveToCase(false);
+      activeCase = prevCase;
+    }
   }
 
   if (btn) {
@@ -3237,8 +3256,9 @@ function setOutput(html) {
 }
 
 function setOutputPlaceholder() {
-  lastOutput = '';
-  lastTarget = '';
+  lastOutput     = '';
+  lastTarget     = '';
+  lastReSaveBody = null;
   document.getElementById('output-content').innerHTML = `
     <div id="output-placeholder">
       <div class="logo">🦀</div>
@@ -3979,6 +3999,25 @@ async function saveToCase() {
 }
 
 async function doSaveToCase(notify = true) {
+  const fmt = document.getElementById('case-format-select')?.value || 'md';
+
+  // For CLI tools: re-run the endpoint with case/format so the CLI writes the
+  // natively-formatted report (same codepath as running from the terminal).
+  if (CLI_SAVE_TOOLS.has(currentTool) && lastReSaveBody && TOOLS[currentTool]) {
+    try {
+      const saveBody = { ...lastReSaveBody, case_name: activeCase, save_format: fmt };
+      const data = await api(TOOLS[currentTool].endpoint, {
+        method: 'POST',
+        body: JSON.stringify(saveBody),
+      });
+      if (data.success && data.saved_to_case) {
+        if (notify) showToast(`Saved to case: ${activeCase}`, 'success');
+        return;
+      }
+    } catch (_) { /* fall through */ }
+  }
+
+  // Fallback: server-side template save (tiquery, MITRE lookup, tshark, etc.)
   try {
     const data = await api(`/cases/${encodeURIComponent(activeCase)}/save`, {
       method: 'POST',
@@ -3986,7 +4025,7 @@ async function doSaveToCase(notify = true) {
         tool: currentTool,
         output: cleanOutputForSave(lastOutput),
         target: lastTarget,
-        format: document.getElementById('case-format-select')?.value || 'txt',
+        format: fmt,
       }),
     });
     if (data.success && notify) showToast(`Saved to case: ${activeCase}`, 'success');
@@ -5016,11 +5055,36 @@ function renderMarkdownOutput(text) {
   el.scrollTop = 0;
 }
 
+function syntaxHighlightJson(json) {
+  // Walk the string, matching tokens and HTML-escaping gaps between them
+  const parts = [];
+  let lastIndex = 0;
+  const re = /("(?:[^"\\]|\\.)*"(?:\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g;
+  let m;
+  while ((m = re.exec(json)) !== null) {
+    if (m.index > lastIndex) parts.push(escHtml(json.slice(lastIndex, m.index)));
+    const tok = m[0];
+    const esc = escHtml(tok);
+    let cls;
+    if (tok.startsWith('"') && /:$/.test(tok.trim())) cls = 'out-cyan';   // key
+    else if (tok.startsWith('"'))                       cls = 'out-green';  // string value
+    else if (tok === 'true' || tok === 'false')         cls = 'out-yellow'; // boolean
+    else if (tok === 'null')                            cls = 'out-dim';    // null
+    else                                                cls = 'out-orange'; // number
+    parts.push(`<span class="${cls}">${esc}</span>`);
+    lastIndex = m.index + tok.length;
+  }
+  if (lastIndex < json.length) parts.push(escHtml(json.slice(lastIndex)));
+  return parts.join('');
+}
+
 function renderJsonOutput(text) {
-  document.getElementById('output-content').classList.remove('md-view');
+  const el = document.getElementById('output-content');
+  el.classList.remove('md-view');
   try {
     const pretty = JSON.stringify(JSON.parse(text), null, 2);
-    setOutput(`<span class="out-default" style="white-space:pre-wrap">${escHtml(pretty)}</span>`);
+    el.innerHTML = `<pre style="margin:0;font-family:var(--font-mono);font-size:0.85em;line-height:1.5;white-space:pre-wrap;word-break:break-all">${syntaxHighlightJson(pretty)}</pre>`;
+    el.scrollTop = 0;
   } catch {
     renderColorizedOutput(text);
   }
@@ -5215,8 +5279,11 @@ function _showToolPanel() {
 }
 
 function cleanOutputForSave(text) {
-  // Remove ASCII table border characters, leaving readable content
-  return text.split('\n')
+  // Strip [color_tag] prefixes emitted by common_ui::styled_line
+  const colorTagRe = /^\[(?:green|red|yellow|stone|highlight|highlight_hash|NOTE|cyan|orange|dim)\]/gm;
+  return text
+    .replace(colorTagRe, '')
+    .split('\n')
     .map(line => {
       // Skip pure border lines
       if (/^[┌├└─┬┼┤┐┘╔╠╚═╦╬╣╗╝│]+$/.test(line.trim())) return null;
@@ -5232,7 +5299,7 @@ function cleanOutputForSave(text) {
     })
     .filter(l => l !== null)
     .join('\n')
-    .replace(/\n{3,}/g, '\n\n')  // Collapse multiple blank lines
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 

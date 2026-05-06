@@ -126,7 +126,7 @@ fn default_url_source_ids() -> Vec<String> {
 
 // ── Source factory ────────────────────────────────────────────────────────────
 
-fn build_sources(ids: &[String], hash_type: HashType, verbose_vt: bool) -> Vec<Arc<dyn ThreatSource>> {
+fn build_sources(ids: &[String], _hash_type: HashType, verbose_vt: bool) -> Vec<Arc<dyn ThreatSource>> {
     // Key resolution: YAML config override → api/<src>-api.txt → legacy migration
     let cfg = config::TiQueryConfig::load().unwrap_or_default();
 
@@ -153,13 +153,7 @@ fn build_sources(ids: &[String], hash_type: HashType, verbose_vt: bool) -> Vec<A
             "fs"  => Arc::new(FileScan::new(resolve("fs"))),
             "ms"  => Arc::new(Malshare::new(resolve("ms"))),
             "tr"  => Arc::new(Triage::new(resolve("tr"))),
-            "os"  => {
-                if hash_type != HashType::Sha256 {
-                    // skip silently — plan spec
-                    continue;
-                }
-                Arc::new(ObjectiveSee::new())
-            }
+            "os"  => Arc::new(ObjectiveSee::new()),
             "urlscan" => Arc::new(UrlScan::new(resolve("url"))),
             "gsb"     => Arc::new(GoogleSafeBrowsing::new(resolve("gsb"))),
             other => Arc::new(StubSource::new(other)),

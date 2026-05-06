@@ -308,6 +308,26 @@
     
     
       <li class="md-tabs__item">
+        <a href="codesign_check/" class="md-tabs__link">
+          
+  
+  
+  Mac Analysis
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
         <a href="../tools/" class="md-tabs__link">
           
   
@@ -1040,7 +1060,7 @@
   
   
   <span class="md-ellipsis">
-    Third-Party Tools
+    Mac Analysis
     
   </span>
   
@@ -1050,6 +1070,123 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Mac Analysis
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="codesign_check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Code Sign Check
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="macho_info/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Mach-O Info
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="plist_analyzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Third-Party Tools
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1328,10 +1465,10 @@
   <h1>Overview</h1>
 
 <p><img alt="MalChela web interface" src="../images/malchela_screenshot.png" /></p>
-<p align="center"><strong>Figure 5.1:</strong> MalChela Web Interface</p>
+<p align="center"><strong> MalChela Web Interface</p>
 
 <p><img alt="MalChela CLI" src="../images/malchela_cli_screenshot.png" /></p>
-<p align="center"><strong>Figure 5.2:</strong> MalChela CLI</p>
+<p align="center"><strong> MalChela CLI</p>
 
 <h2 style="text-align: center;">MalChela Core Tools</h2>
 <p style="text-align: center;">
@@ -1359,6 +1496,25 @@
     <tr><td>Strings to YARA</td><td>Prompts for metadata and strings (text file) to create a YARA rule</td></tr>
     <tr><td>Threat Intel Query</td><td>Multi-source hash and URL lookup. Hash: VT, MB, OTX, HA, FileScan, Malshare, MetaDefender, ObjectiveSee. URL: VT, urlscan.io, Google Safe Browsing. Web interface supports file-to-hash and QR code decode.*</td></tr>
     <tr><td>XMZHash</td><td>Recurse a directory, for files without MZ, Zip or PDF header, create hash list and lookup table</td></tr>
+  </tbody>
+</table>
+
+<h2 style="text-align: center;">Mac Analysis Tools</h2>
+<p style="text-align: center;">
+  Dedicated tools for static analysis of macOS binaries, bundles, and property lists.
+</p>
+
+<table style="margin-left: 8%; width: 100%;">
+  <thead>
+    <tr>
+      <th>Program</th>
+      <th>Function</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Code Sign Check</td><td>Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and get-task-allow flag</td></tr>
+    <tr><td>Mach-O Info</td><td>Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection</td></tr>
+    <tr><td>Plist Analyzer</td><td>Parses .plist files and .app bundle Info.plist for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection</td></tr>
   </tbody>
 </table>
 

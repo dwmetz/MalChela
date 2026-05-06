@@ -307,6 +307,26 @@
   
   
   
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../coretools/codesign_check/" class="md-tabs__link">
+          
+  
+  
+  Mac Analysis
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
     
   
   
@@ -1010,6 +1030,123 @@
       
   
   
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Mac Analysis
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Mac Analysis
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coretools/codesign_check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Code Sign Check
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coretools/macho_info/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Mach-O Info
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coretools/plist_analyzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -1029,10 +1166,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -1045,8 +1182,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Third-Party Tools
           </label>
@@ -1337,7 +1474,7 @@
 <h1 id="pcap-to-csv-conversion">PCAP to CSV Conversion</h1>
 <p>The <code>tshark_to_csv.py</code> script is a helper utility that converts <code>.pcap</code> or <code>.pcapng</code> files into structured <code>.csv</code> files using <code>tshark</code>. This allows packet captures to be processed and analyzed using familiar spreadsheet or database tools.</p>
 <p><img alt="PCAP to CSV" src="../../images/pcap_to_csv.png" /></p>
-<p align="center"><strong>Figure 6.3:</strong> PCAP to CSV</p>
+<p align="center"><strong> PCAP to CSV</p>
 
 <p>The script uses <code>tshark</code> to extract key fields from each packet and writes them to a CSV file with headers. Users can specify custom fields, or rely on a default set commonly useful for forensic review.</p>
 <p>Timestamps in the CSV output are converted into a human-readable ISO 8601 format with microsecond precision (<code>YYYY-MM-DDTHH:MM:SS.ssssssZ</code>), ensuring compatibility with downstream tools such as the Magnet Custom Artifact Generator.</p>

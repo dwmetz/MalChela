@@ -30,7 +30,7 @@ This panel supports live search by **technique ID** (e.g., `T1059`) or **keyword
 
 ![MITRE Lookup](../images/mitre_lookup.png)
 
-<p align="center"><strong>Figure 5.11.1:</strong> MITRE Lookup</p>
+<p align="center"><strong> MITRE Lookup</p>
 
 ## Accessing from CLI
 
@@ -59,7 +59,7 @@ You can run the MITRE Lookup tool directly with a search term or flags:
 ```
 ![MITRE Lookup (CLI)](../images/mitre_lookup_cli.png)
 
-<p align="center"><strong>Figure 5.11.2:</strong> MITRE Lookup (CLI)</p>
+<p align="center"><strong> MITRE Lookup (CLI)</p>
 
 ## Example
 

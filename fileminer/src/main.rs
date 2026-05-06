@@ -383,10 +383,25 @@ fn analyze_directory(
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if file_type.contains("x-mach-binary") || file_type.contains("x-mach-o") {
+                suggested_tools.push(("Mach-O Info".into(), "macho_info".into()));
+                suggested_tools.push(("Code Sign Check".into(), "codesign_check".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if file_type.contains("x-apple-property-list") || file_type.contains("application/xml") {
+                suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
             } else if file_type == "Unknown" && file_size > 10_000 {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            }
+
+            // Also suggest plist_analyzer for .plist files by extension
+            if path.extension().and_then(|e| e.to_str()) == Some("plist") {
+                if suggested_tools.is_empty() {
+                    suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
+                }
             }
 
 

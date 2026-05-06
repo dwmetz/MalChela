@@ -2,7 +2,7 @@ MZcount recursively scans a directory and counts the number of files that match 
 
 ![MZCount](../images/mzcount.png)
 
-<p align="center"><strong>Figure 5.12:</strong> MZCount</p>
+<p align="center"><strong> MZCount</p>
 
 
 ---

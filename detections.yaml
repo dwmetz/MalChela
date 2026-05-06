@@ -1632,3 +1632,278 @@ ConsoleWindowHiding:
       technique_name: "Hide Artifacts: Hidden Window"
       tactics: ["Defense Evasion"]
 
+
+# ── macOS-specific detections ─────────────────────────────────────────────────
+
+MacLaunchAgentDaemonPersistence:
+  title: "macOS LaunchAgent / LaunchDaemon Persistence"
+  id: "mac-launchagent-persist-001"
+  status: "experimental"
+  description: "Detects strings referencing LaunchAgent or LaunchDaemon plist directories and launchctl commands — the primary macOS persistence mechanism. User-level LaunchAgents survive logout; system-level LaunchDaemons persist across reboots."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "Library/LaunchAgents/"
+      - "Library/LaunchDaemons/"
+      - "launchctl\\s+(load|bootstrap|submit|start)"
+      - "com\\.apple\\.launchd"
+  tags:
+    - attack.T1543.001
+  level: high
+  mitre:
+    - technique_id: "T1543.001"
+      technique_name: "Create or Modify System Process: Launch Agent"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+MacLoginItemPersistence:
+  title: "macOS Login Item Persistence"
+  id: "mac-loginitem-persist-001"
+  status: "experimental"
+  description: "Detects SMLoginItemSetEnabled and LSSharedFileList APIs used to register Login Items, and the kLSSharedFileListSessionLoginItems key. Login Items execute at user login and are less visible than LaunchAgents."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "SMLoginItemSetEnabled"
+      - "kLSSharedFileListSessionLoginItems"
+      - "LSSharedFileListInsertItemURL"
+  tags:
+    - attack.T1547.015
+  level: high
+  mitre:
+    - technique_id: "T1547.015"
+      technique_name: "Boot or Logon Autostart Execution: Login Items"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+MacShellProfileInjection:
+  title: "macOS Shell Profile Injection"
+  id: "mac-shellprofile-inject-001"
+  status: "experimental"
+  description: "Detects references to shell initialization files used for user-level persistence. Writing commands to .zshrc, .bash_profile, or .profile ensures execution on every new shell session."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "\\.bash_profile"
+      - "\\.zshrc"
+      - "\\.bashrc"
+      - "\\.zprofile"
+      - "\\.profile"
+  tags:
+    - attack.T1546.004
+  level: medium
+  mitre:
+    - technique_id: "T1546.004"
+      technique_name: "Event Triggered Execution: Unix Shell Configuration Modification"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+MacCronJobPersistence:
+  title: "macOS Cron Job Persistence"
+  id: "mac-cron-persist-001"
+  status: "experimental"
+  description: "Detects crontab usage for scheduled persistence on macOS. Less common than LaunchAgents but still present in macOS malware."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "crontab\\s+-[le]"
+      - "/var/spool/cron/crontabs/"
+      - "/etc/cron\\.d/"
+  tags:
+    - attack.T1053.003
+  level: medium
+  mitre:
+    - technique_id: "T1053.003"
+      technique_name: "Scheduled Task/Job: Cron"
+      tactics: ["Persistence", "Privilege Escalation", "Execution"]
+
+MacDylibInjection:
+  title: "macOS Dylib Injection via DYLD Environment Variables"
+  id: "mac-dyld-inject-001"
+  status: "experimental"
+  description: "DYLD_INSERT_LIBRARIES is the macOS equivalent of LD_PRELOAD — it forces a dylib to load into every process. Its presence as a hardcoded string is a strong indicator of dylib injection. DYLD_LIBRARY_PATH hijacks the dylib search order."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "DYLD_INSERT_LIBRARIES"
+      - "DYLD_LIBRARY_PATH"
+      - "DYLD_FORCE_FLAT_NAMESPACE"
+  tags:
+    - attack.T1574.006
+  level: high
+  mitre:
+    - technique_id: "T1574.006"
+      technique_name: "Hijack Execution Flow: Dynamic Linker Hijacking"
+      tactics: ["Persistence", "Privilege Escalation", "Defense Evasion"]
+
+MacKeychainAccess:
+  title: "macOS Keychain Credential Access"
+  id: "mac-keychain-creds-001"
+  status: "experimental"
+  description: "Detects Keychain API calls used to extract credentials. SecItemCopyMatching is the modern API; SecKeychainFindGenericPassword is the legacy form. Both are used by macOS credential-stealing malware."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "SecItemCopyMatching"
+      - "SecKeychainFindGenericPassword"
+      - "SecKeychainFindInternetPassword"
+      - "security\\s+find-generic-password"
+      - "kSecClass"
+  tags:
+    - attack.T1555.001
+  level: high
+  mitre:
+    - technique_id: "T1555.001"
+      technique_name: "Credentials from Password Stores: Keychain"
+      tactics: ["Credential Access"]
+
+MacAppleScriptExecution:
+  title: "macOS AppleScript Execution"
+  id: "mac-applescript-exec-001"
+  status: "experimental"
+  description: "Detects osascript and NSAppleScript — used to execute AppleScript for automation, UI interaction, and privilege abuse. Windtail and other Mac malware families use osascript for persistence and exfiltration."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "osascript"
+      - "NSAppleScript"
+      - "do shell script"
+  tags:
+    - attack.T1059.002
+  level: high
+  mitre:
+    - technique_id: "T1059.002"
+      technique_name: "Command and Scripting Interpreter: AppleScript"
+      tactics: ["Execution"]
+
+MacUnixShellExecution:
+  title: "macOS Unix Shell Execution via POSIX API"
+  id: "mac-posix-exec-001"
+  status: "experimental"
+  description: "Detects posix_spawn and execve as strings, indicating spawning of child processes. Hardcoded shell paths (/bin/sh, /bin/bash, /bin/zsh) combined with these indicate command execution capability."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "posix_spawn"
+      - "/bin/sh"
+      - "/bin/bash"
+      - "/bin/zsh"
+      - "popen"
+  tags:
+    - attack.T1059.004
+  level: medium
+  mitre:
+    - technique_id: "T1059.004"
+      technique_name: "Command and Scripting Interpreter: Unix Shell"
+      tactics: ["Execution"]
+
+MacPrivilegeEscalation:
+  title: "macOS Privilege Escalation Indicators"
+  id: "mac-privesc-001"
+  status: "experimental"
+  description: "Detects AuthorizationExecuteWithPrivileges (deprecated but abused in malware for root execution without a visible prompt), and setuid/setgid syscalls used to permanently elevate privileges."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "AuthorizationExecuteWithPrivileges"
+      - "AuthorizationCreate"
+      - "setuid\\("
+      - "setgid\\("
+      - "sudo\\s+"
+  tags:
+    - attack.T1548.004
+  level: high
+  mitre:
+    - technique_id: "T1548.004"
+      technique_name: "Abuse Elevation Control Mechanism: Elevated Execution with Prompt"
+      tactics: ["Privilege Escalation", "Defense Evasion"]
+
+MacSystemDiscovery:
+  title: "macOS System Fingerprinting"
+  id: "mac-sysinfo-discover-001"
+  status: "experimental"
+  description: "Detects sysctlbyname and IOKit APIs used to fingerprint the host. kIOPlatformSerialNumberKey reads the hardware serial number — a common victim profiling technique. IOServiceMatching is used to query hardware properties."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "sysctlbyname"
+      - "kIOPlatformSerialNumberKey"
+      - "IOServiceMatching"
+      - "IORegistryEntryCreateCFProperties"
+      - "hw\\.model"
+  tags:
+    - attack.T1082
+  level: medium
+  mitre:
+    - technique_id: "T1082"
+      technique_name: "System Information Discovery"
+      tactics: ["Discovery"]
+
+MacSandboxVMEvasion:
+  title: "macOS Sandbox / VM Detection"
+  id: "mac-sandbox-evade-001"
+  status: "experimental"
+  description: "Detects strings used to identify virtual machine or analysis environments on macOS. VMware and Parallels leave detectable artifacts in IOKit. sysctl hw.logicalcpu is used to detect low-CPU sandboxes."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "VMware"
+      - "Parallels"
+      - "VirtualBox"
+      - "hw\\.logicalcpu"
+      - "QEMU"
+  tags:
+    - attack.T1497.001
+  level: high
+  mitre:
+    - technique_id: "T1497.001"
+      technique_name: "Virtualization/Sandbox Evasion: System Checks"
+      tactics: ["Defense Evasion"]
+
+MacSensitiveFileAccess:
+  title: "macOS Sensitive File and Directory Access"
+  id: "mac-sensitive-paths-001"
+  status: "experimental"
+  description: "Detects hardcoded paths to macOS credential stores, browser data, and user-specific sensitive directories. Common targets for data theft malware."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "Library/Keychains/"
+      - "Library/Safari/Cookies"
+      - "Library/Application Support/Google/Chrome"
+      - "Library/Application Support/Firefox"
+      - "/etc/passwd"
+      - "Login\\.keychain"
+  tags:
+    - attack.T1555
+    - attack.T1539
+  level: high
+  mitre:
+    - technique_id: "T1555"
+      technique_name: "Credentials from Password Stores"
+      tactics: ["Credential Access"]
+    - technique_id: "T1539"
+      technique_name: "Steal Web Session Cookie"
+      tactics: ["Credential Access"]
+

@@ -46,6 +46,10 @@ nav:
       - StringsToYARA: coretools/strings_to_yara.md
       - XMZHash: coretools/xmzhash.md
 
+  - Mac Analysis:
+      - Code Sign Check: coretools/codesign_check.md
+      - Mach-O Info: coretools/macho_info.md
+      - Plist Analyzer: coretools/plist_analyzer.md
 
   - Third-Party Tools:
       - Integrating Third Party Tools: tools/index.md

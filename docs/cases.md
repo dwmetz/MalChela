@@ -6,7 +6,7 @@ Cases are managed entirely through the web interface.
 
 ![Case Management](./images/case_management.png)
 
-<p align="center"><strong>Figure 4.1:</strong> Case Management</p>
+<p align="center"><strong> Case Management</p>
 
 ## Creating a Case
 
@@ -14,7 +14,7 @@ A case can be created from the New Case menu, or by selecting 'Save to Case' in 
 
 ![New Case](./images/new_case.png)
 
-<p align="center"><strong>Figure 4.2:</strong> New Case</p>
+<p align="center"><strong> New Case</p>
 
 After choosing the input, assign a descriptive case name. The web interface will automatically create a new folder under:
 
@@ -53,7 +53,7 @@ From the Case modal, you can search across:
 
 ![Searching Cases](./images/case_search.png)
 
-<p align="center"><strong>Figure 4.3:</strong> Searching Cases</p>
+<p align="center"><strong> Searching Cases</p>
 
 ## Archiving Cases
 

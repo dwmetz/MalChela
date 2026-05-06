@@ -4,7 +4,7 @@
 
 ![File Miner](../images/fileminer.png)
 
-<p align="center"><strong>Figure 5.6:</strong> File Miner</p>
+<p align="center"><strong> File Miner</p>
 
 
 ## Function Overview

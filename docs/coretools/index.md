@@ -1,11 +1,11 @@
 
 ![MalChela web interface](../images/malchela_screenshot.png)
 
-<p align="center"><strong>Figure 5.1:</strong> MalChela Web Interface</p>
+<p align="center"><strong> MalChela Web Interface</p>
 
 ![MalChela CLI](../images/malchela_cli_screenshot.png)
 
-<p align="center"><strong>Figure 5.2:</strong> MalChela CLI</p>
+<p align="center"><strong> MalChela CLI</p>
 
 <h2 style="text-align: center;">MalChela Core Tools</h2>
 <p style="text-align: center;">
@@ -33,6 +33,25 @@
     <tr><td>Strings to YARA</td><td>Prompts for metadata and strings (text file) to create a YARA rule</td></tr>
     <tr><td>Threat Intel Query</td><td>Multi-source hash and URL lookup. Hash: VT, MB, OTX, HA, FileScan, Malshare, MetaDefender, ObjectiveSee. URL: VT, urlscan.io, Google Safe Browsing. Web interface supports file-to-hash and QR code decode.*</td></tr>
     <tr><td>XMZHash</td><td>Recurse a directory, for files without MZ, Zip or PDF header, create hash list and lookup table</td></tr>
+  </tbody>
+</table>
+
+<h2 style="text-align: center;">Mac Analysis Tools</h2>
+<p style="text-align: center;">
+  Dedicated tools for static analysis of macOS binaries, bundles, and property lists.
+</p>
+
+<table style="margin-left: 8%; width: 100%;">
+  <thead>
+    <tr>
+      <th>Program</th>
+      <th>Function</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Code Sign Check</td><td>Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and get-task-allow flag</td></tr>
+    <tr><td>Mach-O Info</td><td>Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection</td></tr>
+    <tr><td>Plist Analyzer</td><td>Parses .plist files and .app bundle Info.plist for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection</td></tr>
   </tbody>
 </table>
 

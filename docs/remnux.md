@@ -14,14 +14,14 @@ This mode is manually enabled by selecting **“Load REMnux”** from the tools.
 
 ![Enabling REMnux mode](images/yaml_configurator.png)
 
-<p align="left"><strong>Figure 7.1:</strong> Enabling REMnux mode</p>
+<p align="left"><strong> Enabling REMnux mode</p>
 
 > Note: Whenever you change the tools.yaml, you can use the "Reload Sidebar" button to update the tool listings in the sidebar.
 
 ---
 ![REMnux Mode](images/remnux_mode_pwa.png)
 
-<p align="center"><strong>Figure 7.2:</strong> MalChela in REMnux Mode </p>
+<p align="center"><strong> MalChela in REMnux Mode </p>
 
 ---
 

@@ -1270,6 +1270,8 @@
     white-space: nowrap;
   }
   .fm-tool-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .fm-tool-done { border-color: var(--green); color: var(--green); }
+  .fm-tool-done:hover { border-color: var(--green); color: var(--green); opacity: 0.75; }
 
   /* ── TI Query tabs ── */
   .ti-tab {
@@ -1298,7 +1300,7 @@
 
   <!-- Header -->
   <div id="header">
-    <h1>MalChela <span>Analysis Toolkit</span> <span style="color:var(--text-dim);font-weight:300">v4.0</span></h1>
+    <h1>MalChela <span>Analysis Toolkit</span> <span style="color:var(--text-dim);font-weight:300">v4.1</span></h1>
 
     <div id="header-toolbar">
       <button class="tb-btn" onclick="showHome(event)" title="Home"><img src="/icons/home.svg"></button>
@@ -1603,6 +1605,9 @@ let currentTool    = null;
 let lastOutput     = '';
 let lastTarget     = '';
 let lastRows       = [];  // FileMiner rows for mismatch re-filter
+let fmLastPath      = '';   // Folder path from the last fileminer run
+let fmExecutedTools = new Set(); // "toolId::filePath" pairs where output was saved
+let fmLaunchedFrom  = null; // { toolId, filePath } — set when a subtool is launched from FileMiner
 let lastReSaveBody = null; // Last run body for CLI tools (used by manual save-to-case)
 
 // Tools whose server endpoints accept case_name/save_format and invoke CLI-native saves
@@ -1650,6 +1655,8 @@ const CARGO_ENDPOINTS = {
   tiquery: '/tools/tiquery', malhash: '/tools/malhash',
   extract_samples: '/tools/extract_samples', combine_yara: '/tools/combine_yara',
   strings_to_yara: '/tools/strings_to_yara',
+  plist_analyzer: '/tools/plist_analyzer', macho_info: '/tools/macho_info',
+  codesign_check: '/tools/codesign_check',
 };
 
 // Runtime tool registry — populated from tools.yaml
@@ -1841,8 +1848,21 @@ function selectTool(id) {
   // Render input panel
   renderInputPanel(id, tool);
 
-  // Clear output
-  setOutputPlaceholder();
+  // Restore FileMiner results when navigating back; otherwise clear
+  if (id === 'fileminer') {
+    fmLaunchedFrom = null; // user returned without saving — discard pending tracking
+    if (lastRows.length) {
+      setTimeout(() => {
+        const pathInput = document.getElementById('path-input');
+        if (pathInput && fmLastPath) pathInput.value = fmLastPath;
+        renderFileminerTable(lastRows);
+      }, 0);
+    } else {
+      setOutputPlaceholder();
+    }
+  } else {
+    setOutputPlaceholder();
+  }
 }
 
 function renderInputPanel(id, tool) {
@@ -1864,6 +1884,7 @@ function renderInputPanel(id, tool) {
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
           <input type="checkbox" id="chk-mismatch-only"> Show mismatches only
         </label>
+        <button class="browse-btn" style="margin-left:auto;font-size:11px;padding:2px 8px" onclick="openFmSessionBrowser()">Load Session</button>
       </div>` : '';
     panel.innerHTML = `
       <div class="input-row">
@@ -2631,7 +2652,11 @@ async function runTool(btnEl) {
       // Tool-specific structured renderers
       if (currentTool === 'fileminer' && data.rows?.length) {
         lastRows = data.rows;
+        fmLastPath = target;
+        fmExecutedTools = new Set();
         renderFileminerTable(data.rows);
+        persistFmState();
+        saveFmSession(saveChk?.checked ? (selectedCase || '') : '');
       } else if (currentTool === 'mstrings') {
         renderMstringsOutput(lastOutput);
       } else if (currentTool === 'tiquery') {
@@ -2673,6 +2698,17 @@ async function runTool(btnEl) {
     }
   }
 
+  // Track FileMiner sub-tool execution when output was saved
+  if (fmLaunchedFrom && lastOutput) {
+    const outputSaved = cliSavedToCase || (saveChk?.checked && selectedCase);
+    if (outputSaved) {
+      fmExecutedTools.add(`${fmLaunchedFrom.toolId}::${fmLaunchedFrom.filePath}`);
+      persistFmState();
+      saveFmSession();
+      fmLaunchedFrom = null;
+    }
+  }
+
   if (btn) {
     btn.textContent = btn.textContent.includes('Query') ? 'Run Query' : 'Run';
     btn.classList.remove('running');
@@ -2684,12 +2720,15 @@ async function runTool(btnEl) {
 
 function renderFileminerTable(rows) {
   const TOOL_MAP = {
-    'fileanalyzer': 'fileanalyzer',
-    'mstrings':     'mstrings',
-    'malhash':      'tiquery',
-    'tiquery':      'tiquery',
-    'nsrlquery':    'nsrlquery',
-    'hashit':       'hashit',
+    'fileanalyzer':  'fileanalyzer',
+    'mstrings':      'mstrings',
+    'malhash':       'tiquery',
+    'tiquery':       'tiquery',
+    'nsrlquery':     'nsrlquery',
+    'hashit':        'hashit',
+    'mach-o info':      'macho_info',
+    'plist analyzer':   'plist_analyzer',
+    'code sign check':  'codesign_check',
   };
 
   const mismatchOnly = document.getElementById('chk-mismatch-only')?.checked;
@@ -2705,9 +2744,10 @@ function renderFileminerTable(rows) {
       : [];
     const toolBtns = tools.map(t => {
       const toolId = TOOL_MAP[t.toLowerCase()] || t.toLowerCase();
-      const fullPath = escHtml(row.full_path || (row.path + '/' + row.filename));
-      return `<button class="fm-tool-btn"
-        onclick="launchFromFileminer('${escHtml(toolId)}','${fullPath}','${escHtml(row.sha256)}')"
+      const fullPath = row.full_path || (row.path + '/' + row.filename);
+      const done = fmExecutedTools.has(`${toolId}::${fullPath}`);
+      return `<button class="fm-tool-btn${done ? ' fm-tool-done' : ''}"
+        onclick="launchFromFileminer('${escHtml(toolId)}','${escHtml(fullPath)}','${escHtml(row.sha256)}')"
         >${escHtml(t)}</button>`;
     }).join('');
 
@@ -2722,8 +2762,7 @@ function renderFileminerTable(rows) {
   }).join('');
 
   const mismatches = rows.filter(r => r.mismatch?.toLowerCase() === 'true').length;
-  const html = `
-    <div style="padding:0 0 8px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+  const html = `<div style="padding:0 0 8px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <span style="font-size:11px;color:var(--cyan);font-weight:600">
         FileMiner Results — ${displayRows.length}${mismatchOnly ? ' mismatches' : ` file${rows.length !== 1 ? 's' : ''}`}
         ${!mismatchOnly && mismatches ? `<span style="color:var(--red);margin-left:8px">(${mismatches} mismatch${mismatches !== 1 ? 'es' : ''})</span>` : ''}
@@ -2745,8 +2784,10 @@ function renderFileminerTable(rows) {
       </table>
     </div>`;
 
-  document.getElementById('output-content').innerHTML = html;
-  document.getElementById('output-content').scrollTop = 0;
+  const oc = document.getElementById('output-content');
+  oc.classList.add('md-view'); // disable pre-wrap for table rendering
+  oc.innerHTML = html;
+  oc.scrollTop = 0;
 }
 
 function rerenderFileminer(mismatchOnly) {
@@ -2757,6 +2798,7 @@ function rerenderFileminer(mismatchOnly) {
 }
 
 function launchFromFileminer(toolId, filePath, sha256) {
+  fmLaunchedFrom = { toolId, filePath };
   selectTool(toolId);
   setTimeout(() => {
     if (toolId === 'tiquery') {
@@ -2774,6 +2816,85 @@ function launchFromFileminer(toolId, filePath, sha256) {
       if (pathInput) pathInput.value = filePath;
     }
   }, 50);
+}
+
+// ── FileMiner Session Persistence ─────────────────────────────────────────
+
+function persistFmState() {
+  try {
+    localStorage.setItem('malchela_fm_rows',     JSON.stringify(lastRows));
+    localStorage.setItem('malchela_fm_path',     fmLastPath);
+    localStorage.setItem('malchela_fm_executed', JSON.stringify([...fmExecutedTools]));
+  } catch (_) {}
+}
+
+function restoreFmState() {
+  try {
+    const rows = localStorage.getItem('malchela_fm_rows');
+    const path = localStorage.getItem('malchela_fm_path');
+    const exec = localStorage.getItem('malchela_fm_executed');
+    if (rows) lastRows = JSON.parse(rows);
+    if (path) fmLastPath = path;
+    if (exec) fmExecutedTools = new Set(JSON.parse(exec));
+  } catch (_) {}
+}
+
+async function saveFmSession(caseName) {
+  if (!lastRows.length) return;
+  const cn = (caseName !== undefined ? caseName : (activeCase || ''));
+  try {
+    await api('/tools/fileminer/session', {
+      method: 'POST',
+      body: JSON.stringify({
+        analyzed_path: fmLastPath,
+        case_name: cn,
+        rows: lastRows,
+        executed: [...fmExecutedTools],
+      }),
+    });
+  } catch (_) {}
+}
+
+async function loadFmSession(sessionPath) {
+  try {
+    const data = await api(`/tools/fileminer/session?path=${encodeURIComponent(sessionPath)}`);
+    if (!data.success) { showToast('Failed to load session: ' + (data.error || ''), 'error'); return; }
+    const s = data.session || {};
+    lastRows        = s.rows || [];
+    fmLastPath      = s.analyzed_path || '';
+    fmExecutedTools = new Set(s.executed || []);
+    persistFmState();
+    selectTool('fileminer');
+    setTimeout(() => {
+      const pathInput = document.getElementById('path-input');
+      if (pathInput && fmLastPath) pathInput.value = fmLastPath;
+      if (lastRows.length) renderFileminerTable(lastRows);
+    }, 50);
+    showToast('Session loaded', 'success');
+  } catch (e) {
+    showToast('Load error: ' + e.message, 'error');
+  }
+}
+
+async function openFmSessionBrowser() {
+  browserTargetInput = '__fm_session__';
+  browserMode        = 'file';
+  browserSelected    = null;
+  document.getElementById('browser-selected').textContent = 'No selection';
+  document.getElementById('browser-selected').classList.remove('has-value');
+  document.getElementById('browser-overlay').classList.add('open');
+
+  // Resolve absolute path: try to start in case/fileminer subdir, fall back to saved_output
+  try {
+    const h = await api('/health');
+    const root = (h.malchela_root || '').replace(/\/$/, '');
+    const preferred = activeCase
+      ? `${root}/saved_output/cases/${activeCase}/fileminer`
+      : `${root}/saved_output/fileminer`;
+    browseTo(preferred).catch(() => browseTo(`${root}/saved_output`).catch(() => browseTo(null)));
+  } catch (_) {
+    browseTo(null);
+  }
 }
 
 // ── TiQuery Table Renderer ─────────────────────────────────────────────────
@@ -3510,6 +3631,13 @@ function confirmBrowserSelection() {
     return;
   }
 
+  // FileMiner session load mode
+  if (browserTargetInput === '__fm_session__') {
+    closeBrowser();
+    loadFmSession(browserSelected);
+    return;
+  }
+
   // Special mode: compute SHA256 of selected file for TI Query hash field
   if (browserTargetInput === '__hash__') {
     closeBrowser();
@@ -3996,6 +4124,13 @@ async function saveToCase() {
   if (!lastOutput) { showToast('No output to save', 'error'); return; }
   if (!activeCase) { showToast('No active case — open Cases and select one', 'error'); return; }
   await doSaveToCase(true);
+  // If this save was for a tool launched from FileMiner, record it
+  if (fmLaunchedFrom) {
+    fmExecutedTools.add(`${fmLaunchedFrom.toolId}::${fmLaunchedFrom.filePath}`);
+    persistFmState();
+    saveFmSession();
+    fmLaunchedFrom = null;
+  }
 }
 
 async function doSaveToCase(notify = true) {
@@ -5184,29 +5319,33 @@ function renderHomeOutput(text) {
   }
 
   // Separate feature table rows (contain |) from regular text
+  // Track pre-table and post-table lines separately so post-table notes
+  // render after the table, not before it.
   const tableLines = [];
-  const regularLines = [];
+  const preTableLines = [];
+  const postTableLines = [];
   let inTable = false;
+  let tableEnded = false;
 
   textLines.forEach(line => {
     const t = line.trim();
     if (t.includes('|')) {
-      if (!inTable && regularLines.length) {
-        // flush regular lines before table starts
-      }
       inTable = true;
       tableLines.push(t);
     } else {
-      if (inTable) inTable = false;
-      regularLines.push(line);
+      if (inTable) { inTable = false; tableEnded = true; }
+      if (tableEnded) {
+        postTableLines.push(line);
+      } else {
+        preTableLines.push(line);
+      }
     }
   });
 
   // Build feature table HTML
   let featureTableHtml = '';
   if (tableLines.length) {
-    featureTableHtml = `
-      <table style="border-collapse:collapse;margin:12px 0;width:100%;max-width:700px">
+    featureTableHtml = `<table style="border-collapse:collapse;margin:4px 0 12px;width:100%;max-width:700px">
         <thead>
           <tr style="border-bottom:2px solid var(--border-light)">
             <th style="text-align:left;padding:5px 16px 5px 0;color:var(--cyan);font-size:11px;white-space:nowrap">Tool</th>
@@ -5228,8 +5367,8 @@ function renderHomeOutput(text) {
       </table>`;
   }
 
-  // Render regular text lines
-  const rendered = regularLines.map(line => {
+  // Render regular text lines (pre-table)
+  const rendered = preTableLines.map(line => {
     const t = line.trim();
     const esc = escHtml(t);
     if (/MalChela Analysis Toolkit|MalChela - A YARA/i.test(t))
@@ -5243,9 +5382,20 @@ function renderHomeOutput(text) {
     if (/https?:\/\//i.test(t))
       return `<div><span class="out-cyan">${esc}</span></div>`;
     if (/^(ABOUT|FEATURES|OPTIONS):/i.test(t))
-      return `<div style="margin-top:10px"><span class="out-orange" style="font-weight:600;letter-spacing:.08em">${esc}</span></div>`;
+      return `<div style="margin-top:10px;margin-bottom:0"><span class="out-orange" style="font-weight:600;letter-spacing:.08em">${esc}</span></div>`;
     if (t && t.length > 4
         && !/MalChela|Version:|https?:|ABOUT:|FEATURES:/i.test(t))
+      return `<div><span style="color:var(--cyan);font-style:italic">${esc}</span></div>`;
+    if (!t) return `<div style="height:4px"></div>`;
+    return `<div><span class="out-dim">${esc}</span></div>`;
+  });
+
+  const renderedPost = postTableLines.map(line => {
+    const t = line.trim();
+    const esc = escHtml(t);
+    if (/^(ABOUT|FEATURES|OPTIONS):/i.test(t))
+      return `<div style="margin-top:10px"><span class="out-orange" style="font-weight:600;letter-spacing:.08em">${esc}</span></div>`;
+    if (t && t.length > 4)
       return `<div><span style="color:var(--cyan);font-style:italic">${esc}</span></div>`;
     if (!t) return `<div style="height:4px"></div>`;
     return `<div><span class="out-dim">${esc}</span></div>`;
@@ -5254,7 +5404,7 @@ function renderHomeOutput(text) {
   const artHtml = artBlock.length
     ? `<pre class="ascii-art">${escHtml(artBlock.join('\n'))}</pre>`
     : '';
-  const textHtml = `<div style="line-height:1.8">${rendered.join('')}${featureTableHtml}</div>`;
+  const textHtml = `<div style="line-height:1.8">${rendered.join('')}${featureTableHtml}${renderedPost.join('')}</div>`;
 
   html = `<div style="padding:16px 0 0 24px">${artHtml}${textHtml}</div>`;
   document.getElementById('output-content').innerHTML = html;
@@ -5324,8 +5474,9 @@ if (activeCase) {
 checkHealth();
 setInterval(checkHealth, 30000);
 
-// Load tools from yaml then show home
+// Load tools from yaml then show home; restore any persisted FileMiner state
 loadToolsFromYaml().then(() => {
+  restoreFmState();
   showHome({ target: document.querySelector('.sidebar-btn') });
 });
 </script>

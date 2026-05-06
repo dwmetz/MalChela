@@ -15,7 +15,7 @@ NC='\033[0m'     # reset
 
 echo ""
 echo -e "${OR}  ╔══════════════════════════════════════╗${NC}"
-echo -e "${OR}  ║   MalChela Server Setup  v4.0        ║${NC}"
+echo -e "${OR}  ║   MalChela Server Setup  v        ║${NC}"
 echo -e "${OR}  ║   Baker Street Forensics             ║${NC}"
 echo -e "${OR}  ╚══════════════════════════════════════╝${NC}"
 echo ""

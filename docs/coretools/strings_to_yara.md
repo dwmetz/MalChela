@@ -4,7 +4,7 @@ Lines beginning with hash: are deliberately ignored during rule generation — t
 
 ![Strings to YARA](../images/strings_to_yara.png)
 
-<p align="center"><strong>Figure 5.15:</strong> Strings to YARA</p>
+<p align="center"><strong> Strings to YARA</p>
 
 ---
 

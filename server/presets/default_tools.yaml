@@ -118,6 +118,27 @@ tools:
   category: "File Analysis"
   exec_type: cargo
 
+- name: "Plist Analyzer"
+  description: "Parses macOS .plist files and .app bundle Info.plist for malware indicators"
+  command: ["plist_analyzer"]
+  input_type: file
+  category: "Mac Analysis"
+  exec_type: cargo
+
+- name: "Mach-O Info"
+  description: "Parses a Mach-O binary (macOS executable/dylib): architecture, linked libs, sections with entropy, stripped symbols"
+  command: ["macho_info"]
+  input_type: file
+  category: "Mac Analysis"
+  exec_type: cargo
+
+- name: "Code Sign Check"
+  description: "Inspects macOS code signing: signature type, team ID, entitlements, ad-hoc/unsigned detection"
+  command: ["codesign_check"]
+  input_type: file
+  category: "Mac Analysis"
+  exec_type: cargo
+
 # -------------------------------------
 # Example script in workspace integration:
 # This script is included in MalChela (requires Tshark)

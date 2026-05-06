@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
-  MalChela v4.0
+  MalChela v
  </h1>
   <h4>
       A YARA &amp; Malware Analysis Toolkit written in Rust.
@@ -45,6 +45,14 @@
 | nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it's known-good |
 | strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
 | xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for non-Windows malware corpus |
+
+**Mac Analysis** *(v4.1)*
+
+| Program          | Function |
+|------------------|----------|
+| Code Sign Check  | Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and `get-task-allow` flag |
+| Mach-O Info      | Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection |
+| Plist Analyzer   | Parses `.plist` files and `.app` bundle `Info.plist` for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection |
 
 *Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically.*
 

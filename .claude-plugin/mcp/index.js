@@ -283,6 +283,66 @@ const TOOLS = [
     },
   },
 
+  // Mac Analysis
+  {
+    name: 'plist_analyzer',
+    category: 'Mac Analysis',
+    input_type: 'file',
+    description:
+      'Parses macOS .plist files and .app bundle Info.plist for malware indicators. ' +
+      'Detects: LSUIElement/NSUIElement (hidden background agent), NSAllowsArbitraryLoads ' +
+      '(ATS disabled — unencrypted HTTP allowed), CFBundleURLTypes (custom URL scheme ' +
+      'registration), CFBundleSignature="????" (no creator code), LSEnvironment (env var ' +
+      'injection), missing or extra binaries in Contents/MacOS/. ' +
+      'Use on any .plist file or point at a .app bundle directory.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filepath: { type: 'string', description: 'Absolute path to a .plist file or .app bundle' },
+      },
+      required: ['filepath'],
+    },
+  },
+
+  {
+    name: 'macho_info',
+    category: 'Mac Analysis',
+    input_type: 'file',
+    description:
+      'Parses Mach-O binaries (thin and fat/universal): CPU architecture, file type, ' +
+      'PIE/ASLR status, __PAGEZERO integrity, linked libraries, RPATH entries, section ' +
+      'entropy, and symbol table status. Flags: stripped symbols, high-entropy sections ' +
+      '(packed/encrypted content), zero-sized __PAGEZERO (privilege escalation), RPATH ' +
+      'entries (dylib hijacking), deprecated/EOL crypto libraries (libcrypto.0.9.8, etc.), ' +
+      'and the CoreFoundation+SystemConfiguration+Security dylib triad common in C2 implants.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filepath: { type: 'string', description: 'Absolute path to a Mach-O binary' },
+      },
+      required: ['filepath'],
+    },
+  },
+
+  {
+    name: 'codesign_check',
+    category: 'Mac Analysis',
+    input_type: 'file',
+    description:
+      'Inspects macOS code signing by parsing the code signature superblob directly from ' +
+      'the Mach-O binary. Reports: signature status (Developer-signed, Ad-hoc, or Unsigned), ' +
+      'Bundle ID and Team ID from the CodeDirectory, entitlements presence, get-task-allow ' +
+      'flag (debug/dev build), and _CodeSignature/ directory verification. ' +
+      'Accepts a .app bundle path or a bare Mach-O binary. Handles fat/universal binaries.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filepath: { type: 'string', description: 'Absolute path to a .app bundle or Mach-O binary' },
+      },
+      required: ['filepath'],
+    },
+  },
+
   // Utilities
   {
     name: 'extract_samples',

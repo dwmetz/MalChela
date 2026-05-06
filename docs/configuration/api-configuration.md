@@ -42,7 +42,7 @@ Each file should contain a single line with your API key. Keys are read at runti
 ---
 ![API Configuration Utility](../images/api_configuration.png)
 
-**Figure 4.0:** API Configuration Utility
+<p align="center"><strong>API Configuration Utility</p>
 
 ## Managing Your Keys with the Configuration Utility
 

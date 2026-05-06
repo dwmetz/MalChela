@@ -1,4 +1,4 @@
-malchela_root: /Users/dmetz/tools/MalChela
+malchela_root: /Users/dmetz/dev/MalChela
 browser_root:  /Users/dmetz
 port: 8675
 tool_paths:

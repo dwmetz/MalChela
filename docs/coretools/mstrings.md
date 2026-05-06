@@ -4,7 +4,7 @@ Note: The MITRE Technique Lookup bar, introduced in v3.0.1 has been removed. It 
 
 ![MStrings](../images/mstrings.png)
 
-<p align="center"><strong>Figure 5.10:</strong> MStrings</p>
+<p align="center"><strong> MStrings</p>
 
 ---
 

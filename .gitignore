@@ -26,3 +26,6 @@ scratchpad.txt
 
 # MKDocs
 /site
+
+# Server
+/server/venv/

@@ -79,6 +79,35 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
+// Filter high-volume ObjC/Swift runtime noise that appears in every Mach-O binary.
+// These strings are never meaningful IOCs and would swamp detection output.
+fn is_objc_swift_noise(s: &str) -> bool {
+    let t = s.trim();
+    // ObjC runtime stubs and imported symbol stubs (appear hundreds of times per binary)
+    if t.starts_with("_objc_") || t.starts_with("objc_") || t.starts_with("@_") {
+        return true;
+    }
+    // Swift mangled symbol prefixes
+    if t.starts_with("_$s") || t.starts_with("_$S") || t.starts_with("swift_") || t.starts_with("_T0") {
+        return true;
+    }
+    // Apple system dylib paths — present in every Mac binary's import table
+    if t.starts_with("/System/Library/Frameworks/")
+        || t.starts_with("/System/Library/PrivateFrameworks/")
+        || t.starts_with("/usr/lib/libobjc")
+        || t.starts_with("/usr/lib/swift/")
+        || t.starts_with("/usr/lib/libc++")
+        || t.starts_with("/usr/lib/libSystem")
+    {
+        return true;
+    }
+    // ObjC type encoding strings (e.g. "v8@0:8", "@@:") — short, only ObjC type chars
+    if t.len() < 16 && t.chars().all(|c| "@:^v#BiILlqQfdCSsDTtBrnoO*{}0123456789".contains(c)) {
+        return true;
+    }
+    false
+}
+
 struct Mstrings {
     matches: Vec<Match>,
 }
@@ -89,13 +118,13 @@ impl Mstrings {
     }
 
     pub fn process_line(&mut self, line: &str) {
-        if !line.trim().is_empty() {
+        if !line.trim().is_empty() && !is_objc_swift_noise(line) {
             let encoding_type = if std::str::from_utf8(line.as_bytes()).is_ok() {
                 Encoding::Utf8
             } else {
                 Encoding::Ascii
             };
-    
+
             self.matches.push(Match {
                 offset: self.matches.len() * 16,
                 encoding: encoding_type,
@@ -371,9 +400,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // \x22 is used in char classes instead of \" to avoid raw-string issues.
     // The regex crate does not support lookarounds, so IP boundary validation
     // is done in Rust after matching.
-    let re_url    = Regex::new(r"https?://[^\s\x22'<>]{8,}").unwrap();
-    let re_ip     = Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap();
-    let re_fspath = Regex::new(r"(?i)(?:%\w+%|\\|\$\{[^}]+\})[^\s\x22'<>]*\.(?:exe|bat|ps1|vbs|pdb|dll|txt|zip|lnk)").unwrap();
+    let re_url      = Regex::new(r"https?://[^\s\x22'<>]{8,}").unwrap();
+    let re_ip       = Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap();
+    // Windows-style paths
+    let re_fspath   = Regex::new(r"(?i)(?:%\w+%|\\|\$\{[^}]+\})[^\s\x22'<>]*\.(?:exe|bat|ps1|vbs|pdb|dll|txt|zip|lnk)").unwrap();
+    // macOS-style paths: /Users/…, ~/Library/…, /Library/…, /private/var/…, /tmp/…
+    let re_mac_path = Regex::new(r"(?:~|/Users/[^/\s]+|/Library|/private/var|/tmp)/[^\s\x22'<>]*\.(?:sh|py|dylib|plist|app|pkg|command)").unwrap();
 
     for m in &mstrings.matches {
         if let Some(rule) = &m.rule_name {
@@ -407,6 +439,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         fs_iocs.insert(extracted.to_string());
                     }
                 }
+                for cap in re_mac_path.find_iter(&m.matched_str) {
+                    fs_iocs.insert(cap.as_str().to_string());
+                }
             } else {
                 // Normal path: short discrete string.
                 // Normalize key=value pairs — take only the value after '='.
@@ -424,15 +459,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let has_namespace = candidate.contains("::");
 
                 if !is_template && !has_spaces && !has_namespace {
-                    if rule.to_lowercase().contains("filesystem")
+                    let rule_lc = rule.to_lowercase();
+                    let is_mac_path = sc.starts_with("/users/")
+                        || sc.starts_with("/library/")
+                        || sc.starts_with("~/library/")
+                        || sc.starts_with("/private/")
+                        || sc.starts_with("/tmp/");
+                    let is_mac_ext = sc.ends_with(".sh")
+                        || sc.ends_with(".dylib")
+                        || sc.ends_with(".pkg")
+                        || sc.ends_with(".command")
+                        || sc.ends_with(".plist");
+
+                    if rule_lc.contains("filesystem")
                         || sc.ends_with(".exe")
                         || sc.ends_with(".bat")
                         || sc.ends_with(".ps1")
                         || sc.ends_with(".vbs")
                         || sc.ends_with(".pdb")
+                        || is_mac_ext
+                        || is_mac_path
                     {
                         fs_iocs.insert(candidate.to_string());
-                    } else if rule.to_lowercase().contains("ip address")
+                    } else if rule_lc.contains("ip address")
                         || sc.contains("http:")
                         || sc.contains("https:")
                         || (sc.contains('.') && sc.split('.').count() == 4)

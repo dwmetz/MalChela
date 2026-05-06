@@ -621,7 +621,7 @@ def home_screen():
     output = (
         f"{ascii_art}\n"
         f"            https://bakerstreetforensics.com\n\n"
-        f"            MalChela Analysis Toolkit v4.0\n\n"
+        f"            MalChela Analysis Toolkit v4.1\n\n"
         f"{koan}"
     )
     return jsonify({"success": True, "output": output})
@@ -1091,6 +1091,126 @@ def mstrings():
         _register_cli_case_output("mstrings", case_name, str(path), save_format)
         result["saved_to_case"] = True
     return jsonify(result)
+
+
+@app.route("/tools/plist_analyzer", methods=["POST"])
+def plist_analyzer():
+    """Parse macOS .plist files and .app bundle Info.plist for malware indicators."""
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
+    if not path:
+        return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    args = [str(path)]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("plist_analyzer", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("plist_analyzer", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
+
+
+@app.route("/tools/macho_info", methods=["POST"])
+def macho_info():
+    """Parse Mach-O binary: architecture, linked libraries, sections with entropy, stripped symbols."""
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
+    if not path:
+        return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    args = [str(path)]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("macho_info", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("macho_info", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
+
+
+@app.route("/tools/codesign_check", methods=["POST"])
+def codesign_check():
+    """Inspect macOS code signing: signature type, team ID, entitlements, ad-hoc/unsigned detection."""
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = data.get("case_name", "").strip()
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
+    if not path:
+        return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    args = [str(path)]
+    if case_name:
+        args += ["-o", _FMT_FLAG[save_format], "--case", case_name]
+    result = run_binary("codesign_check", args)
+    if case_name and result.get("success"):
+        _register_cli_case_output("codesign_check", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
+
+
+@app.route("/tools/fileminer/session", methods=["POST"])
+def fileminer_session_save():
+    """Create or update a FileMiner session JSON with the current rows and executed-tool list."""
+    data          = request.json or {}
+    case_name     = data.get("case_name", "").strip()
+    analyzed_path = data.get("analyzed_path", "")
+    rows          = data.get("rows", [])
+    executed      = data.get("executed", [])
+
+    if case_name:
+        session_dir = MALCHELA_ROOT / "saved_output" / "cases" / case_name / "fileminer"
+    else:
+        session_dir = MALCHELA_ROOT / "saved_output" / "fileminer"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    session_path = session_dir / "session.json"
+
+    now = datetime.utcnow().isoformat() + "Z"
+    # Preserve original creation timestamp if the file already exists
+    created = now
+    if session_path.exists():
+        try:
+            existing = json.loads(session_path.read_text())
+            created = existing.get("created", now)
+        except Exception:
+            pass
+
+    payload = {
+        "analyzed_path": analyzed_path,
+        "case":          case_name or None,
+        "created":       created,
+        "last_updated":  now,
+        "rows":          rows,
+        "executed":      executed,
+    }
+    session_path.write_text(json.dumps(payload, indent=2))
+    rel = str(session_path.relative_to(MALCHELA_ROOT))
+    return jsonify({"success": True, "path": rel})
+
+
+@app.route("/tools/fileminer/session", methods=["GET"])
+def fileminer_session_load():
+    """Load a FileMiner session JSON by its path on disk."""
+    path_str = request.args.get("path", "").strip()
+    if not path_str:
+        return jsonify({"success": False, "error": "No path specified"})
+    # Resolve relative paths against MALCHELA_ROOT (the save route returns relative paths)
+    candidate = Path(path_str) if Path(path_str).is_absolute() else MALCHELA_ROOT / path_str
+    session_path = safe_path(str(candidate))
+    if not session_path or not session_path.exists():
+        return jsonify({"success": False, "error": "Session file not found"})
+    try:
+        payload = json.loads(session_path.read_text())
+        return jsonify({"success": True, "session": payload})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/tools/mzhash", methods=["POST"])

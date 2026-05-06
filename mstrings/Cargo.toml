@@ -1,6 +1,6 @@
 [package]
 name = "mstrings"
-version = "4.0.0"
+version = "4.1.0"
 edition = "2021"
 
 [dependencies]
@@ -20,7 +20,6 @@ common_config = { path = "../common_config" }
 project-root = "0.2.2"
 clap = { version = "4.5", features = ["derive"] }
 common_ui = { path = "../common_ui" }
-egui = "0.31.1"
 prettytable = "0.10.0"
 terminal_size = "0.4.3"
 tabled = "0.18.0"

@@ -4,11 +4,11 @@ Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool
 
 ![TIQuery Hash Lookup](../images/tiquery_hash.png)
 
-<p align="center"><strong>Figure 5.17:</strong> TIQuery Hash Lookup</p>
+<p align="center"><strong> TIQuery Hash Lookup</p>
 
 ![TIQuery QR Lookup](../images/tiquery_qr.png)
 
-<p align="center"><strong>Figure 5.18:</strong> TIQuery QR Code Lookup</p>
+<p align="center"><strong> TIQuery QR Code Lookup</p>
 
 ---
 

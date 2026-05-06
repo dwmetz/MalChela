@@ -1,0 +1,15 @@
+[package]
+name = "macho_info"
+version = "4.1.0"
+edition = "2021"
+
+[dependencies]
+goblin = "0.9.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+common_config = { path = "../common_config" }
+common_ui = { path = "../common_ui" }
+colored = "3.1.1"
+strip-ansi-escapes = "0.2.1"

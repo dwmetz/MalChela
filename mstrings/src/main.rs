@@ -34,7 +34,7 @@ fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>) {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 enum Encoding {
     Ascii,
     Utf8,
@@ -117,7 +117,7 @@ impl Mstrings {
         Self { matches: Vec::new() }
     }
 
-    pub fn process_line(&mut self, line: &str) {
+    pub fn process_line(&mut self, line: &str, offset: usize) {
         if !line.trim().is_empty() && !is_objc_swift_noise(line) {
             let encoding_type = if std::str::from_utf8(line.as_bytes()).is_ok() {
                 Encoding::Utf8
@@ -126,7 +126,7 @@ impl Mstrings {
             };
 
             self.matches.push(Match {
-                offset: self.matches.len() * 16,
+                offset,
                 encoding: encoding_type,
                 matched_str: line.trim_start().to_string(),
                 rule_name: None,
@@ -158,18 +158,37 @@ impl Mstrings {
             }
         }
 
-        for m in &mut self.matches {
+        let mut new_matches: Vec<Match> = Vec::new();
+        for m in &self.matches {
+            let mut any_match = false;
+            let mut seen_rules: std::collections::HashSet<String> = std::collections::HashSet::new();
             for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
-                if regex.is_match(&m.matched_str) {
-                    m.rule_name = Some(rule_name.clone());
-                    m.tactic = Some(tactic.clone());
-                    m.technique = Some(technique.clone());
-                    // Only store the T-number, not a URL
-                    m.technique_id = Some(technique_id.clone());
-                    break;
+                if regex.is_match(&m.matched_str) && seen_rules.insert(rule_name.clone()) {
+                    new_matches.push(Match {
+                        offset: m.offset,
+                        encoding: m.encoding.clone(),
+                        matched_str: m.matched_str.clone(),
+                        rule_name: Some(rule_name.clone()),
+                        tactic: Some(tactic.clone()),
+                        technique: Some(technique.clone()),
+                        technique_id: Some(technique_id.clone()),
+                    });
+                    any_match = true;
                 }
             }
+            if !any_match {
+                new_matches.push(Match {
+                    offset: m.offset,
+                    encoding: m.encoding.clone(),
+                    matched_str: m.matched_str.clone(),
+                    rule_name: None,
+                    tactic: None,
+                    technique: None,
+                    technique_id: None,
+                });
+            }
         }
+        self.matches = new_matches;
 
         Ok(())
     }
@@ -177,10 +196,10 @@ impl Mstrings {
 
 
 #[derive(Tabled)]
-struct DisplayMatch {
+struct FlatMatch {
     #[tabled(rename = "Offset")]
     offset: String,
-    #[tabled(rename = "Encoding")]
+    #[tabled(rename = "Enc")]
     encoding: String,
     #[tabled(rename = "Match")]
     matched_str: String,
@@ -189,12 +208,43 @@ struct DisplayMatch {
     #[tabled(rename = "Tactic")]
     tactic: String,
     #[tabled(rename = "Technique")]
-    technique: String, // now treated as Markdown in GUI
+    technique: String,
     #[tabled(rename = "ID")]
-    technique_id: String, // e.g., "T1027"
+    technique_id: String,
 }
 
-// (No methods needed for DisplayMatch at this time)
+#[derive(Tabled)]
+struct DisplayMatch {
+    #[tabled(rename = "Count")]
+    count: String,
+    #[tabled(rename = "Rule")]
+    rule_name: String,
+    #[tabled(rename = "Matched Strings")]
+    matched_strings: String,
+    #[tabled(rename = "Tactic")]
+    tactic: String,
+    #[tabled(rename = "Technique")]
+    technique: String,
+    #[tabled(rename = "ID")]
+    technique_id: String,
+}
+
+fn tactic_priority(tactic: &str) -> u8 {
+    let t = tactic.to_lowercase();
+    if t.contains("impact")                { 0 }
+    else if t.contains("collection")      { 1 }
+    else if t.contains("command and control") { 2 }
+    else if t.contains("exfiltration")    { 3 }
+    else if t.contains("execution")       { 4 }
+    else if t.contains("persistence")     { 5 }
+    else if t.contains("privilege escalation") { 6 }
+    else if t.contains("credential")      { 7 }
+    else if t.contains("lateral movement") { 8 }
+    else if t.contains("defense evasion") { 9 }
+    else if t.contains("discovery")       { 10 }
+    else if t.contains("resource development") { 11 }
+    else { 12 }
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::collections::BTreeSet;
@@ -289,12 +339,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sha256 = format!("{:x}", hasher.finalize());
 
     let mut current = Vec::new();
-    for &byte in &buffer {
+    let mut string_start: usize = 0;
+    for (i, &byte) in buffer.iter().enumerate() {
         if byte.is_ascii_graphic() || byte == b' ' {
+            if current.is_empty() {
+                string_start = i;
+            }
             current.push(byte);
         } else if current.len() >= 4 {
             if let Ok(s) = String::from_utf8(current.clone()) {
-                mstrings.process_line(&s);
+                mstrings.process_line(&s, string_start);
             }
             current.clear();
         } else {
@@ -304,26 +358,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if current.len() >= 4 {
         if let Ok(s) = String::from_utf8(current.clone()) {
-            mstrings.process_line(&s);
+            mstrings.process_line(&s, string_start);
         }
     }
 
     mstrings.apply_yara_detections()?;
 
-    let display_matches: Vec<DisplayMatch> = mstrings.matches.iter()
-        .filter_map(|m| {
-            if let Some(rule) = &m.rule_name {
-                Some(DisplayMatch {
-                    offset: format!("0x{:08X}", m.offset),
-                    encoding: format!("{:?}", m.encoding),
-                    matched_str: truncate_string(&m.matched_str, 80),
-                    rule_name: rule.clone(),
-                    tactic: m.tactic.clone().unwrap_or_default(),
-                    technique: m.technique.clone().unwrap_or_default(),
-                    technique_id: m.technique_id.clone().unwrap_or_default(),
-                })
-            } else {
-                None
+    // Group matched strings by rule name; track tactic/technique for sort.
+    // Use BTreeSet per group to deduplicate strings that appear at multiple offsets.
+    let raw_match_count = mstrings.matches.iter().filter(|m| m.rule_name.is_some()).count();
+
+    let mut rule_groups: std::collections::HashMap<
+        String,
+        (String, String, String, std::collections::BTreeSet<String>),
+    > = std::collections::HashMap::new();
+
+    for m in mstrings.matches.iter().filter(|m| m.rule_name.is_some()) {
+        let rule = m.rule_name.as_ref().unwrap().clone();
+        let entry = rule_groups.entry(rule).or_insert_with(|| (
+            m.tactic.clone().unwrap_or_default(),
+            m.technique.clone().unwrap_or_default(),
+            m.technique_id.clone().unwrap_or_default(),
+            std::collections::BTreeSet::new(),
+        ));
+        entry.3.insert(m.matched_str.clone());
+    }
+
+    // Sort groups: primary = tactic priority, secondary = rule name
+    let mut sorted_groups: Vec<(String, String, String, String, Vec<String>)> = rule_groups
+        .into_iter()
+        .map(|(rule, (tactic, technique, id, strings))| {
+            (rule, tactic, technique, id, strings.into_iter().collect())
+        })
+        .collect();
+    sorted_groups.sort_by(|a, b| {
+        tactic_priority(&a.1).cmp(&tactic_priority(&b.1)).then(a.0.cmp(&b.0))
+    });
+
+    let display_matches: Vec<DisplayMatch> = sorted_groups
+        .iter()
+        .map(|(rule, tactic, technique, id, strings)| {
+            let count = strings.len();
+            let matched_strings = {
+                let cap = 8;
+                let shown: Vec<String> = strings
+                    .iter()
+                    .take(cap)
+                    .map(|s| truncate_string(s, 50))
+                    .collect();
+                if count > cap {
+                    format!("{} (+{} more)", shown.join(", "), count - cap)
+                } else {
+                    shown.join(", ")
+                }
+            };
+            DisplayMatch {
+                count: count.to_string(),
+                rule_name: rule.clone(),
+                matched_strings,
+                tactic: tactic.clone(),
+                technique: technique.clone(),
+                technique_id: id.clone(),
             }
         })
         .collect();
@@ -331,11 +426,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !is_gui_mode() {
         println!("{}", styled_line("stone", &format!("File: {}", file_path_copy)));
         println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
-        println!("\n{}\n", format!("{} unique detections matched.", display_matches.len()).truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
+        println!("\n{}\n", format!("{} matches across {} rules.", raw_match_count, display_matches.len()).truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
     } else {
         println!("{}", styled_line("stone", &format!("File: {}", file_path_copy)));
         println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
-        println!("\n{} unique detections matched.\n", display_matches.len());
+        println!("\n{} matches across {} rules.\n", raw_match_count, display_matches.len());
     }
 
     // Create the table using the `display_matches`
@@ -344,8 +439,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     table
         .with(Style::modern())
         .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
-        .with(Modify::new(Columns::single(4)).with(Width::wrap(15).keep_words(true)))
-        .with(Modify::new(Columns::new(0..)).with(Width::wrap(25).keep_words(true)));
+        .with(Modify::new(Columns::single(0)).with(Width::wrap(5).keep_words(true)))   // Count
+        .with(Modify::new(Columns::single(1)).with(Width::wrap(30).keep_words(true)))  // Rule
+        .with(Modify::new(Columns::single(2)).with(Width::wrap(45).keep_words(true)))  // Matched Strings
+        .with(Modify::new(Columns::single(3)).with(Width::wrap(18).keep_words(true)))  // Tactic
+        .with(Modify::new(Columns::single(4)).with(Width::wrap(25).keep_words(true)))  // Technique
+        .with(Modify::new(Columns::single(5)).with(Width::wrap(10).keep_words(true))); // ID
 
     // Stringify the table after applying formatting, for both display and output file
     let table_str = table.to_string();
@@ -502,6 +601,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         print_iocs("POTENTIAL NETWORK IOCs:", &net_iocs);
     }
 
+    // Detail section: flat per-string table for drill-down (parsed by PWA toggle)
+    let flat_matches: Vec<FlatMatch> = mstrings.matches.iter()
+        .filter(|m| m.rule_name.is_some())
+        .map(|m| FlatMatch {
+            offset:       format!("0x{:08X}", m.offset),
+            encoding:     format!("{:?}", m.encoding),
+            matched_str:  truncate_string(&m.matched_str, 60),
+            rule_name:    m.rule_name.clone().unwrap_or_default(),
+            tactic:       m.tactic.clone().unwrap_or_default(),
+            technique:    m.technique.clone().unwrap_or_default(),
+            technique_id: m.technique_id.clone().unwrap_or_default(),
+        })
+        .collect();
+
+    if !flat_matches.is_empty() {
+        println!("---DETAIL---");
+        let mut flat_table = TabledTable::new(&flat_matches);
+        flat_table
+            .with(Style::modern())
+            .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
+            .with(Modify::new(Columns::single(3)).with(Width::wrap(25).keep_words(true)))
+            .with(Modify::new(Columns::single(4)).with(Width::wrap(18).keep_words(true)))
+            .with(Modify::new(Columns::single(5)).with(Width::wrap(25).keep_words(true)))
+            .with(Modify::new(Columns::single(2)).with(Width::wrap(30).keep_words(true)));
+        println!("{}", flat_table.to_string());
+    }
+
     println!();
 
     let save_output = matches.get_flag("output") || matches.contains_id("case");
@@ -536,14 +662,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Build the report content (reuse printed table and IOCs)
         let mut report_buffer = String::new();
 
-        let detection_count = mstrings.matches.iter().filter(|m| m.rule_name.is_some()).count();
-
         // Add file and hash metadata at the top of the report
         if format == "md" {
             report_buffer.push_str("# mStrings Analysis Report\n\n");
             report_buffer.push_str(&format!("**File:** `{}`  \n", file_path_copy));
             report_buffer.push_str(&format!("**SHA256:** `{}`  \n", sha256));
-            report_buffer.push_str(&format!("**Detections:** {}  \n\n", detection_count));
+            report_buffer.push_str(&format!(
+                "**Detections:** {} matches across {} rules  \n\n",
+                raw_match_count,
+                display_matches.len()
+            ));
         } else {
             report_buffer.push_str(&format!("File: {}\n", file_path_copy));
             report_buffer.push_str(&format!("SHA256: {}\n\n", sha256));
@@ -551,7 +679,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Add summary for non-md
         if format != "md" {
-            report_buffer.push_str(&format!("{} unique detections matched.\n\n", detection_count));
+            report_buffer.push_str(&format!(
+                "{} matches across {} rules.\n\n",
+                raw_match_count,
+                display_matches.len()
+            ));
         }
 
         // Add table content

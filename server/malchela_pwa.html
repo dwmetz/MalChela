@@ -888,7 +888,7 @@
     margin-bottom: 10px;
     line-height: 1.7;
   }
-  .ms-table-wrap { overflow-x: auto; margin-top: 8px; }
+  .ms-table-wrap { overflow-x: auto; margin-top: 4px; }
   .ms-table {
     width: 100%;
     border-collapse: collapse;
@@ -942,7 +942,8 @@
     display: flex;
     gap: 16px;
     flex-wrap: wrap;
-    margin-bottom: 8px;
+    align-items: center;
+    margin-bottom: 4px;
     font-size: 11px;
   }
   .ms-summary-item { color: var(--text-dim); }
@@ -3106,63 +3107,119 @@ function parseVtPerEngineRows(lines) {
 }
 // ── mStrings Table Renderer ────────────────────────────────────────────────
 
-function parseMstringsOutput(text) {
+function buildIdHtml(id) {
+  if (!id) return '';
+  const url = 'https://attack.mitre.org/techniques/' + id.replace('.', '/') + '/';
+  return `<a class="ms-technique-id" href="${url}" target="_blank"
+             style="text-decoration:none;margin-right:4px">${escHtml(id)}</a>` +
+         `<button onclick="openMitreLookup('${escHtml(id)}')"
+             style="background:none;border:none;color:var(--cyan-dim);font-size:9px;cursor:pointer;padding:0"
+             title="Look up in MITRE panel">⊛</button>`;
+}
+
+function toggleMsDetail(showDetail) {
+  const summary = document.getElementById('ms-summary-table');
+  const detail  = document.getElementById('ms-detail-table');
+  if (summary) summary.style.display = showDetail ? 'none' : '';
+  if (detail)  detail.style.display  = showDetail ? ''     : 'none';
+}
+
+function parseBoxTable(text, startMarker, stopMarker) {
+  // Generic box-drawing table parser. Returns array of cell arrays per data row.
   const lines = text.split('\n');
-  const rows = [];
-  const header = {};
   let colPositions = [];
   let inTable = false;
+  let inTarget = !startMarker; // if no marker, start immediately
+  const rows = [];
 
-  // Find header separator to get column positions
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (startMarker && line.trim() === startMarker) { inTarget = true; continue; }
+    if (stopMarker  && line.trim() === stopMarker)  { break; }
+    if (!inTarget) continue;
+
     if (line.startsWith('┌') || line.startsWith('├')) {
-      // Find column boundary positions from separator chars
       const positions = [];
       for (let j = 0; j < line.length; j++) {
         if ('┬┼┐┤'.includes(line[j])) positions.push(j);
       }
-      if (positions.length >= 4) {
-        colPositions = positions;
-        inTable = true;
-      }
+      if (positions.length >= 4) { colPositions = positions; inTable = true; }
       continue;
     }
     if (!inTable) continue;
     if (line.startsWith('└')) continue;
 
     if (line.startsWith('│') && colPositions.length) {
-      // Slice cells at column positions
       let prev = 0;
       const cells = colPositions.map(pos => {
         const cell = line.slice(prev + 1, pos).trim();
         prev = pos;
         return cell;
       });
+      rows.push(cells);
+    }
+  }
+  return rows;
+}
 
-      // Skip header row
-      if (cells[0] === 'Offset' || cells[0] === '#') continue;
+function parseMstringsOutput(text) {
+  // Summary table: 6 columns — Count, Rule, Matched Strings, Tactic, Technique, ID
+  // Stop parsing when we hit the detail section marker
+  const cellRows = parseBoxTable(text, null, '---DETAIL---');
+  const rows = [];
 
-      // New row starts with a hex offset or digit
-      if (/^0x[0-9a-fA-F]+$/.test(cells[0]) || /^\d+$/.test(cells[0])) {
-        rows.push({
-          offset:    cells[0] || '',
-          encoding:  cells[1] || '',
-          match:     cells[2] || '',
-          rule:      cells[3] || '',
-          tactic:    cells[4] || '',
-          technique: cells[5] || '',
-          id:        cells[6] || '',
-        });
-      } else if (rows.length) {
-        // Continuation line — append to last row without spaces for path-like cells
-        const last = rows[rows.length - 1];
-        if (cells[2]) last.match     += cells[2];
-        if (cells[3]) last.rule      += ' ' + cells[3];
-        if (cells[4]) last.tactic    += ' ' + cells[4];
-        if (cells[5]) last.technique += ' ' + cells[5];
-        if (cells[6]) last.id        += cells[6];
-      }
+  for (const cells of cellRows) {
+    // Skip header row
+    if (cells[0] === 'Count' || cells[0] === 'Hits' || cells[0] === 'Offset' || cells[0] === '#') continue;
+
+    if (/^\d+$/.test(cells[0])) {
+      // New summary row: Count | Rule | Matched Strings | Tactic | Technique | ID
+      rows.push({
+        count:    cells[0] || '',
+        rule:     cells[1] || '',
+        matched:  cells[2] || '',
+        tactic:   cells[3] || '',
+        technique:cells[4] || '',
+        id:       cells[5] || '',
+      });
+    } else if (rows.length) {
+      // Continuation line
+      const last = rows[rows.length - 1];
+      if (cells[1]) last.rule      += ' ' + cells[1];
+      if (cells[2]) last.matched   += cells[2];
+      if (cells[3]) last.tactic    += ' ' + cells[3];
+      if (cells[4]) last.technique += ' ' + cells[4];
+      if (cells[5]) last.id        += cells[5];
+    }
+  }
+  return rows;
+}
+
+function parseDetailSection(text) {
+  // Detail table: 7 columns — Offset, Enc, Match, Rule, Tactic, Technique, ID
+  const cellRows = parseBoxTable(text, '---DETAIL---', null);
+  const rows = [];
+
+  for (const cells of cellRows) {
+    if (cells[0] === 'Offset' || cells[0] === '#') continue;
+
+    if (/^0x[0-9a-fA-F]+$/.test(cells[0])) {
+      rows.push({
+        offset:    cells[0] || '',
+        encoding:  cells[1] || '',
+        match:     cells[2] || '',
+        rule:      cells[3] || '',
+        tactic:    cells[4] || '',
+        technique: cells[5] || '',
+        id:        cells[6] || '',
+      });
+    } else if (rows.length) {
+      const last = rows[rows.length - 1];
+      if (cells[2]) last.match     += cells[2];
+      if (cells[3]) last.rule      += ' ' + cells[3];
+      if (cells[4]) last.tactic    += ' ' + cells[4];
+      if (cells[5]) last.technique += ' ' + cells[5];
+      if (cells[6]) last.id        += cells[6];
     }
   }
   return rows;
@@ -3182,7 +3239,8 @@ function tacticClass(tactic) {
 }
 
 function renderMstringsOutput(text) {
-  const rows = parseMstringsOutput(text);
+  const rows       = parseMstringsOutput(text);
+  const detailRows = parseDetailSection(text);
 
   // Split output into three sections: header, table, post-table (IOCs etc.)
   const headerLines = [];
@@ -3191,6 +3249,7 @@ function renderMstringsOutput(text) {
   let tableEnded = false;
 
   for (const line of text.split('\n')) {
+    if (line.trim() === '---DETAIL---') { tableEnded = true; continue; }
     const isTableBorder = /^[┌├└]/.test(line);
     const isTableRow    = line.startsWith('│');
     const isIocHeader   = /^POTENTIAL\s+\w+.*IOC/i.test(line.trim());
@@ -3240,43 +3299,67 @@ function renderMstringsOutput(text) {
     html += '<div class="out-dim" style="margin-top:8px">No MITRE table rows found in output.</div>';
   } else {
     // Summary bar
-    html += `<div class="ms-summary" style="margin-top:10px">
-      <div class="ms-summary-item">Matches: <span>${rows.length}</span></div>
+    html += `<div class="ms-summary" style="margin-top:6px">
+      <div class="ms-summary-item">Rules: <span>${rows.length}</span></div>
       <div class="ms-summary-item">Techniques: <span>${ids.length}</span></div>
       <div class="ms-summary-item">Tactics: <span>${tactics.length}</span></div>
+      ${detailRows.length ? `<div class="ms-summary-item" style="margin-left:auto;line-height:1">
+        <label style="font-size:10px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" id="ms-detail-toggle" onchange="toggleMsDetail(this.checked)"
+            style="margin:0;accent-color:var(--cyan)">Detail view
+        </label>
+      </div>` : ''}
     </div>`;
 
-    // Main table
-    html += `<div class="ms-table-wrap"><table class="ms-table">
+    // Summary table (default view)
+    html += `<div id="ms-summary-table"><div class="ms-table-wrap"><table class="ms-table">
       <thead><tr>
-        <th>Offset</th><th>Enc</th><th>Match</th>
-        <th>Rule</th><th>Tactic</th><th>Technique</th><th>ID</th>
+        <th style="width:3em;text-align:center">Hits</th>
+        <th>Rule</th><th>Matched Strings</th>
+        <th>Tactic</th><th>Technique</th><th>ID</th>
       </tr></thead>
       <tbody>`;
 
     html += rows.map(row => {
       const tacClass = tacticClass(row.tactic);
-      const idHtml = row.id
-        ? `<a class="ms-technique-id"
-             href="https://attack.mitre.org/techniques/${row.id.replace('.', '/')}/"
-             target="_blank"
-             style="text-decoration:none;margin-right:4px">${escHtml(row.id)}</a>` +
-          `<button onclick="openMitreLookup('${escHtml(row.id)}')"
-             style="background:none;border:none;color:var(--cyan-dim);font-size:9px;cursor:pointer;padding:0"
-             title="Look up in MITRE panel">⊛</button>`
-        : '';
+      const idHtml = buildIdHtml(row.id);
       return `<tr>
-        <td class="ms-offset">${escHtml(row.offset)}</td>
-        <td style="color:var(--text-dim);font-size:10px">${escHtml(row.encoding)}</td>
-        <td class="ms-match">${escHtml(row.match)}</td>
+        <td class="ms-offset" style="text-align:center;font-weight:600;color:var(--orange)">${escHtml(row.count)}</td>
         <td style="font-size:10px">${escHtml(row.rule)}</td>
+        <td class="ms-match">${escHtml(row.matched)}</td>
         <td class="${tacClass}">${escHtml(row.tactic)}</td>
         <td style="font-size:10px">${escHtml(row.technique)}</td>
         <td>${idHtml}</td>
       </tr>`;
     }).join('');
 
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
+
+    // Detail table (hidden by default)
+    if (detailRows.length) {
+      html += `<div id="ms-detail-table" style="display:none"><div class="ms-table-wrap"><table class="ms-table">
+        <thead><tr>
+          <th>Offset</th><th>Enc</th><th>Match</th>
+          <th>Rule</th><th>Tactic</th><th>Technique</th><th>ID</th>
+        </tr></thead>
+        <tbody>`;
+
+      html += detailRows.map(row => {
+        const tacClass = tacticClass(row.tactic);
+        const idHtml = buildIdHtml(row.id);
+        return `<tr>
+          <td class="ms-offset">${escHtml(row.offset)}</td>
+          <td style="color:var(--text-dim);font-size:10px">${escHtml(row.encoding)}</td>
+          <td class="ms-match">${escHtml(row.match)}</td>
+          <td style="font-size:10px">${escHtml(row.rule)}</td>
+          <td class="${tacClass}">${escHtml(row.tactic)}</td>
+          <td style="font-size:10px">${escHtml(row.technique)}</td>
+          <td>${idHtml}</td>
+        </tr>`;
+      }).join('');
+
+      html += '</tbody></table></div></div>';
+    }
   }
 
   document.getElementById('output-content').innerHTML = html;

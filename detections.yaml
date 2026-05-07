@@ -64,14 +64,14 @@ SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
   status: "experimental"
-  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names. Scheme prefix required to avoid Go import path false positives. Optional subdomain prefix (e.g. www.) handled via non-capturing group to correctly match cases like the WannaCry kill switch domain (http://www.iuqerfsodp9...)."
+  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names. Scheme prefix required to avoid Go import path false positives. Optional subdomain prefix (e.g. www.) handled via non-capturing group to correctly match cases like the WannaCry kill switch domain (http://www.iuqerfsodp9...). URL must be cleanly delimited (preceded by whitespace, quote, or start-of-string) to avoid matching URLs embedded mid-blob in Go binary data sections or DGA word lists."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "https?://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
-      - "ftp://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "(?:^|[\\s\"'`(])https?://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "(?:^|[\\s\"'`(])ftp://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
   tags:
     - attack.t1071.001
   level: high
@@ -174,6 +174,265 @@ LOLBinsLateralMovement:
     - technique_id: "T1021"
       technique_name: "Remote Services"
       tactics: ["Lateral Movement"]
+
+MsiexecRemoteExecution:
+  title: "Msiexec Remote or Silent MSI Execution"
+  id: "lolbin-msiexec-001"
+  status: "experimental"
+  description: "Detects msiexec.exe with flags used for silent remote MSI execution. /q suppresses UI; /i followed by http/https indicates fetching and executing a remote installer — a common dropper technique. Covered as T1218.007 (Signed Binary Proxy Execution: Msiexec)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "msiexec\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "msiexec\\s+/[qiI]"
+      - "msiexec.*http[s]?://"
+  tags:
+    - attack.T1218.007
+  level: high
+  mitre:
+    - technique_id: "T1218.007"
+      technique_name: "Signed Binary Proxy Execution: Msiexec"
+      tactics: ["Defense Evasion"]
+
+
+CmstpUACBypass:
+  title: "CMSTP UAC and AWL Bypass"
+  id: "lolbin-cmstp-001"
+  status: "experimental"
+  description: "Detects cmstp.exe — the Microsoft Connection Manager Profile Installer. Used to bypass UAC and application whitelisting by executing a malicious INF file. The /s /ns /au flags are characteristic of abuse."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "cmstp\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+  tags:
+    - attack.T1218.003
+    - attack.T1548.002
+  level: high
+  mitre:
+    - technique_id: "T1218.003"
+      technique_name: "Signed Binary Proxy Execution: CMSTP"
+      tactics: ["Defense Evasion"]
+    - technique_id: "T1548.002"
+      technique_name: "Abuse Elevation Control Mechanism: Bypass User Access Control"
+      tactics: ["Privilege Escalation", "Defense Evasion"]
+
+
+DotNetLOLBinExecution:
+  title: "Signed .NET Proxy Execution (Regasm / Regsvcs / Odbcconf)"
+  id: "lolbin-dotnet-exec-001"
+  status: "experimental"
+  description: "Detects regasm.exe, regsvcs.exe, and odbcconf.exe — signed Microsoft binaries that can execute arbitrary .NET assemblies or DLLs to bypass application whitelisting. Regasm/Regsvcs run code via COM registration callbacks; odbcconf loads DLLs via response files."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(regasm\\.exe|regsvcs\\.exe)(?:[^a-zA-Z0-9_\\-]|$)"
+      - "odbcconf\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+  tags:
+    - attack.T1218.009
+    - attack.T1218.008
+  level: high
+  mitre:
+    - technique_id: "T1218.009"
+      technique_name: "Signed Binary Proxy Execution: Regsvcs/Regasm"
+      tactics: ["Defense Evasion"]
+    - technique_id: "T1218.008"
+      technique_name: "Signed Binary Proxy Execution: Odbcconf"
+      tactics: ["Defense Evasion"]
+
+
+MshtaRemoteExecution:
+  title: "Mshta Remote HTA Execution"
+  id: "lolbin-mshta-remote-001"
+  status: "experimental"
+  description: "Detects mshta.exe with a URL argument — the 'Squiblytwo' technique. mshta.exe is already in LOLBinsExecution by name; this rule catches the more specific pattern of mshta being passed an http/https URL to execute a remote HTA payload."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "mshta\\.exe.*http[s]?://"
+      - "mshta\\s+http[s]?://"
+  tags:
+    - attack.T1218.005
+  level: high
+  mitre:
+    - technique_id: "T1218.005"
+      technique_name: "Signed Binary Proxy Execution: Mshta"
+      tactics: ["Defense Evasion"]
+
+
+SquiblydooRegsvr32:
+  title: "Squiblydoo — Regsvr32 Remote Scriptlet Execution"
+  id: "lolbin-squiblydoo-001"
+  status: "experimental"
+  description: "Detects the Squiblydoo technique: regsvr32.exe /s /n /u /i:<URL> scrobj.dll. Executes a remote COM scriptlet (.sct) via scrobj.dll, bypassing AppLocker and application whitelisting. The /i: flag with a URL or UNC path is the key indicator."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "regsvr32.*\\/[sSnNuUiI].*http[s]?://"
+      - "regsvr32.*scrobj\\.dll"
+      - "regsvr32.*/i:http"
+  tags:
+    - attack.T1218.010
+  level: high
+  mitre:
+    - technique_id: "T1218.010"
+      technique_name: "Signed Binary Proxy Execution: Regsvr32"
+      tactics: ["Defense Evasion"]
+
+
+CertutilDownloadDecode:
+  title: "Certutil Used for Download or Decode"
+  id: "lolbin-certutil-download-001"
+  status: "experimental"
+  description: "Detects certutil.exe with flags specific to payload download and base64 decoding. -urlcache -split -f downloads a URL to disk; -decode decodes a base64-encoded payload. Both are heavily abused by malware droppers. certutil.exe by name is already in LOLBinsDefenseEvasion; this rule targets the specific abuse flags."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "certutil.*-urlcache"
+      - "certutil.*-decode"
+      - "certutil.*-split"
+      - "certutil.*http[s]?://"
+  tags:
+    - attack.T1105
+    - attack.T1140
+  level: high
+  mitre:
+    - technique_id: "T1105"
+      technique_name: "Ingress Tool Transfer"
+      tactics: ["Command and Control"]
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
+
+HHCHMExecution:
+  title: "HH.exe Compiled HTML Help Execution"
+  id: "lolbin-hh-chm-001"
+  status: "experimental"
+  description: "Detects hh.exe — the Windows HTML Help executable. When passed a .chm file or remote URL, it can execute embedded scripts (JScript/VBScript). Used in phishing delivery chains and by some RAT families for initial execution."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "hh\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "hh\\.exe.*\\.chm"
+  tags:
+    - attack.T1218.001
+  level: medium
+  mitre:
+    - technique_id: "T1218.001"
+      technique_name: "Signed Binary Proxy Execution: Compiled HTML File"
+      tactics: ["Defense Evasion"]
+
+
+MavinjectDLLInjection:
+  title: "Mavinject Legitimate DLL Injector Abuse"
+  id: "lolbin-mavinject-001"
+  status: "experimental"
+  description: "Detects mavinject.exe — a signed Microsoft binary that injects DLLs into running processes. Used by Cobalt Strike and other post-exploitation frameworks as a trusted injector to avoid triggering injection-specific detections."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "mavinject\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "mavinject\\s+\\d+"
+  tags:
+    - attack.T1055.001
+  level: high
+  mitre:
+    - technique_id: "T1055.001"
+      technique_name: "Process Injection: Dynamic-link Library Injection"
+      tactics: ["Defense Evasion", "Privilege Escalation"]
+
+
+CredentialFileCopyLOLBin:
+  title: "Credential File Copy via LOLBin (Esentutl / Diskshadow)"
+  id: "lolbin-cred-copy-001"
+  status: "experimental"
+  description: "Detects esentutl.exe and diskshadow.exe used for credential database extraction. Esentutl can copy locked files like NTDS.dit and SAM via /y (copy) or /p (repair). Diskshadow /s executes script files and is used to expose VSS snapshots for NTDS.dit access."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "esentutl\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "diskshadow\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "esentutl.*/[yYpPmM]"
+      - "diskshadow\\s+/s"
+  tags:
+    - attack.T1003.003
+  level: high
+  mitre:
+    - technique_id: "T1003.003"
+      technique_name: "OS Credential Dumping: NTDS"
+      tactics: ["Credential Access"]
+
+
+SystemReconLOLBins:
+  title: "System Reconnaissance via Built-in Commands"
+  id: "lolbin-recon-001"
+  status: "experimental"
+  description: "Detects reconnaissance commands commonly hardcoded in malware droppers and RATs. whoami reveals current user/privilege context; systeminfo fingerprints OS build and patch level; nltest enumerates domain controllers and trusts; ipconfig /all reveals network configuration."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "whoami\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "whoami\\s+/(?:all|priv|groups)"
+      - "systeminfo\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "nltest\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "nltest\\s+/(?:dclist|domain_trusts|dsgetdc)"
+  tags:
+    - attack.T1033
+    - attack.T1082
+    - attack.T1482
+  level: medium
+  mitre:
+    - technique_id: "T1033"
+      technique_name: "System Owner/User Discovery"
+      tactics: ["Discovery"]
+    - technique_id: "T1082"
+      technique_name: "System Information Discovery"
+      tactics: ["Discovery"]
+    - technique_id: "T1482"
+      technique_name: "Domain Trust Discovery"
+      tactics: ["Discovery"]
+
+
+PayloadExtractionLOLBin:
+  title: "Payload Extraction via Expand or Extrac32"
+  id: "lolbin-extract-001"
+  status: "experimental"
+  description: "Detects expand.exe and extrac32.exe — signed Windows binaries that extract compressed/CAB files. Used by droppers to extract a payload from a CAB archive delivered alongside the initial stager, bypassing file-type detections on the final payload."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "expand\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "extrac32\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+  tags:
+    - attack.T1140
+  level: medium
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
 
 SuspiciousExecutableRundll32:
   title: "Suspicious executable (rundll32, regsvr32)"
@@ -552,16 +811,16 @@ SuspiciousURLDetection:
       tactics: ["Initial Access"]
       
 SuspiciousScriptReferences:
-  title: "Suspicious Script References with Filename (if present)"
+  title: "Suspicious Script File Extension Reference"
   id: "bb2c8d6a-3a8e-4957-9a3c-b9a6b5f3065f"
   status: "experimental"
-  description: "Suspicious script references, capturing the filename (if present), commonly used for exploitation or payload delivery."
+  description: "Detects filenames with script or payload extensions (.js, .jse, .vbe, .msi, .hta, .ps1, .vbs) bounded by whitespace, quotes, or path separators. Indicates a script or installer being referenced for execution or delivery. .bat is intentionally excluded — covered by SuspiciousBatFilename with the more specific T1059.003 mapping. Note: may produce false positives on Go binaries that embed HTML content (e.g. DGA word lists containing inline JavaScript references)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(?:^|[\\s\\\\/'\"(])([a-zA-Z0-9_\\-\\.]+\\.)(js|jse|vbe|msi|hta|bat|ps1|vbs)(?:$|[\\s\"'\\)])"
+      - "(?:^|[\\s\\\\/'\"(])([a-zA-Z0-9_\\-\\.]+\\.)(js|jse|vbe|msi|hta|ps1|vbs)(?:$|[\\s\"'\\)])"
   tags:
     - attack.T1059
   level: high
@@ -728,6 +987,7 @@ ProcessEnumerationAndHooking:
   detection:
     strings:
       - "(CreateToolhelp32Snapshot|EnumProcesses)"
+      - "(Module32First|Module32Next|Process32First|Process32Next|Thread32First|Thread32Next)"
       - "(?<![a-zA-Z])SetWindowsHookEx"
       - "DllMain"
   tags:
@@ -1089,10 +1349,10 @@ PackedOrStubExecutable:
       tactics: ["Defense Evasion"]
 
 PowerShellMemoryExecution:
-  title: "PowerShell In-Memory Payload Hint"
+  title: "In-Memory Payload Execution (PowerShell / .NET)"
   id: "ps-memory-bypass"
   status: "experimental"
-  description: "Detects common PowerShell techniques for decoding and executing payloads in memory."
+  description: "Detects base64 decoding and in-memory assembly loading used by both PowerShell scripts and compiled .NET binaries. FromBase64String is a .NET method equally present in C# droppers and PS scripts; System.Reflection.Assembly::Load is the canonical .NET in-memory load primitive."
   logsource:
     category: "file_event"
     product: "windows"
@@ -1104,6 +1364,7 @@ PowerShellMemoryExecution:
   tags:
     - attack.T1059.001
     - attack.T1027
+    - attack.T1620
   level: high
   mitre:
     - technique_id: "T1059.001"
@@ -1111,6 +1372,9 @@ PowerShellMemoryExecution:
       tactics: ["Execution"]
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+    - technique_id: "T1620"
+      technique_name: "Reflective Code Loading"
       tactics: ["Defense Evasion"]
 RansomwareCryptoAPIs:
   title: "Ransomware Cryptography APIs"
@@ -1531,13 +1795,14 @@ TimingBasedSandboxEvasion:
   title: "Timing-Based Sandbox Evasion Indicators"
   id: "timing-sandbox-evade-001"
   status: "experimental"
-  description: "Detects GetTickCount, QueryPerformanceCounter, and QueryPerformanceFrequency — the standard timing trio used to measure elapsed time before and after Sleep. Sandboxes often accelerate execution, causing the measured delta to be too small, which malware uses to detect analysis environments."
+  description: "Detects GetTickCount, GetTickCount64, timeGetTime, QueryPerformanceCounter, and QueryPerformanceFrequency — timing APIs used to measure elapsed time before and after Sleep. Sandboxes often accelerate execution, causing the measured delta to be too small, which malware uses to detect analysis environments."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "GetTickCount(?!64)"
+      - "(GetTickCount|GetTickCount64)"
+      - "timeGetTime"
       - "(QueryPerformanceCounter|QueryPerformanceFrequency)"
   tags:
     - attack.T1497.003
@@ -1560,6 +1825,7 @@ OSVersionFingerprinting:
     strings:
       - "GetVersionExW"
       - "GetSystemInfo"
+      - "RtlGetVersion"
   tags:
     - attack.T1082
   level: medium
@@ -1692,7 +1958,7 @@ MacShellProfileInjection:
       - "\\.zshrc"
       - "\\.bashrc"
       - "\\.zprofile"
-      - "\\.profile"
+      - "\\.profile(?![a-zA-Z0-9_])"
   tags:
     - attack.T1546.004
   level: medium
@@ -1906,4 +2172,416 @@ MacSensitiveFileAccess:
     - technique_id: "T1539"
       technique_name: "Steal Web Session Cookie"
       tactics: ["Credential Access"]
+
+
+# ── Linux / IoT-specific detections ───────────────────────────────────────────
+
+TftpIngressTransfer:
+  title: "TFTP Used for Payload Download"
+  id: "tftp-ingress-001"
+  status: "experimental"
+  description: "Detects tftp as an ingress tool transfer mechanism. Mirai and other IoT botnets use TFTP to fetch architecture-specific payloads after initial compromise — it requires no authentication and is available on many embedded devices."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "\\btftp\\b"
+  tags:
+    - attack.T1105
+  level: high
+  mitre:
+    - technique_id: "T1105"
+      technique_name: "Ingress Tool Transfer"
+      tactics: ["Command and Control"]
+
+
+TelnetLateralMovement:
+  title: "Telnet Access (IoT Lateral Movement)"
+  id: "telnet-lateral-001"
+  status: "experimental"
+  description: "Detects hardcoded telnet and telnetd references. Mirai and similar IoT botnets spread by brute-forcing telnet credentials on embedded devices. Presence of telnetd suggests the sample may also install a backdoor listener."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "\\btelnet\\b"
+      - "\\btelnetd\\b"
+  tags:
+    - attack.T1110
+    - attack.T1021.004
+  level: high
+  mitre:
+    - technique_id: "T1110"
+      technique_name: "Brute Force"
+      tactics: ["Credential Access"]
+    - technique_id: "T1021.004"
+      technique_name: "Remote Services: SSH"
+      tactics: ["Lateral Movement"]
+
+
+SSDPUPnPScanning:
+  title: "SSDP / UPnP Discovery (IoT Network Scanning)"
+  id: "ssdp-upnp-scan-001"
+  status: "experimental"
+  description: "Detects SSDP M-SEARCH requests and ssdp:discover service type strings. IoT botnets use UPnP discovery to enumerate routers, cameras, and DVRs on the local network before attempting exploitation."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "M-SEARCH \\* HTTP"
+      - "ssdp:discover"
+      - "urn:dial-multiscreen-org"
+  tags:
+    - attack.T1046
+  level: high
+  mitre:
+    - technique_id: "T1046"
+      technique_name: "Network Service Discovery"
+      tactics: ["Discovery"]
+
+
+LinuxProcEnumeration:
+  title: "Linux /proc Filesystem Enumeration"
+  id: "linux-proc-enum-001"
+  status: "experimental"
+  description: "Detects hardcoded /proc paths used for process and network discovery on Linux. /proc/self/exe is used to re-execute or overwrite the running binary; /proc/net/tcp enumerates open connections; /proc/%d/cmdline walks running processes."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "/proc/self/exe"
+      - "/proc/net/tcp"
+      - "/proc/%d/cmdline"
+      - "/proc/cpuinfo"
+  tags:
+    - attack.T1057
+    - attack.T1049
+  level: medium
+  mitre:
+    - technique_id: "T1057"
+      technique_name: "Process Discovery"
+      tactics: ["Discovery"]
+    - technique_id: "T1049"
+      technique_name: "System Network Connections Discovery"
+      tactics: ["Discovery"]
+
+
+BusyboxIoTIndicator:
+  title: "BusyBox Reference (IoT Malware Indicator)"
+  id: "busybox-iot-001"
+  status: "experimental"
+  description: "Detects hardcoded /bin/busybox references. BusyBox is the standard Unix utility suite on embedded Linux devices; its presence as a string in malware indicates targeting of IoT/router/DVR platforms."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "/bin/busybox"
+      - "\\bbusybox\\b"
+  tags:
+    - attack.T1059.004
+  level: medium
+  mitre:
+    - technique_id: "T1059.004"
+      technique_name: "Command and Scripting Interpreter: Unix Shell"
+      tactics: ["Execution"]
+
+
+AntiGDBSymbol:
+  title: "Anti-GDB / Anti-Debugger Symbol"
+  id: "anti-gdb-symbol-001"
+  status: "experimental"
+  description: "Detects anti_gdb_entry and similar anti-debugger symbol names left in the binary's symbol table. These indicate the sample actively resists analysis via ptrace-based debuggers."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "anti_gdb_entry"
+      - "anti_gdb"
+  tags:
+    - attack.T1622
+  level: high
+  mitre:
+    - technique_id: "T1622"
+      technique_name: "Debugger Evasion"
+      tactics: ["Defense Evasion", "Discovery"]
+
+
+SpoofedBrowserUserAgent:
+  title: "Spoofed Browser User-Agent String"
+  id: "spoofed-ua-001"
+  status: "experimental"
+  description: "Detects hardcoded User-Agent strings mimicking real browsers (Chrome, Firefox, IE) to blend C2 traffic with legitimate web traffic. Distinct from the generic SuspiciousUserAgent rule which targets tool-like UAs — this targets impersonation of browsers."
+  logsource:
+    category: "file_event"
+    product: "any"
+  detection:
+    strings:
+      - "User-Agent: Mozilla/5\\.0.*Chrome/"
+      - "User-Agent: Google Chrome/"
+      - "User-Agent: Mozilla/4\\.0 \\(compatible; MSIE"
+  tags:
+    - attack.T1071.001
+  level: medium
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+
+CnCResolutionSymbol:
+  title: "C2 Address Resolution Function Symbol"
+  id: "cnc-resolve-symbol-001"
+  status: "experimental"
+  description: "Detects resolve_cnc_addr and similar function names in the symbol table indicating explicit C2 address resolution logic. Mirai and derivatives export this symbol when compiled without stripping."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "resolve_cnc_addr"
+      - "cnc_addr"
+      - "resolve_cnc"
+  tags:
+    - attack.T1071.001
+    - attack.T1008
+  level: high
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+    - technique_id: "T1008"
+      technique_name: "Fallback Channels"
+      tactics: ["Command and Control"]
+
+
+BackdoorStringLiteral:
+  title: "Backdoor String Literal"
+  id: "backdoor-string-001"
+  status: "experimental"
+  description: "Detects the literal string 'Backdoor' embedded in a binary. Chaos RAT and similar Go-based implants embed this as a command type or module identifier in their C2 protocol dispatch tables."
+  logsource:
+    category: "file_event"
+    product: "any"
+  detection:
+    strings:
+      - "\\bBackdoor\\b"
+  tags:
+    - attack.T1505.003
+  level: high
+  mitre:
+    - technique_id: "T1505.003"
+      technique_name: "Server Software Component: Web Shell"
+      tactics: ["Persistence"]
+
+
+Socks5Tunneling:
+  title: "SOCKS5 Proxy / Tunneling"
+  id: "socks5-tunnel-001"
+  status: "experimental"
+  description: "Detects hardcoded socks5 protocol strings. SOCKS5 is used by RATs and C2 frameworks to tunnel traffic through victim hosts, proxying attacker connections through compromised infrastructure."
+  logsource:
+    category: "file_event"
+    product: "any"
+  detection:
+    strings:
+      - "\\bsocks5\\b"
+  tags:
+    - attack.T1090
+    - attack.T1572
+  level: high
+  mitre:
+    - technique_id: "T1090"
+      technique_name: "Proxy"
+      tactics: ["Command and Control"]
+    - technique_id: "T1572"
+      technique_name: "Protocol Tunneling"
+      tactics: ["Command and Control"]
+
+
+LinuxCrontabPersistence:
+  title: "Linux Crontab Persistence via Shell Command"
+  id: "linux-crontab-persist-001"
+  status: "experimental"
+  description: "Detects shell commands that write cron entries directly to /etc/crontab or drop files into /etc/cron.d/. Chaos ransomware/RAT uses 'echo */1 * * * * root /.mod >> /etc/crontab' for minute-interval persistence as root."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "/etc/crontab"
+      - "/etc/cron\\.d/"
+      - "\\* \\* \\* \\* \\*"
+  tags:
+    - attack.T1053.003
+  level: high
+  mitre:
+    - technique_id: "T1053.003"
+      technique_name: "Scheduled Task/Job: Cron"
+      tactics: ["Persistence", "Privilege Escalation", "Execution"]
+
+
+LinuxProfileDPersistence:
+  title: "Linux /etc/profile.d/ Persistence"
+  id: "linux-profiled-persist-001"
+  status: "experimental"
+  description: "Detects references to /etc/profile.d/ — a system-wide shell initialization directory. Dropping a script here executes as root for every login shell. Chaos embeds /etc/profile.d/bash.cfg and bash.cfg.sh as persistence targets."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "/etc/profile\\.d/"
+  tags:
+    - attack.T1546.004
+  level: high
+  mitre:
+    - technique_id: "T1546.004"
+      technique_name: "Event Triggered Execution: Unix Shell Configuration Modification"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+
+GoCBCEncryption:
+  title: "Go AES-CBC Encryption (NewCBCEncrypter / NewCBCDecrypter)"
+  id: "go-cbc-encrypt-001"
+  status: "experimental"
+  description: "Detects Go crypto/cipher CBC mode API strings. NewCBCEncrypter and NewCBCDecrypter are the standard Go AES-CBC primitives used by Go-based ransomware and RATs for file encryption or C2 traffic encryption. Distinct from Windows CryptoAPI (covered by RansomwareCryptoAPIs)."
+  logsource:
+    category: "file_event"
+    product: "any"
+  detection:
+    strings:
+      - "NewCBCEncrypter"
+      - "NewCBCDecrypter"
+  tags:
+    - attack.T1486
+    - attack.T1027
+  level: high
+  mitre:
+    - technique_id: "T1486"
+      technique_name: "Data Encrypted for Impact"
+      tactics: ["Impact"]
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+
+DotNetReflectiveLoading:
+  title: ".NET Reflective Assembly Loading"
+  id: "dotnet-reflective-load-001"
+  status: "experimental"
+  description: "Detects GetExportedTypes and AppDomain.GetCurrentDomain — indicators of .NET reflective code loading. GetExportedTypes enumerates all public types from a loaded assembly (unusual in normal app code); AppDomain usage enables loading assemblies into an isolated domain at runtime to avoid static analysis."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "GetExportedTypes"
+      - "GetCurrentDomain"
+  tags:
+    - attack.T1620
+  level: high
+  mitre:
+    - technique_id: "T1620"
+      technique_name: "Reflective Code Loading"
+      tactics: ["Defense Evasion"]
+
+
+# ── Windows downloader / dropper detections ───────────────────────────────────
+
+WinInetHTTPDownload:
+  title: "WinINet HTTP Download APIs"
+  id: "wininet-http-download-001"
+  status: "experimental"
+  description: "Detects WinINet API imports used to make HTTP requests and read responses. The combination of InternetOpenW + InternetOpenUrlW + InternetReadFile is the canonical Windows HTTP download chain, commonly used by droppers and coinminer stubs to fetch second-stage payloads."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(InternetOpenW|InternetOpenA)"
+      - "(InternetOpenUrlW|InternetOpenUrlA)"
+      - "(InternetReadFile|InternetReadFileEx)"
+      - "InternetCloseHandle"
+  tags:
+    - attack.T1105
+    - attack.T1071.001
+  level: high
+  mitre:
+    - technique_id: "T1105"
+      technique_name: "Ingress Tool Transfer"
+      tactics: ["Command and Control"]
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+
+URLDownloadToFile:
+  title: "URLDownloadToFile (One-Shot URL Download)"
+  id: "urldownloadtofile-001"
+  status: "experimental"
+  description: "Detects URLDownloadToFileW/A imports from urlmon.dll. This API fetches a URL directly to disk in a single call — one of the most explicit downloader primitives in the Windows API. Extremely common in coinminer stubs, RAT droppers, and malvertising payloads."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(URLDownloadToFileW|URLDownloadToFileA)"
+  tags:
+    - attack.T1105
+  level: high
+  mitre:
+    - technique_id: "T1105"
+      technique_name: "Ingress Tool Transfer"
+      tactics: ["Command and Control"]
+
+
+ShellExecuteExecution:
+  title: "ShellExecute Used for Payload Execution"
+  id: "shellexecute-exec-001"
+  status: "experimental"
+  description: "Detects ShellExecuteW/A and ShellExecuteExW/A imports. These APIs launch files, URLs, and executables and are commonly used in droppers to execute a downloaded second-stage payload without spawning a visible process via CreateProcess."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(ShellExecuteW|ShellExecuteA)"
+      - "(ShellExecuteExW|ShellExecuteExA)"
+  tags:
+    - attack.T1106
+    - attack.T1204.002
+  level: high
+  mitre:
+    - technique_id: "T1106"
+      technique_name: "Native API"
+      tactics: ["Execution"]
+    - technique_id: "T1204.002"
+      technique_name: "User Execution: Malicious File"
+      tactics: ["Execution"]
+
+
+CreateProcessExecution:
+  title: "CreateProcess Used for Child Process Execution"
+  id: "createprocess-exec-001"
+  status: "experimental"
+  description: "Detects CreateProcessW/A imports. Direct process creation is how droppers, loaders, and coinminers launch their downloaded payload or miner binary."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "(CreateProcessW|CreateProcessA)"
+  tags:
+    - attack.T1106
+  level: medium
+  mitre:
+    - technique_id: "T1106"
+      technique_name: "Native API"
+      tactics: ["Execution"]
 

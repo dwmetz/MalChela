@@ -19,13 +19,21 @@ scratchpad.txt
 # Uploads and server-generated backups
 /uploads/*
 /server/backups/*
+server/server_config.yaml
+server/server_config.yaml.bak
 
 # YARA rules
 /yara_rules/*.yar
 /yara_rules/*.yara
+
+# MCP
+.claude-plugin/mcp/node_modules/
+.claude-plugin/mcp/package-lock.json
 
 # MKDocs
 /site
 
 # Server
 /server/venv/
+
+

@@ -1,8 +1,0 @@
-extensions:
-  # Mark safe_path() as a path sanitizer — it resolves the path with os.path.realpath()
-  # and enforces a jail check against BROWSER_ROOT before returning.
-  - addsTo:
-      pack: codeql/python-all
-      extensible: pathSanitizer
-    data:
-      - ["safe_path", "ReturnValue"]

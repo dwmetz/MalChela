@@ -37,3 +37,4 @@ server/server_config.yaml.bak
 /server/venv/
 
 
+server/__pycache__/

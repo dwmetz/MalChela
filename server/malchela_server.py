@@ -221,6 +221,7 @@ def _register_cli_case_output(tool: str, case_name: str, target: str,
     register it in case.yaml so the case browser picks it up.
     """
     import time
+    case_name = _sanitize_case_name(case_name) or case_name
     case_dir = CASES_DIR / case_name
     tool_dir = case_dir / tool
     if not tool_dir.exists():
@@ -406,7 +407,8 @@ def save_tools_yaml_raw():
         # Validate it's valid yaml before saving
         yaml.safe_load(content)
     except yaml.YAMLError as e:
-        return jsonify({"success": False, "error": f"Invalid YAML: {e}"}), 400
+        logger.error("YAML parse error: %s", e)
+        return jsonify({"success": False, "error": "Invalid YAML"}), 400
     TOOLS_YAML_PATH.write_text(content)
     return jsonify({"success": True})
 
@@ -449,7 +451,7 @@ def restore_tools_yaml():
     # Try absolute path first, then as filename within backup dir
     restore_path = safe_path(raw_path)
     if not restore_path or not restore_path.exists():
-        candidate = TOOLS_YAML_BACKUP_DIR / Path(raw_path).name
+        candidate = TOOLS_YAML_BACKUP_DIR / secure_filename(Path(raw_path).name)
         if candidate.exists():
             restore_path = candidate
         else:
@@ -460,7 +462,8 @@ def restore_tools_yaml():
         with open(restore_path) as f:
             yaml.safe_load(f)
     except yaml.YAMLError as e:
-        return jsonify({"success": False, "error": f"Invalid YAML: {e}"}), 400
+        logger.error("YAML parse error in restore: %s", e)
+        return jsonify({"success": False, "error": "Invalid YAML"}), 400
     shutil.copy2(str(restore_path), str(TOOLS_YAML_PATH))
     return jsonify({"success": True, "restored_from": str(restore_path)})
 
@@ -1365,6 +1368,7 @@ def strings_to_yara():
 
     if not rule_name:
         return jsonify({"success": False, "error": "rule_name is required"}), 400
+    rule_name_safe = re.sub(r'[^\w\-.]', '_', rule_name)[:64]
 
     temp_file = None
 
@@ -1401,12 +1405,12 @@ def strings_to_yara():
 
     # Optionally copy generated .yar to yara_rules/ so fileanalyzer picks it up
     if result.get("success") and copy_to_rules:
-        yar_name = f"{rule_name}.yar"
+        yar_name = f"{rule_name_safe}.yar"
         # strings_to_yara writes to saved_output/strings_to_yara/ — find it
         yar_src = OUTPUT_DIR / "strings_to_yara" / yar_name
         if not yar_src.exists():
             # Try alternate naming
-            yar_src = OUTPUT_DIR / "strings_to_yara" / f"{rule_name}.yara"
+            yar_src = OUTPUT_DIR / "strings_to_yara" / f"{rule_name_safe}.yara"
         if yar_src.exists():
             YARA_DIR.mkdir(parents=True, exist_ok=True)
             dest = YARA_DIR / yar_src.name

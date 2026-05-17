@@ -1,0 +1,31 @@
+[package]
+name = "yara-backend"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Rule loading and scanning facade backed by yara-x. Used by MalChela's analysis tools."
+repository = "https://github.com/dwmetz/MalChela"
+
+[dependencies]
+yara-x = "1.16"
+thiserror = "1"
+parking_lot = "0.12"
+walkdir = "2"
+log = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+serde_json = "1.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "compile"
+harness = false
+
+[[bench]]
+name = "scan_mem"
+harness = false
+
+[[bench]]
+name = "scan_file"
+harness = false

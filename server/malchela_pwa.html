@@ -1760,7 +1760,7 @@ function buildDynamicSidebar() {
       const unavail = tool.available === false ? ' style="opacity:0.45"' : '';
       const titleAttr = tool.available === false ? ` title="${escHtml(tool.title)} — not found in PATH"` : '';
       html += `<button class="sidebar-btn" id="tool-btn-${escHtml(id)}"
-        onclick="selectTool('${escHtml(id)}')"${unavail}${titleAttr}>
+        data-tool-id="${escHtml(id)}" onclick="selectTool(this.dataset.toolId)"${unavail}${titleAttr}>
         <span class="icon">◈</span> ${escHtml(tool.title)}
       </button>`;
     }
@@ -3545,7 +3545,8 @@ function fallbackCopy(text) {
 }
 
 function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ── File Browser ───────────────────────────────────────────────────────────
@@ -4855,7 +4856,7 @@ function buildTsharkRefList(search) {
     <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)" title="${escHtml(d)}">
       <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);flex:1">${escHtml(f)}</span>
       <span style="font-size:10px;color:var(--text-dim);flex:2">${escHtml(d)}</span>
-      <button onclick="tsharkRefCopy('${escHtml(f.replace(/'/g,"\\'"))}')"
+      <button data-field="${escHtml(f)}" onclick="tsharkRefCopy(this.dataset.field)"
         style="background:none;border:1px solid var(--border-light);border-radius:2px;color:var(--text-dim);
                font-size:9px;cursor:pointer;padding:1px 5px;white-space:nowrap">⊕ Use</button>
     </div>`).join('');
@@ -4866,7 +4867,7 @@ function buildTsharkRefList(search) {
       <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)" title="${escHtml(d)}">
         <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-primary);flex:1">${escHtml(f)}</span>
         <span style="font-size:10px;color:var(--text-dim);flex:2">${escHtml(d)}</span>
-        <button onclick="tsharkRefCopy('${escHtml(f.replace(/'/g,"\\'"))}')"
+        <button data-field="${escHtml(f)}" onclick="tsharkRefCopy(this.dataset.field)"
           style="background:none;border:1px solid var(--border-light);border-radius:2px;color:var(--text-dim);
                  font-size:9px;cursor:pointer;padding:1px 5px;white-space:nowrap">⊕ Use</button>
       </div>`).join('')}` : '';

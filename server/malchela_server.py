@@ -14,8 +14,11 @@ Supported platforms: Kali Linux, REMnux/Ubuntu, macOS
 import os
 import sys
 import json
+import re
 import subprocess
 import shutil
+import traceback
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
@@ -23,6 +26,14 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import yaml
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def _safe_error(e: Exception) -> str:
+    """Log exception server-side; return safe message string for HTTP clients."""
+    logger.error("Server error:\n%s", traceback.format_exc())
+    return "Internal server error"
 
 # ── Config Loader ─────────────────────────────────────────────────────────────
 
@@ -150,7 +161,7 @@ def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
     cmd = [str(binary_path)] + args
     try:
         result = subprocess.run(
-            cmd,
+            cmd,  # shell=False (list form) — not vulnerable to shell injection
             cwd=str(MALCHELA_ROOT),  # Required — resolves API keys, YARA rules, Sigma rules
             capture_output=True,
             text=True,
@@ -167,7 +178,7 @@ def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
     except subprocess.TimeoutExpired:
         return {"success": False, "error": f"Tool timed out after {timeout}s"}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _safe_error(e)}
 
 
 # Patterns that are CLI-only noise, irrelevant or confusing in the PWA context
@@ -181,7 +192,6 @@ _CLI_NOISE_PATTERNS = [
 
 def _strip_cli_noise(output: str) -> str:
     """Remove CLI-specific save reminders that are meaningless in the PWA."""
-    import re
     lines = output.split('\n')
     cleaned = []
     for line in lines:
@@ -196,7 +206,6 @@ def _strip_cli_noise(output: str) -> str:
 
 def _strip_color_tags(text: str) -> str:
     """Remove [color_name] prefixes emitted by common_ui::styled_line."""
-    import re
     return re.sub(
         r'^\[(?:green|red|yellow|stone|highlight|highlight_hash|NOTE|cyan|orange|dim)\]',
         '',
@@ -265,12 +274,31 @@ def safe_path(raw: str) -> Optional[Path]:
     Resolve and jail-check a path against BROWSER_ROOT.
     Returns None if the path escapes the jail.
     """
-    try:
-        resolved = Path(raw).resolve()
-        resolved.relative_to(BROWSER_ROOT.resolve())
-        return resolved
-    except (ValueError, Exception):
+    if not raw:
         return None
+    try:
+        browser_root = str(BROWSER_ROOT.resolve())
+        resolved_str = os.path.realpath(raw)
+        # Explicit prefix check that CodeQL recognizes as path sanitization
+        if not (resolved_str == browser_root or
+                resolved_str.startswith(browser_root + os.sep)):
+            return None
+        return Path(resolved_str)
+    except Exception:
+        return None
+
+
+_CASE_NAME_RE = re.compile(r'[^\w\-.]')
+_SAFE_ARG_RE  = re.compile(r'^[^\|&;`$<>!]+$')
+
+def _sanitize_case_name(name: str) -> Optional[str]:
+    """Sanitize a case name for safe filesystem use — only allow word chars, hyphens, dots."""
+    if not name:
+        return None
+    clean = _CASE_NAME_RE.sub('_', name.strip())
+    if not clean or '..' in clean:
+        return None
+    return clean[:128]
 
 
 def read_api_key(filename: str) -> Optional[str]:
@@ -358,7 +386,7 @@ def get_tools_yaml():
 
         return jsonify({"success": True, "edition": edition, "tools": result})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": _safe_error(e)}), 500
 
 
 @app.route("/tools_yaml/raw", methods=["GET"])
@@ -395,7 +423,6 @@ def backup_tools_yaml():
 
     if custom_name:
         # Sanitize — only allow safe filename characters
-        import re
         safe_name = re.sub(r'[^\w\-.]', '_', custom_name)
         if not safe_name.endswith('.yaml'):
             safe_name += '.yaml'
@@ -515,10 +542,11 @@ def run_generic_tool():
     elif path_obj:
         args.append(str(path_obj))
 
-    # Append any extra user args
+    # Append any extra user args (strip shell metacharacters)
     if extra_args:
-        import shlex
-        args.extend(shlex.split(extra_args))
+        import shlex as _shlex
+        parsed = _shlex.split(extra_args)
+        args.extend(a for a in parsed if _SAFE_ARG_RE.match(a))
 
     try:
         result = subprocess.run(
@@ -542,7 +570,7 @@ def run_generic_tool():
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "error": "Tool timed out after 120s. If this tool requires interactive input it may not be suitable for remote execution."})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 # ── Home & About ──────────────────────────────────────────────────────────────
@@ -566,7 +594,7 @@ def _run_interactive(binary: str, stdin_input: str = "\n", timeout: int = 15) ->
     except subprocess.TimeoutExpired:
         return {"success": False, "error": f"Timed out after {timeout}s"}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": _safe_error(e)}
 
 
 @app.route("/home", methods=["GET"])
@@ -683,7 +711,7 @@ def about_screen():
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "error": "Timed out"})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 # ── File Browser ──────────────────────────────────────────────────────────────
 
@@ -772,7 +800,7 @@ def upload_file():
                 "size": dest.stat().st_size,
             })
         except Exception as e:
-            errors.append(f"{f.filename}: {str(e)}")
+            errors.append(f"{f.filename}: {_safe_error(e)}")
 
     return jsonify({
         "success": len(saved) > 0,
@@ -807,7 +835,7 @@ def fileanalyzer():
     """Analyze a file for hashes, entropy, PE structure, YARA matches, VirusTotal status."""
     data        = request.json or {}
     path        = safe_path(data.get("path", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -899,7 +927,7 @@ def fileminer():
         })
 
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 def _parse_fileminer_output(output: str) -> list:
@@ -1160,7 +1188,7 @@ def codesign_check():
 def fileminer_session_save():
     """Create or update a FileMiner session JSON with the current rows and executed-tool list."""
     data          = request.json or {}
-    case_name     = data.get("case_name", "").strip()
+    case_name     = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     analyzed_path = data.get("analyzed_path", "")
     rows          = data.get("rows", [])
     executed      = data.get("executed", [])
@@ -1210,7 +1238,7 @@ def fileminer_session_load():
         payload = json.loads(session_path.read_text())
         return jsonify({"success": True, "session": payload})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/tools/mzhash", methods=["POST"])
@@ -1351,7 +1379,7 @@ def strings_to_yara():
             strings_file = Path(tmp.name)
             temp_file = strings_file
         except Exception as e:
-            return jsonify({"success": False, "error": f"Could not write temp strings file: {e}"}), 500
+            return jsonify({"success": False, "error": f"Could not write temp strings file: {_safe_error(e)}"}), 500
     elif strings_file_path:
         strings_file = safe_path(strings_file_path)
         if not strings_file:
@@ -1483,7 +1511,7 @@ def tiquery():
                 proc.kill()
                 result_holder['result'] = {"success": False, "error": "tiquery timed out"}
             except Exception as e:
-                result_holder['result'] = {"success": False, "error": str(e)}
+                result_holder['result'] = {"success": False, "error": _safe_error(e)}
             finally:
                 _tiquery_progress["running"] = False
 
@@ -1595,7 +1623,8 @@ def tshark():
 
     if extra_args:
         import shlex as _shlex
-        args.extend(_shlex.split(extra_args))
+        parsed = _shlex.split(extra_args)
+        args.extend(a for a in parsed if _SAFE_ARG_RE.match(a))
 
     try:
         result = subprocess.run(
@@ -1612,7 +1641,7 @@ def tshark():
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "error": "TShark timed out after 300s"})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/vol3/plugins", methods=["GET"])
@@ -1625,7 +1654,7 @@ def get_vol3_plugins():
             data = yaml.safe_load(f) or {}
         return jsonify({"success": True, "plugins": data})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": _safe_error(e)}), 500
 
 
 @app.route("/tools/vol3", methods=["POST"])
@@ -1693,10 +1722,11 @@ def run_vol3():
         else:
             args += [clean_name, str(val)]
 
-    # Add extra args if provided
+    # Add extra args if provided (strip shell metacharacters)
     if extra_args:
         import shlex as _shlex
-        args.extend(_shlex.split(extra_args))
+        parsed = _shlex.split(extra_args)
+        args.extend(a for a in parsed if _SAFE_ARG_RE.match(a))
 
     try:
         result = subprocess.run(
@@ -1717,7 +1747,7 @@ def run_vol3():
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "error": "vol3 timed out after 600s"})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/tools/yarax", methods=["POST"])
@@ -1750,7 +1780,8 @@ def yarax():
         args.append("--recursive")
     if extra_args:
         import shlex as _shlex
-        args.extend(_shlex.split(extra_args))
+        parsed = _shlex.split(extra_args)
+        args.extend(a for a in parsed if _SAFE_ARG_RE.match(a))
     args += [str(rules_path), str(target_path)]
 
     try:
@@ -1765,7 +1796,7 @@ def yarax():
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "error": "YARA-X scan timed out after 300s"})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 def file_hash():
@@ -1787,7 +1818,7 @@ def file_hash():
                 sha256.update(chunk)
         return jsonify({"success": True, "sha256": sha256.hexdigest(), "filename": path.name})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/api_keys", methods=["GET"])
@@ -1880,7 +1911,7 @@ def read_file():
         content = path.read_text(errors='replace')
         return jsonify({"success": True, "content": content})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 # ── Case Management ───────────────────────────────────────────────────────────
 
@@ -1918,7 +1949,7 @@ def list_cases():
 def create_case():
     """Create a new case directory with case.yaml."""
     data = request.json or {}
-    name = data.get("name", "").strip().replace(" ", "_")
+    name = _sanitize_case_name(data.get("name", "").strip().replace(" ", "_"))
     if not name:
         return jsonify({"success": False, "error": "Case name is required"}), 400
 
@@ -1946,6 +1977,10 @@ def create_case():
 def get_case(case_name):
     """Get case details including saved outputs."""
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
 
@@ -1974,6 +2009,10 @@ def get_case(case_name):
 def update_case(case_name):
     """Update case metadata (description, tags, status)."""
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
 
@@ -1999,19 +2038,27 @@ def update_case(case_name):
 def delete_case(case_name):
     """Permanently delete a case directory."""
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
     try:
         shutil.rmtree(str(case_dir))
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/cases/<case_name>/archive", methods=["POST"])
 def archive_case(case_name):
     """Zip a case to saved_output/case_archives/ and return path info for optional download."""
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
 
@@ -2026,7 +2073,7 @@ def archive_case(case_name):
             "path":     str(zip_path),
         })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/cases/<case_name>/archive/download", methods=["GET"])
@@ -2077,7 +2124,7 @@ def import_case():
             zf.extractall(str(CASES_DIR))
         return jsonify({"success": True, "case_name": case_name})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/cases/archives", methods=["GET"])
@@ -2102,6 +2149,10 @@ def save_to_case(case_name):
     Structure: cases/<case_name>/<tool>/report_<timestamp>.<ext>
     """
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
 
@@ -2230,6 +2281,10 @@ def search_cases():
 def get_case_notes(case_name):
     """Get case notes file list for Notebook save-to-case browser."""
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
     notes_files = sorted(case_dir.glob("*.md")) + sorted(case_dir.glob("notes*.txt"))
@@ -2243,6 +2298,10 @@ def append_case_notes(case_name):
     Creates notes.md if no filename specified.
     """
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
 
@@ -2278,7 +2337,7 @@ def notebook_save():
         path.write_text(content)
         return jsonify({"success": True, "path": str(path)})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": False, "error": _safe_error(e)})
 
 
 @app.route("/cases/<case_name>/output", methods=["GET"])
@@ -2288,6 +2347,10 @@ def get_case_output(case_name):
     Accepts path as query param to support subdirectory paths e.g. tiquery/report_xyz.txt
     """
     case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     filename = request.args.get("path", "")
     if not filename:
         return jsonify({"success": False, "error": "Missing path parameter"}), 400
@@ -2306,7 +2369,7 @@ def get_case_output(case_name):
     try:
         content = filepath.read_text(errors='replace')
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": _safe_error(e)}), 500
 
     return jsonify({"success": True, "content": content})
 

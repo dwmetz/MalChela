@@ -26,7 +26,13 @@
   </table>
 </div>
 
+<h3>About:</h3>
 
+> **mal** — malware  
+> **chela** — "crab hand"  
+> A chela on a crab is the scientific term for a claw or pincer. It's a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things — just like these programs.
+
+---
 
 <h3>Features:</h3>
 
@@ -56,11 +62,7 @@
 
 *Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically.*
 
-<h3>About:</h3>
-
-> **mal** — malware  
-> **chela** — "crab hand"  
-> A chela on a crab is the scientific term for a claw or pincer. It's a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things — just like these programs.
+---
 
 <h3>Dependencies:</h3>
 
@@ -79,6 +81,8 @@ Before building, point the build to to Homebrew's YARA prefix
 export YARA_LIBRARY_PATH=$(brew --prefix yara)/lib
 export BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix yara)/include"
 ```
+
+---
 
 <h3>Installation &amp; Usage:</h3>
 
@@ -160,8 +164,10 @@ A Node.js MCP server exposes all MalChela tools directly to Claude Desktop on ma
 
 **Setup:**
 
+> ⚠️ **Note:** The MCP server lives in a hidden directory (`.claude-plugin/`) in the repo root. It won't appear in Finder or a plain `ls`. Use `ls -la` to confirm it's present.
+
 ```
-cd mcp/
+cd .claude-plugin/
 npm install
 ```
 
@@ -172,13 +178,15 @@ Configure Claude Desktop to load the server by adding it to your `claude_desktop
   "mcpServers": {
     "malchela": {
       "command": "node",
-      "args": ["/path/to/MalChela/mcp/server.js"]
+      "args": ["/path/to/MalChela/.claude-plugin/server.js"]
     }
   }
 }
 ```
 
-See [`mcp/README.md`](mcp/README.md) for full configuration details.
+Restart Claude Desktop after saving. If the MCP server is recognized, a tools icon will appear in the Claude interface confirming the connection is active.
+
+See [`.claude-plugin/mcp/README.md`](.claude-plugin/mcp/README.md) for full configuration details.
 
 ---
 
@@ -199,7 +207,7 @@ python3 kali_server.py
 
 Configure `mcp_server.py` with the host's IP and start it. Then point Claude Desktop at `mcp_server.py` as the MCP server.
 
-See [`mcp/README.md`](mcp/README.md) for full setup and configuration.
+See [`.claude-plugin/mcp/README.md`](.claude-plugin/mcp/README.md) for full setup and configuration.
 
 ---
 
@@ -282,3 +290,4 @@ Successfully tested on macOS (Apple Silicon), Ubuntu, and Raspberry Pi.
 YARA version 4.2 or greater is required.
 
 **Windows:** As of October 2025, both MalChela CLI and GUI operate on Windows under WSL2. MalChelaGUI improvements for WSL included in v3.1.1.
+

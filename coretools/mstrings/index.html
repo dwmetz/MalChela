@@ -709,6 +709,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Analyze
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../combine_yara/" class="md-nav__link">
         
   
@@ -1526,6 +1549,7 @@
   <h1>MStrings</h1>
 
 <p>mStrings extracts strings from files and classifies them using regular expressions, YARA rules, and MITRE ATT&amp;CK mappings. It highlights potential indicators of compromise and suspicious behavior, grouping matches by tactic and technique. Ideal for quickly surfacing malicious capabilities in binaries, scripts, and documents.</p>
+<p>Also accepts macOS Mach-O binaries and <code>.app</code> bundles — when given a bundle, the main executable is auto-resolved via <code>Info.plist</code>'s <code>CFBundleExecutable</code>, falling back to the sole binary in <code>Contents/MacOS/</code> if that lookup fails.</p>
 <p>Note: The MITRE Technique Lookup bar, introduced in v3.0.1 has been removed. It has been replaced with a full <a href="../mitre_lookup/">MITRE lookup utility</a> (no internet required.)</p>
 <p><img alt="MStrings" src="../../images/mstrings.png" /></p>
 <p align="center"><strong> MStrings</p>
@@ -1540,6 +1564,9 @@ cargo run -p mstrings -- /path_to_file/ -o -t
 
 # Example 3: Save output to a case folder
 cargo run -p mstrings -- /path_to_file/ -o -t --case CaseXYZ
+
+# Example 4: Scan a .app bundle (main executable resolved automatically)
+cargo run -p mstrings -- /path/to/Sample.app
 </code></pre>
 <p>Use <code>-o</code> to save output and include one of the following format flags:
 - <code>-t</code> → Save as <code>.txt</code>

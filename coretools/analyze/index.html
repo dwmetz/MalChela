@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../fileanalyzer/">
+        <link rel="prev" href="../usage/">
       
       
-        <link rel="next" href="../hashcheck/">
+        <link rel="next" href="../combine_yara/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>FileMiner - MalChela Documentation</title>
+        <title>Analyze - MalChela Documentation</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#function-overview" class="md-skip">
+        <a href="#how-it-works" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              FileMiner
+              Analyze
             
           </span>
         </div>
@@ -706,10 +706,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../analyze/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Analyze
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -720,6 +740,69 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How It Works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-malchela-summary-rollup-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      The MalChela Summary Rollup Report
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#save-to-case" class="md-nav__link">
+    <span class="md-ellipsis">
+      Save to Case
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pwa-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      PWA Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      MCP Usage
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -798,30 +881,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    FileMiner
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../fileminer/" class="md-nav__link">
         
   
   
@@ -832,75 +895,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#function-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Function Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cli-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      CLI Usage
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="CLI Usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
-    <span class="md-ellipsis">
-      Options
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Examples
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#web-interface-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      Web Interface Notes
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1561,51 +1555,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#function-overview" class="md-nav__link">
+  <a href="#how-it-works" class="md-nav__link">
     <span class="md-ellipsis">
-      Function Overview
+      How It Works
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#cli-usage" class="md-nav__link">
+  <a href="#the-malchela-summary-rollup-report" class="md-nav__link">
     <span class="md-ellipsis">
-      CLI Usage
+      The MalChela Summary Rollup Report
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="CLI Usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
-    <span class="md-ellipsis">
-      Options
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Examples
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#web-interface-notes" class="md-nav__link">
+  <a href="#save-to-case" class="md-nav__link">
     <span class="md-ellipsis">
-      Web Interface Notes
+      Save to Case
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pwa-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      PWA Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      MCP Usage
     </span>
   </a>
   
@@ -1630,82 +1618,82 @@
   
 
 
-  <h1>FileMiner</h1>
+  <h1>Analyze</h1>
 
-<p><strong>Note:</strong> <code>FileMiner</code> replaces the deprecated <code>MismatchMiner</code>.</p>
-<p><strong>FileMiner</strong> is a command-line tool that recursively scans a directory to analyze files by magic bytes and hash, identifying mismatches between file extensions and true types. It is useful for forensic triage, anomaly detection, and preparing follow-up analysis using other tools in the MalChela suite.</p>
-<p><img alt="File Miner" src="../../images/fileminer.png" /></p>
-<p align="center"><strong> File Miner</p>
-
-<h2 id="function-overview">Function Overview</h2>
-<ul>
-<li>Identifies file types using magic byte detection (<code>infer</code>)</li>
-<li>Computes SHA-256 hashes for all files</li>
-<li>Detects extension mismatches</li>
-<li>Suggests relevant analysis tools (e.g., FileAnalyzer, mStrings, TiQuery)</li>
-<li>Outputs results in a styled table or optional JSON format</li>
-<li>Integrates with case management via the <code>--case</code> flag</li>
-<li>Automatically launches in the web interface when a folder-based case is created or restored</li>
-<li>Results populate an interactive table in the web interface</li>
-<li>Users can launch suggested tools on a per-file basis directly from the web interface</li>
-</ul>
-<h2 id="cli-usage">CLI Usage</h2>
-<pre><code class="language-sh">cargo run -p fileminer -- [OPTIONS] [DIR]
-</code></pre>
-<h3 id="options">Options</h3>
+<p>Analyze is a one-click auto-triage workflow: point it at a file, folder, or <code>.app</code> bundle, and it classifies everything with <a href="../fileminer/">File Miner</a>, then automatically dispatches every tool File Miner suggests for each file it finds. There's no need to read File Miner's suggestions and run each tool by hand — Analyze closes that loop for you and produces a single combined report at the end.</p>
+<p>Unlike the other Core Tools, Analyze is not a standalone Rust binary — it's a workflow built on top of the existing tools, available through the <strong>PWA</strong> and the <strong>MCP server</strong>.</p>
+<hr />
+<h3 id="how-it-works">How It Works</h3>
+<ol>
+<li>File Miner scans the target (a single file, every file in a folder, or every file inside an <code>.app</code> bundle) and classifies each one.</li>
+<li>For each file, Analyze runs every tool File Miner suggests — the same suggestions you'd see running File Miner manually, just dispatched automatically instead of one at a time.</li>
+<li>Results are combined into a single <strong>MalChela Summary</strong> rollup report (<code>malchela_summary_&lt;timestamp&gt;.md</code>), saved alongside the individual tool reports it summarizes.</li>
+</ol>
+<p>A single sample or small bundle is the intended use case — Analyze caps out at 25 files per run. For corpus-scale scans, use <a href="../mzhash/">MZHash</a>, <a href="../mzcount/">MZCount</a>, or <a href="../xmzhash/">XMZHash</a> instead.</p>
+<hr />
+<h3 id="the-malchela-summary-rollup-report">The MalChela Summary Rollup Report</h3>
+<p>The rollup leads with a <strong>Triage Summary</strong> banner, built to answer the questions you'd actually ask first when opening a new sample:</p>
 <table>
 <thead>
 <tr>
-<th>Option</th>
-<th>Description</th>
+<th>Section</th>
+<th>Source</th>
+<th>What It Shows</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>DIR</code></td>
-<td>Directory to analyze. Optional — will prompt if not supplied.</td>
+<td>File counts</td>
+<td>File Miner</td>
+<td>Total files analyzed, with duplicate content (identical SHA256 under different filenames — common with carved or exported artifacts) automatically grouped into one write-up instead of repeats</td>
 </tr>
 <tr>
-<td><code>--json</code></td>
-<td>Save results to JSON. Defaults to <code>fileminer_output.json</code> unless <code>--output</code> is used.</td>
+<td>Flagged malicious</td>
+<td>FileAnalyzer + Threat Intel Query</td>
+<td>VirusTotal verdicts, cross-referenced from both sources so Mach-O samples get the same coverage as PE (FileAnalyzer isn't suggested for Mach-O files, so Threat Intel Query is what catches those)</td>
 </tr>
 <tr>
-<td><code>--output &lt;filename&gt;</code></td>
-<td>Overrides the default output file name. Used internally by the web interface.</td>
+<td>Malware tags</td>
+<td>Threat Intel Query</td>
+<td>Family/tag names pulled from Threat Intel Query's multi-source lookups, for files that were flagged malicious</td>
 </tr>
 <tr>
-<td><code>--case &lt;case-name&gt;</code></td>
-<td>Saves output under <code>saved_output/&lt;case-name&gt;/fileminer/</code>. Also passes case name to downstream tools.</td>
+<td>MITRE ATT&amp;CK findings</td>
+<td>mStrings</td>
+<td>Total match count, broken down by tactic</td>
 </tr>
 <tr>
-<td><code>-m</code>, <code>--mismatches-only</code></td>
-<td>Only display entries with extension mismatches.</td>
+<td>Filesystem / Network IOCs</td>
+<td>mStrings</td>
+<td>Dropped filenames, paths, and network indicators surfaced during string extraction</td>
+</tr>
+<tr>
+<td>Flags / Indicators</td>
+<td>Mach-O Info, Plist Analyzer, Code Sign Check</td>
+<td>Structural findings — RPATH entries, hidden-Dock plists, Team ID mismatches, and similar — attributed to the specific file and tool that flagged them</td>
 </tr>
 </tbody>
 </table>
-<h3 id="examples">Examples</h3>
-<pre><code class="language-sh"># Analyze interactively
-cargo run -p fileminer --
-
-# Analyze directory and save JSON
-cargo run -p fileminer -- /path/to/files --json
-
-# Save to specific case folder
-cargo run -p fileminer -- /path/to/files --case case123
-
-# Filter mismatches only
-cargo run -p fileminer -- /path/to/files -m
-
-# Combine all
-cargo run -p fileminer -- /path/to/files --case suspicious_usb -m
+<p>Below the summary, each file gets its own section with every tool's actual formatted report embedded — real tables and headers pulled from each tool's own Markdown output, not raw console text. The rollup reads cleanly whether you're viewing it in the PWA or opening the file directly.</p>
+<hr />
+<h3 id="save-to-case">Save to Case</h3>
+<p>Analyze's Save to Case control matches every other tool panel — a checkbox and case dropdown, opt-in. When enabled, every tool Analyze dispatches saves its report to the case (and registers it in <code>case.yaml</code>, so it shows up in the case browser), and the rollup itself is saved to:</p>
+<pre><code>saved_output/cases/&lt;case_name&gt;/analyze/
 </code></pre>
-<h2 id="web-interface-notes">Web Interface Notes</h2>
+<p>When no case is selected, individual tool reports still land in their normal default locations (e.g. <code>saved_output/mstrings/</code>), and the rollup is saved to:</p>
+<pre><code>saved_output/analyze/
+</code></pre>
+<hr />
+<h3 id="pwa-usage">PWA Usage</h3>
+<p>Select <strong>Select Target</strong> from the Analyze section of the sidebar, choose a file, folder, or <code>.app</code> bundle, then configure the run before clicking <strong>Run</strong>:</p>
 <ul>
-<li>When a new case is created or restored using a folder, FileMiner runs automatically in the web interface.</li>
-<li>Results are saved under <code>saved_output/cases/&lt;case-name&gt;/fileminer/</code>.</li>
-<li>FileMiner displays an interactive table of results with suggested tools per file.</li>
-<li>Suggested tools can be launched directly from within the web interface results panel.</li>
+<li><strong>Save to Case</strong> — opt-in, same pattern as every other tool panel.</li>
+<li><strong>Concise Output</strong> — on by default. Renders the MalChela Summary rollup inline instead of the full expanded per-tool output. Turn it off to see everything each tool produced without opening the saved report separately.</li>
 </ul>
+<hr />
+<h3 id="mcp-usage">MCP Usage</h3>
+<p>Analyze is available to AI agents as the <code>analyze</code> tool in the MCP server. Like every other MCP tool, it requires an active case first — call <code>set_case</code> before <code>analyze</code>. This keeps the MCP's behavior consistent across all of its tools rather than special-casing this one workflow; there's no "no case" mode on the MCP side the way there is in the PWA.</p>
+<p>See <a href="https://github.com/dwmetz/MalChela/blob/main/.claude-plugin/mcp/README.md"><code>.claude-plugin/mcp/README.md</code></a> for MCP setup.</p>
 
 
 

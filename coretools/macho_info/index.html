@@ -704,6 +704,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Analyze
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../combine_yara/" class="md-nav__link">
         
   
@@ -1580,6 +1603,7 @@
   <h1>Mach-O Info</h1>
 
 <p>Mach-O Info performs static analysis on macOS Mach-O binaries, including both thin (single-architecture) and fat/universal binaries. It reports architecture details, linked libraries, RPATH entries, per-section entropy, and symbol table status. Suspicious indicators are flagged automatically in the Indicators section.</p>
+<p>Accepts either a <code>.app</code> bundle path or a direct path to a Mach-O binary. When given a bundle, the main executable is auto-resolved via <code>Info.plist</code>'s <code>CFBundleExecutable</code>, falling back to the sole binary in <code>Contents/MacOS/</code> if that lookup fails.</p>
 <p><img alt="Mach-O Info" src="../../images/macho.png" /></p>
 <p align="center"><strong>Mach-O Info</p>
 
@@ -1635,11 +1659,14 @@ Per-section entropy table. Sections above 7.0 are flagged as potentially packed 
 </table>
 <hr />
 <h3 id="pwa-usage">PWA Usage</h3>
-<p>Select <strong>Mach-O Info</strong> from the Mac Analysis category and provide the path to a Mach-O binary. File Miner will suggest Mach-O Info for any file it identifies as <code>x-mach-binary</code>.</p>
+<p>Select <strong>Mach-O Info</strong> from the Mac Analysis category and provide the path to a <code>.app</code> bundle or a Mach-O binary. File Miner will suggest Mach-O Info for any file it identifies as <code>x-mach-binary</code>.</p>
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
 <pre><code class="language-bash"># Analyze a Mach-O binary
 cargo run -p macho_info -- /path/to/binary
+
+# Analyze a .app bundle (main executable resolved automatically)
+cargo run -p macho_info -- /path/to/Sample.app
 
 # Save output as Markdown to a case folder
 cargo run -p macho_info -- /path/to/binary -o -m --case CaseXYZ

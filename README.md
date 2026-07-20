@@ -26,7 +26,13 @@
   </table>
 </div>
 
+<h3>About:</h3>
 
+> **mal** — malware  
+> **chela** — "crab hand"  
+> A chela on a crab is the scientific term for a claw or pincer. It's a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things — just like these programs.
+
+---
 
 <h3>Features:</h3>
 
@@ -60,11 +66,7 @@ All four tools auto-resolve a `.app` bundle's main executable (via `CFBundleExec
 
 *Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically.*
 
-<h3>About:</h3>
-
-> **mal** — malware  
-> **chela** — "crab hand"  
-> A chela on a crab is the scientific term for a claw or pincer. It's a specialized appendage, typically found on the first pair of legs, used for grasping, defense, and manipulating things — just like these programs.
+---
 
 <h3>Dependencies:</h3>
 
@@ -83,6 +85,8 @@ Before building, point the build to to Homebrew's YARA prefix
 export YARA_LIBRARY_PATH=$(brew --prefix yara)/lib
 export BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix yara)/include"
 ```
+
+---
 
 <h3>Installation &amp; Usage:</h3>
 
@@ -240,3 +244,4 @@ Successfully tested on macOS (Apple Silicon), Ubuntu, and Raspberry Pi.
 YARA version 4.2 or greater is required.
 
 **Windows:** As of October 2025, both MalChela CLI and GUI operate on Windows under WSL2. MalChelaGUI improvements for WSL included in v3.1.1.
+

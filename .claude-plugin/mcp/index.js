@@ -27,9 +27,9 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { execFileSync } from 'child_process';
 import {
   existsSync, readdirSync, statSync, mkdirSync, writeFileSync, readFileSync,
-  realpathSync, openSync, closeSync, unlinkSync,
+  realpathSync, openSync, closeSync, unlinkSync, rmSync,
 } from 'fs';
-import { dirname } from 'path';
+import { dirname, basename } from 'path';
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
 
 // Session-level case state — null until the user selects a case
@@ -764,7 +764,7 @@ function extractMstringsIocs(markdown) {
 // write-up instead of the same tool output repeated verbatim per filename.
 // This only changes what's shown here — every path was still dispatched and
 // still has its own saved report and case.yaml entry.
-function buildAnalyzeRollup(target, perFileResults) {
+function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   const groups = new Map();
   const order = [];
   for (const f of perFileResults) {
@@ -818,10 +818,13 @@ function buildAnalyzeRollup(target, perFileResults) {
     '',
     `Generated: ${new Date().toISOString()}`,
     `Files analyzed: ${perFileResults.length}`,
+  ];
+  if (extractionNote) lines.push(`_${extractionNote}_`);
+  lines.push(
     '',
     '## Triage Summary',
     '',
-  ];
+  );
   if (order.length !== perFileResults.length) {
     lines.push(
       `- **${order.length} unique file(s)** across ${perFileResults.length} path(s) ` +
@@ -895,10 +898,51 @@ function buildAnalyzeRollup(target, perFileResults) {
   return lines.join('\n');
 }
 
-function runAnalyze(targetPath) {
-  if (!existsSync(targetPath)) {
-    throw new Error(`Path does not exist: ${targetPath}`);
+// If target is a .zip (the only way to get a directory-based sample like a
+// .app bundle into a system through a file-only upload path), extract it
+// into a sibling '<stem>_extracted' directory and return that as the new
+// analyze target, plus a note for the rollup. Tries no password first, then
+// the same common malware-zip passwords Extract Samples uses. Shells out to
+// `unzip` (present on virtually every macOS/Linux host, including the
+// Raspberry Pi / REMnux hosts MalChela runs on) rather than adding a zip
+// npm dependency, mirroring the same reasoning as the Python route's use of
+// the zipfile stdlib instead of 7z. Returns { target: targetPath, note: null }
+// unchanged if target isn't a .zip.
+const ZIP_PASSWORDS = [null, 'infected', 'malware', 'virus']; // null tried first = no password
+
+function maybeExtractZip(targetPath) {
+  if (!targetPath.toLowerCase().endsWith('.zip')) {
+    return { target: targetPath, note: null };
   }
+
+  const filename = basename(targetPath);
+  const stem = filename.slice(0, -4);
+  const extractDir = `${dirname(targetPath)}/${stem}_extracted`;
+
+  for (const pwd of ZIP_PASSWORDS) {
+    try { rmSync(extractDir, { recursive: true, force: true }); } catch { /* didn't exist */ }
+    const unzipArgs = [...(pwd !== null ? ['-P', pwd] : []), '-q', targetPath, '-d', extractDir];
+    try {
+      execFileSync('unzip', unzipArgs, { timeout: 30000 });
+      const note = `Auto-extracted \`${filename}\`` + (pwd ? ` (password: \`${pwd}\`)` : '');
+      return { target: extractDir, note };
+    } catch {
+      continue; // wrong password (or extraction failed) — try the next one
+    }
+  }
+
+  throw new Error(
+    `${filename} is password-protected with a password not in the common list ` +
+    `(infected/malware/virus). Extract it manually with Extract Samples first.`
+  );
+}
+
+function runAnalyze(rawTargetPath) {
+  if (!existsSync(rawTargetPath)) {
+    throw new Error(`Path does not exist: ${rawTargetPath}`);
+  }
+
+  const { target: targetPath, note: extractionNote } = maybeExtractZip(rawTargetPath);
 
   const fmBinary = `${RELEASE_DIR}/fileminer`;
   if (!existsSync(fmBinary)) {
@@ -1001,7 +1045,7 @@ function runAnalyze(targetPath) {
     });
   }
 
-  const rollup = buildAnalyzeRollup(targetPath, perFileResults);
+  const rollup = buildAnalyzeRollup(targetPath, perFileResults, extractionNote);
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '_');
   // The "analyze" subfolder matters, not just cosmetically: registerCaseOutput
   // below records the entry's path as "analyze/<filename>", so the file has

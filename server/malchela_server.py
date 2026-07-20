@@ -15,7 +15,7 @@ import os
 import re
 import sys
 import json
-import re
+import zipfile
 import subprocess
 import shutil
 import traceback
@@ -1068,6 +1068,43 @@ _ANALYZE_MAX_FILES = 25  # keep this a synchronous, single-sample/bundle operati
                          # corpus-scale scans belong to MZHash/MZCount/XMZHash.
 
 
+_ZIP_PASSWORDS = ["", "infected", "malware", "virus"]  # "" tried first = no password
+
+
+def _maybe_extract_zip(target: Path) -> tuple:
+    """If target is a .zip (the only way to upload a directory-based sample
+    like a .app bundle through the PWA's file-only upload widget), extract
+    it into a sibling '<stem>_extracted' directory and return the extracted
+    directory as the new analyze target, plus a note for the rollup. Tries
+    no password first, then the same common malware-zip passwords Extract
+    Samples uses. Uses the zipfile stdlib module rather than shelling out to
+    7z (what Extract Samples itself uses) — this only needs to run without
+    an extra 7zip dependency on whatever host Analyze runs on; it only
+    handles classic ZipCrypto-protected zips, not AES-encrypted ones.
+    Returns (target, None) unchanged if target isn't a .zip."""
+    if target.suffix.lower() != ".zip":
+        return target, None
+
+    extract_dir = target.parent / f"{target.stem}_extracted"
+
+    for pwd in _ZIP_PASSWORDS:
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        try:
+            with zipfile.ZipFile(target) as zf:
+                zf.extractall(extract_dir, pwd=pwd.encode() if pwd else None)
+            note = f"Auto-extracted `{target.name}`" + (f" (password: `{pwd}`)" if pwd else "")
+            return extract_dir, note
+        except RuntimeError:
+            continue  # wrong password — try the next one
+        except zipfile.BadZipFile as e:
+            raise ValueError(f"Not a valid zip file: {e}")
+
+    raise ValueError(
+        f"{target.name} is password-protected with a password not in the common list "
+        f"(infected/malware/virus). Extract it manually with Extract Samples first."
+    )
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     """
@@ -1084,6 +1121,12 @@ def analyze():
         return jsonify({"success": False, "error": "Invalid or missing path"}), 400
     if not target.exists():
         return jsonify({"success": False, "error": "Path does not exist"}), 404
+
+    extraction_note = None
+    try:
+        target, extraction_note = _maybe_extract_zip(target)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)})
 
     # A .app bundle is a directory on disk, so it's already handled the same
     # way as any other folder — FileMiner's WalkDir walks into it naturally.
@@ -1191,7 +1234,7 @@ def analyze():
             "tool_runs": tool_runs,
         })
 
-    rollup_md = _build_analyze_rollup(str(target), per_file_results)
+    rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     # The "analyze" subfolder matters here, not just cosmetically: it's what
@@ -1207,12 +1250,13 @@ def analyze():
         _register_cli_case_output("analyze", case_name, str(target), "md")
 
     return jsonify({
-        "success":        True,
-        "target":         str(target),
-        "file_count":     len(per_file_results),
-        "results":        per_file_results,
-        "rollup_path":    str(rollup_path),
-        "rollup_content": rollup_md,
+        "success":         True,
+        "target":          str(target),
+        "file_count":      len(per_file_results),
+        "results":         per_file_results,
+        "rollup_path":     str(rollup_path),
+        "rollup_content":  rollup_md,
+        "extraction_note": extraction_note,
     })
 
 
@@ -1351,7 +1395,7 @@ def _flag_verdict(tool_runs: list) -> tuple:
     return False, ""
 
 
-def _build_analyze_rollup(target: str, per_file_results: list) -> str:
+def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: str = None) -> str:
     """Mechanical rollup only — every tool's captured output concatenated
     under per-file/per-tool headings. No synthesis, no narrative; that's a
     separate, human (or LLM-assisted) step on top of this.
@@ -1417,6 +1461,10 @@ def _build_analyze_rollup(target: str, per_file_results: list) -> str:
         "",
         f"Generated: {datetime.now().isoformat()}",
         f"Files analyzed: {len(per_file_results)}",
+    ]
+    if extraction_note:
+        lines.append(f"_{extraction_note}_")
+    lines += [
         "",
         "## Triage Summary",
         "",

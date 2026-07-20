@@ -3879,6 +3879,9 @@ async function runAnalyze(path) {
 
 function renderAnalyzeResults(data) {
   let html = `<div style="padding:8px 4px">`;
+  if (data.extraction_note) {
+    html += `<div style="margin-bottom:8px;color:var(--cyan);font-size:12px;font-style:italic">${escHtml(data.extraction_note)}</div>`;
+  }
   html += `<div style="margin-bottom:10px;color:var(--text-dim);font-size:12px">`
         + `Target: <code>${escHtml(data.target)}</code> — ${data.file_count} file(s) analyzed. `
         + `Rollup saved to <code>${escHtml(data.rollup_path)}</code>.`

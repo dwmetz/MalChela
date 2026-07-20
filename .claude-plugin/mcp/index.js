@@ -24,7 +24,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import {
   existsSync, readdirSync, statSync, mkdirSync, writeFileSync, readFileSync,
   realpathSync, openSync, closeSync, unlinkSync,
@@ -423,8 +423,8 @@ function resolveBundleExecutable(bundlePath) {
 
   if (existsSync(infoPlist)) {
     try {
-      const bundleExec = execSync(
-        `plutil -extract CFBundleExecutable raw -o - "${infoPlist}"`,
+      const bundleExec = execFileSync(
+        'plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', infoPlist],
         { encoding: 'utf8', timeout: 5000 }
       ).trim();
       if (bundleExec) {
@@ -456,6 +456,9 @@ function resolveBundleExecutable(bundlePath) {
 }
 
 // ── Command builder ───────────────────────────────────────────────────────────
+// Returns { bin, args } for execFileSync — never a shell string. No argument
+// here (paths, case names, hashes) goes through a shell, so nothing a caller
+// controls can break out of quoting to inject a second command.
 function buildCommand(toolName, args) {
   const binary = `${RELEASE_DIR}/${toolName}`;
 
@@ -480,29 +483,45 @@ function buildCommand(toolName, args) {
       }
 
       if (currentCase) {
-        return `"${binary}" "${targetPath}" --case "${currentCase}" -o -t`;
+        return { bin: binary, args: [targetPath, '--case', currentCase, '-o', '-t'] };
       }
-      const out = args.output ? ` -o "${args.output}"` : '';
-      return `"${binary}" "${targetPath}"${out}`;
+      const cmdArgs = [targetPath];
+      if (args.output) cmdArgs.push('-o', args.output);
+      return { bin: binary, args: cmdArgs };
     }
     case 'folder': {
       if (toolName === 'mzhash' && args.algorithms?.length) {
-        const flags = args.algorithms.map(a => `-a ${a}`).join(' ');
-        return `"${binary}" "${args.folderpath}" -- ${flags}`;
+        const flags = args.algorithms.flatMap(a => ['-a', a]);
+        return { bin: binary, args: [args.folderpath, '--', ...flags] };
       }
-      return `"${binary}" "${args.folderpath}"`;
+      return { bin: binary, args: [args.folderpath] };
     }
     case 'hash': {
-      const caseFlag = currentCase ? ` --case "${currentCase}" -o -t` : '';
+      const caseArgs = currentCase ? ['--case', currentCase, '-o', '-t'] : [];
       if (toolName === 'tiquery') {
-        const srcFlag = args.sources ? ` --sources "${args.sources}"` : '';
-        return `"${binary}" "${args.hash}"${srcFlag} --json${caseFlag}`;
+        const srcArgs = args.sources ? ['--sources', args.sources] : [];
+        return { bin: binary, args: [args.hash, ...srcArgs, '--json', ...caseArgs] };
       }
-      return `"${binary}" "${args.hash}"${caseFlag}`;
+      return { bin: binary, args: [args.hash, ...caseArgs] };
     }
     default:
       throw new Error(`Unknown input_type for tool: ${toolName}`);
   }
+}
+
+// Mirrors _sanitize_case_name() in server/malchela_server.py — only word
+// chars, hyphens, and dots survive, and a literal ".." anywhere rejects the
+// name outright. Applied once, at set_case (the single point of entry for
+// currentCase), so every downstream path built from it — registerCaseOutput,
+// runAnalyze's rollupDir, buildCommand's --case arg, readToolMarkdown's
+// toolDir — is safe from traversal without each of them re-checking.
+const CASE_NAME_RE = /[^\w\-.]/g;
+
+function sanitizeCaseName(name) {
+  if (!name) return null;
+  const clean = String(name).trim().replace(CASE_NAME_RE, '_');
+  if (!clean || clean.includes('..')) return null;
+  return clean.slice(0, 128);
 }
 
 // ── Case manifest registration ───────────────────────────────────────────────
@@ -512,6 +531,13 @@ function buildCommand(toolName, args) {
 // case.yaml. The Rust-side tools this dispatches (macho_info, mstrings,
 // codesign_check, plist_analyzer, fileanalyzer, tiquery) already register
 // their own per-tool reports internally; this only covers the rollup file.
+
+// Blocking sleep with no subprocess spawn — avoids depending on a `sleep`
+// binary being present/behaving consistently across macOS/Linux, and skips
+// the process-spawn overhead on what can be a hot retry loop.
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
 
 function acquireCaseLock(caseDir) {
   const lockPath = `${caseDir}/case.yaml.lock`;
@@ -529,7 +555,7 @@ function acquireCaseLock(caseDir) {
       } catch { /* lock vanished between stat and check — retry */ }
       attempts += 1;
       if (attempts > 50) throw new Error('Timed out waiting for case.yaml lock');
-      execSync('sleep 0.1');
+      sleepSync(100);
     }
   }
 }
@@ -582,7 +608,7 @@ function registerCaseOutput(tool, caseName, target, outputPath) {
 const ANALYZE_MAX_FILES = 25; // matches _ANALYZE_MAX_FILES in malchela_server.py
 const ANALYZE_TIMEOUT_MS = 90000;
 const FILEMINER_TIMEOUT_MS = 120000;
-const ANALYZE_MAX_BUFFER = 50 * 1024 * 1024; // fileminer's JSON dump easily exceeds execSync's 1MB default
+const ANALYZE_MAX_BUFFER = 50 * 1024 * 1024; // fileminer's JSON dump easily exceeds execFileSync's 1MB default
 
 function pathsMatch(candidate, resolvedTarget) {
   if (!candidate) return false;
@@ -885,12 +911,12 @@ function runAnalyze(targetPath) {
   const singleFileMode = statSync(targetPath).isFile();
   const scanDir = singleFileMode ? dirname(targetPath) : targetPath;
 
-  const fmArgs = [`"${scanDir}"`, '--no-prompt'];
-  if (currentCase) fmArgs.push('--case', `"${currentCase}"`);
+  const fmArgs = [scanDir, '--no-prompt'];
+  if (currentCase) fmArgs.push('--case', currentCase);
 
   let fmOutput;
   try {
-    fmOutput = execSync(`"${fmBinary}" ${fmArgs.join(' ')}`, {
+    fmOutput = execFileSync(fmBinary, fmArgs, {
       cwd: MALCHELA_DIR, encoding: 'utf8', timeout: FILEMINER_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER,
     });
   } catch (err) {
@@ -952,11 +978,11 @@ function runAnalyze(targetPath) {
       // each tool's actual formatted output (headers, tables) instead of raw
       // CLI stdout. This is Analyze's own internal read-back, independent of
       // the -t default every other MCP tool call uses via buildCommand.
-      const cmdArgs = [`"${arg}"`, '-o', '-m'];
-      if (currentCase) cmdArgs.push('--case', `"${currentCase}"`);
+      const cmdArgs = [arg, '-o', '-m'];
+      if (currentCase) cmdArgs.push('--case', currentCase);
 
       try {
-        const output = execSync(`"${binary}" ${cmdArgs.join(' ')}`, {
+        const output = execFileSync(binary, cmdArgs, {
           cwd: MALCHELA_DIR, encoding: 'utf8', timeout: ANALYZE_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER,
         }).trim();
         const markdown = readToolMarkdown(slug, currentCase);
@@ -1033,7 +1059,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   // Handle set_case — no binary execution, just update session state
   if (name === 'set_case') {
-    currentCase = args.case_name;
+    const sanitized = sanitizeCaseName(args.case_name);
+    if (!sanitized) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Invalid case name: "${args.case_name}". Case names may only contain letters, numbers, hyphens, underscores, and dots (no "..").`,
+        }],
+        isError: true,
+      };
+    }
+    currentCase = sanitized;
     return {
       content: [{
         type: 'text',
@@ -1084,8 +1120,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   try {
-    const cmd = buildCommand(name, args);
-    const result = execSync(cmd, {
+    const { bin, args: cmdArgs } = buildCommand(name, args);
+    const result = execFileSync(bin, cmdArgs, {
       cwd: MALCHELA_DIR,
       encoding: 'utf8',
       timeout: TIMEOUT_MS,

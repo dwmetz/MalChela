@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
-  MalChela v4.1
+  MalChela v4.2
  </h1>
   <h4>
       A YARA &amp; Malware Analysis Toolkit written in Rust.
@@ -32,6 +32,7 @@
 
 | Program             | Function |
 |---------------------|----------|
+| Analyze             | Auto-triages a file, folder, or `.app` bundle: classifies with File Miner, dispatches every tool it suggests, and produces a combined MalChela Summary rollup report |
 | Combine YARA        | Combines all `.yara`/`.yar` files in a directory into a single rule file |
 | Extract Samples     | Recursively extracts password-protected malware archives (ZIP/RAR) using common passwords |
 | File Analyzer       | Analyzes a file for hashes, entropy, PE structure, fuzzy hashes, YARA matches, NSRL lookup, and VirusTotal status |
@@ -39,20 +40,23 @@
 | Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
 | Threat Intel Query  | Multi-source hash **and URL** lookup. Hash sources: VirusTotal, MalwareBazaar, OTX, Hybrid Analysis, FileScan.IO, Malshare, MetaDefender, ObjectiveSee. URL sources: VirusTotal, urlscan.io, Google Safe Browsing. GUI adds file-to-hash and QR code decode → URL lookup. |
-| mStrings            | Extracts strings from a file, applies regex and Sigma rules, maps to MITRE ATT&CK, identifies IOCs, and includes built-in MITRE Technique lookup |
+| mStrings            | Extracts strings from a file — including Mach-O binaries and `.app` bundles — applies regex and Sigma rules, maps to MITRE ATT&CK, identifies filesystem/network IOCs, and includes built-in MITRE Technique lookup |
 | mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
 | nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it's known-good |
 | strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
 | xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for non-Windows malware corpus |
 
-**Mac Analysis** *(v4.1)*
+**Mac Analysis** *(v4.2)*
 
 | Program          | Function |
 |------------------|----------|
 | Code Sign Check  | Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and `get-task-allow` flag |
 | Mach-O Info      | Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection |
+| mStrings         | Extracts strings, IOCs, and MITRE ATT&CK matches from Mach-O binaries and `.app` bundles |
 | Plist Analyzer   | Parses `.plist` files and `.app` bundle `Info.plist` for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection |
+
+All four tools auto-resolve a `.app` bundle's main executable (via `CFBundleExecutable`, falling back to the sole binary in `Contents/MacOS/`) — point them at the bundle directly. Run all four together against a bundle or binary with `./mac_stack.sh`. More Mac-specific detections are planned for upcoming releases.
 
 *Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically.*
 
@@ -148,70 +152,24 @@ MalChela includes a full-featured case system:
 
 ---
 
-### 🤖 AI Integration &amp; MCP Support (v3.1.0)
+### 🔍 Analyze — One-Click Auto-Triage *(v4.2)*
 
-MalChela v3.1.0 introduces support for AI-assisted malware analysis through the **Model Context Protocol (MCP)**, exposing all 13 MalChela tools to AI agents like Claude. Three deployment paths are supported depending on your environment:
+Point Analyze at a file, folder, or `.app` bundle and it classifies everything with File Miner, then automatically dispatches every tool File Miner suggests for each file it finds — no need to read the suggestions and run each tool by hand.
 
----
-
-#### Path 1: Native MCP Server (Claude Desktop on macOS)
-
-A Node.js MCP server exposes all MalChela tools directly to Claude Desktop on macOS with no additional infrastructure required.
-
-**Setup:**
-
-```
-cd mcp/
-npm install
-```
-
-Configure Claude Desktop to load the server by adding it to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "malchela": {
-      "command": "node",
-      "args": ["/path/to/MalChela/mcp/server.js"]
-    }
-  }
-}
-```
-
-See [`mcp/README.md`](mcp/README.md) for full configuration details.
+- Available in both the PWA and as an `analyze` tool in the MCP server, so AI agents can run the same triage workflow directly.
+- **Save to Case** is opt-in, matching every other tool panel's checkbox-and-dropdown pattern.
+- **Concise Output** (on by default) renders the rollup inline instead of the full expanded per-tool output.
+- Every run produces a `malchela_summary_<timestamp>.md` rollup report, saved alongside the individual tool reports it summarizes. It leads with a Triage Summary banner: file counts (with automatic duplicate-content grouping by SHA256), flagged-malicious verdicts cross-referenced from FileAnalyzer and Threat Intel Query, malware family/tag names, MITRE ATT&CK findings by tactic, filesystem/network IOCs, and structural flags/indicators from the Mac Analysis tools.
 
 ---
 
-#### Path 2: Kali MCP Server (Remote Linux host / Raspberry Pi)
+### 🤖 AI Integration &amp; MCP Support
 
-A two-layer architecture for running MalChela on a remote Kali Linux system (e.g., a Raspberry Pi forensics toolkit) and exposing it to Claude Desktop via MCP.
+MalChela exposes its full tool suite — including Analyze and the Mac Analysis stack — to AI agents like Claude through the **Model Context Protocol (MCP)**.
 
-- **`mcp_server.py`** — FastMCP frontend, receives tool calls and forwards them
-- **`kali_server.py`** — Flask backend, executes MalChela binaries on the Kali host
+See [`.claude-plugin/mcp/README.md`](.claude-plugin/mcp/README.md) for setup: installing via the Claude Code plugin marketplace, running on a remote Kali/Raspberry Pi host, and API key configuration. For agentic coding environments (OpenCode and similar), MalChela ships [`AGENTS.md`](.claude-plugin/mcp/AGENTS.md), describing available tools and usage patterns for autonomous discovery.
 
-**Setup on the Kali host:**
-
-```
-cd /usr/share/mcp-kali-server/
-pip install -r requirements.txt
-python3 kali_server.py
-```
-
-Configure `mcp_server.py` with the host's IP and start it. Then point Claude Desktop at `mcp_server.py` as the MCP server.
-
-See [`mcp/README.md`](mcp/README.md) for full setup and configuration.
-
----
-
-#### Path 3: OpenCode / AGENTS.md (REMnux / Agentic CLI)
-
-For agentic coding environments and CLI-based AI tools, MalChela ships with an `AGENTS.md` file describing all available tools, their arguments, and usage patterns. This allows tools like OpenCode to discover and invoke MalChela automatically.
-
-On REMnux, OpenCode can be pointed at the MalChela directory and will use `AGENTS.md` to drive analysis workflows autonomously.
-
----
-
-For a detailed walkthrough of all three approaches, see the blog post: [**MalChela Meets AI: Three Paths to Smarter Malware Analysis**](https://bakerstreetforensics.com)
+For a detailed walkthrough of AI-assisted analysis approaches, see the blog post: [**MalChela Meets AI: Three Paths to Smarter Malware Analysis**](https://bakerstreetforensics.com)
 
 ---
 

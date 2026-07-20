@@ -1,9 +1,10 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::error::Error;
 use std::env;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize, Default)]
 pub struct CommonConfig {
@@ -147,4 +148,176 @@ pub fn migrate_api_keys() {
     for src in &["vt", "mb", "otx", "ha", "mp", "mw", "tr", "fs", "ms"] {
         let _ = resolve_api_key(src);
     }
+}
+
+// ── Case manifest (case.yaml) registration ──────────────────────────────────
+//
+// case.yaml historically was only ever updated by the web GUI's Python
+// server (malchela_server.py::_register_cli_case_output), which scans a
+// tool's output directory for recently-modified files after shelling out to
+// it. That means any tool run outside the web server — terminal, MCP, shell
+// scripts — writes its report correctly but never gets an entry in
+// case.yaml's manifest.
+//
+// register_case_output() closes that gap from the Rust side: a case-aware
+// tool calls it directly with the exact path it just wrote, right after
+// saving. That sidesteps the web server's mtime-window scanning entirely.
+// It's idempotent (dedupes by `path`) and lock-guarded, so it's safe to run
+// even if the Python registrar also fires for the same file.
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct CaseFileEntry {
+    filename: String,
+    path: String,
+    target: String,
+    timestamp: String,
+    tool: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CaseManifest {
+    created: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    files: Vec<CaseFileEntry>,
+    modified: String,
+    name: String,
+    #[serde(default)]
+    notes: String,
+    #[serde(default = "default_case_status")]
+    status: String,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+fn default_case_status() -> String {
+    "open".to_string()
+}
+
+impl CaseManifest {
+    fn new(name: &str, created: &str) -> Self {
+        CaseManifest {
+            created: created.to_string(),
+            description: String::new(),
+            files: Vec::new(),
+            modified: created.to_string(),
+            name: name.to_string(),
+            notes: String::new(),
+            status: default_case_status(),
+            tags: Vec::new(),
+        }
+    }
+}
+
+/// Simple advisory file lock, used so multiple case-aware tool invocations
+/// (e.g. run back-to-back by a script) don't race on case.yaml's
+/// read-modify-write. Uses `create_new` for an atomic "did I win the lock"
+/// check with no extra crate dependency. Steals stale locks older than 10s
+/// so a crashed process can't wedge future runs.
+struct CaseLock {
+    path: PathBuf,
+}
+
+impl CaseLock {
+    fn acquire(case_dir: &Path) -> Result<Self, Box<dyn Error>> {
+        let lock_path = case_dir.join("case.yaml.lock");
+        let mut attempts = 0u32;
+        loop {
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&lock_path)
+            {
+                Ok(_) => return Ok(CaseLock { path: lock_path }),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    if let Ok(meta) = fs::metadata(&lock_path) {
+                        if let Ok(modified) = meta.modified() {
+                            if let Ok(age) = modified.elapsed() {
+                                if age.as_secs() > 10 {
+                                    let _ = fs::remove_file(&lock_path);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    attempts += 1;
+                    if attempts > 50 {
+                        return Err("Timed out waiting for case.yaml lock".into());
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(e) => return Err(Box::new(e)),
+            }
+        }
+    }
+}
+
+impl Drop for CaseLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+/// Register a just-written report file into `<case>/case.yaml`'s manifest.
+///
+/// `tool` — the tool name (matches its output subdirectory, e.g. "macho_info").
+/// `case_name` — the active case.
+/// `target` — the original input path the tool analyzed (for the entry's context).
+/// `output_path` — the exact report file path the tool just wrote.
+///
+/// Silently no-ops on any I/O error (workspace not found, lock timeout, etc.)
+/// rather than failing the tool run — manifest tracking is a convenience,
+/// not something that should block analysis output.
+pub fn register_case_output(tool: &str, case_name: &str, target: &str, output_path: &Path) {
+    let _ = register_case_output_inner(tool, case_name, target, output_path);
+}
+
+fn register_case_output_inner(
+    tool: &str,
+    case_name: &str,
+    target: &str,
+    output_path: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let workspace = find_workspace_root().ok_or("Could not locate MalChela workspace root")?;
+    let case_dir = workspace.join("saved_output").join("cases").join(case_name);
+    fs::create_dir_all(&case_dir)?;
+
+    let filename = output_path
+        .file_name()
+        .ok_or("Output path has no filename")?
+        .to_string_lossy()
+        .to_string();
+    let rel_path = format!("{}/{}", tool, filename);
+    let timestamp = chrono::Local::now().to_rfc3339();
+
+    let _lock = CaseLock::acquire(&case_dir)?;
+
+    let yaml_path = case_dir.join("case.yaml");
+    let mut manifest: CaseManifest = if yaml_path.exists() {
+        let content = fs::read_to_string(&yaml_path)?;
+        serde_yaml::from_str(&content).unwrap_or_else(|_| CaseManifest::new(case_name, &timestamp))
+    } else {
+        CaseManifest::new(case_name, &timestamp)
+    };
+
+    if manifest.files.iter().any(|f| f.path == rel_path) {
+        return Ok(()); // already registered (idempotent)
+    }
+
+    manifest.files.push(CaseFileEntry {
+        filename,
+        path: rel_path,
+        target: target.to_string(),
+        timestamp: timestamp.clone(),
+        tool: tool.to_string(),
+    });
+    manifest.modified = timestamp;
+
+    let yaml_str = serde_yaml::to_string(&manifest)?;
+    let tmp_path = case_dir.join("case.yaml.tmp");
+    fs::write(&tmp_path, yaml_str)?;
+    fs::rename(&tmp_path, &yaml_path)?;
+
+    Ok(())
 }

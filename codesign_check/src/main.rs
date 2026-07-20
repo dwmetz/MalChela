@@ -142,6 +142,101 @@ fn codesign_from_macho(data: &[u8], arch_offset: usize) -> CsInfo {
     }
 }
 
+// ── Parse the code signature from a binary file on disk ───────────────────────
+// Handles both thin and fat/universal binaries (first arch, matching the main
+// executable handling in main()). Returns None if the file cannot be read or
+// is not Mach-O.
+fn codesign_from_file(path: &Path) -> Option<CsInfo> {
+    let data = fs::read(path).ok()?;
+    use goblin::Object;
+    match Object::parse(&data) {
+        Ok(Object::Mach(goblin::mach::Mach::Fat(fat))) => {
+            let arch_offset = fat.arches().ok()
+                .and_then(|a| a.into_iter().next())
+                .map(|a| a.offset as usize)
+                .unwrap_or(0);
+            Some(codesign_from_macho(&data, arch_offset))
+        }
+        Ok(Object::Mach(goblin::mach::Mach::Binary(_))) => {
+            Some(codesign_from_macho(&data, 0))
+        }
+        _ => None,
+    }
+}
+
+// ── One embedded bundle binary's signing summary ──────────────────────────────
+struct EmbeddedBinary {
+    rel_path:         String,
+    status:           String, // "CMS-signed" / "Ad-hoc" / "Unsigned"
+    team_id:          Option<String>,
+    has_entitlements: bool,
+    warnings:         Vec<String>,
+}
+
+// Signing status classification shared by console output and reports.
+fn cs_status(cs: &CsInfo) -> &'static str {
+    if !cs.found {
+        "Unsigned"
+    } else if cs.has_cms && !cs.is_adhoc {
+        "CMS-signed"
+    } else {
+        "Ad-hoc"
+    }
+}
+
+// Collect signing info for every embedded Mach-O binary in a bundle, excluding
+// the main executable (already reported separately).
+fn collect_embedded_binaries(
+    bundle_path: &Path,
+    main_binary: Option<&Path>,
+    main_cs:     &CsInfo,
+) -> Vec<EmbeddedBinary> {
+    let main_canonical = main_binary.and_then(|p| fs::canonicalize(p).ok());
+    let main_is_cms = main_cs.found && main_cs.has_cms && !main_cs.is_adhoc;
+
+    let mut embedded = Vec::new();
+    for bin in common_macho::find_macho_binaries(bundle_path) {
+        // Skip the main executable — it is already reported above.
+        if let (Some(mc), Ok(bc)) = (&main_canonical, fs::canonicalize(&bin)) {
+            if *mc == bc {
+                continue;
+            }
+        }
+
+        let rel_path = bin
+            .strip_prefix(bundle_path)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| bin.display().to_string());
+
+        let cs = codesign_from_file(&bin).unwrap_or_default();
+        let mut warnings = Vec::new();
+
+        if main_is_cms && !cs.found {
+            warnings.push(format!(
+                "Unsigned embedded binary inside a CMS-signed app — possible dylib hijack or tampering: {}",
+                rel_path
+            ));
+        }
+        if let (Some(main_tid), Some(embed_tid)) = (&main_cs.team_id, &cs.team_id) {
+            if main_tid != embed_tid {
+                warnings.push(format!(
+                    "Team ID mismatch: {} signed by {} but main executable is {} — supply-chain / hijack indicator",
+                    rel_path, embed_tid, main_tid
+                ));
+            }
+        }
+
+        embedded.push(EmbeddedBinary {
+            rel_path,
+            status: cs_status(&cs).to_string(),
+            team_id: cs.team_id.clone(),
+            has_entitlements: cs.has_entitlements,
+            warnings,
+        });
+    }
+    embedded
+}
+
 // ── Resolve input to (binary_path, codesig_dir, display_name) ─────────────────
 fn resolve_input(input: &Path) -> (Option<PathBuf>, Option<PathBuf>, String) {
     if input.is_dir() {
@@ -203,6 +298,7 @@ fn build_report(
     codesig_dir:  Option<&PathBuf>,
     cs:           &CsInfo,
     flags_text:   &[String],
+    embedded:     &[EmbeddedBinary],
     format:       &str,
 ) -> String {
     let mut buf = String::new();
@@ -232,6 +328,25 @@ fn build_report(
             buf.push_str("## Flags\n\n");
             for f in flags_text { buf.push_str(&format!("- {}\n", f)); }
         }
+
+        if !embedded.is_empty() {
+            buf.push_str("\n## Embedded Binaries\n\n");
+            buf.push_str("| Path | Status | Team ID | Entitlements |\n|---|---|---|---|\n");
+            for eb in embedded {
+                buf.push_str(&format!(
+                    "| `{}` | {} | {} | {} |\n",
+                    eb.rel_path,
+                    eb.status,
+                    eb.team_id.as_deref().unwrap_or("—"),
+                    if eb.has_entitlements { "Yes" } else { "No" }
+                ));
+            }
+            let all_warnings: Vec<&String> = embedded.iter().flat_map(|eb| eb.warnings.iter()).collect();
+            if !all_warnings.is_empty() {
+                buf.push_str("\n### Embedded Binary Warnings\n\n");
+                for w in all_warnings { buf.push_str(&format!("- {}\n", w)); }
+            }
+        }
     } else {
         buf.push_str(&format!("{}\n{}\n\n", header, "=".repeat(header.len())));
         if let Some(p) = binary_path { buf.push_str(&format!("Binary: {}\n\n", p.display())); }
@@ -252,13 +367,30 @@ fn build_report(
             buf.push_str("\nFlags:\n");
             for f in flags_text { buf.push_str(&format!("  {}\n", f)); }
         }
+
+        if !embedded.is_empty() {
+            buf.push_str("\nEmbedded Binaries:\n");
+            for eb in embedded {
+                let team = eb.team_id.as_deref().unwrap_or("none");
+                buf.push_str(&format!(
+                    "  {} — {} (Team ID: {}, Entitlements: {})\n",
+                    eb.rel_path,
+                    eb.status,
+                    team,
+                    if eb.has_entitlements { "Yes" } else { "No" }
+                ));
+                for w in &eb.warnings {
+                    buf.push_str(&format!("    ⚠  {}\n", w));
+                }
+            }
+        }
     }
     buf
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Command::new("codesign_check")
-        .version("4.1.0")
+        .version("4.2.0")
         .about("Inspect macOS code signing: signature type, team ID, entitlements, ad-hoc detection")
         .arg(Arg::new("input").help("Path to .app bundle or Mach-O binary").index(1))
         .arg(Arg::new("output").short('o').long("output").num_args(0).help("Save output"))
@@ -419,6 +551,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
+    // ── Embedded binaries (frameworks, XPC services, helpers, plugins) ────────
+    let embedded: Vec<EmbeddedBinary> = if common_macho::is_app_bundle(&input_path) {
+        collect_embedded_binaries(&input_path, binary_path.as_deref(), &cs)
+    } else {
+        Vec::new()
+    };
+
+    if common_macho::is_app_bundle(&input_path) {
+        println!("{}", styled_line("SECTION", "--- Embedded Binaries ---"));
+        if embedded.is_empty() {
+            ok("No embedded Mach-O binaries found beyond the main executable");
+        } else {
+            for eb in &embedded {
+                println!("  {}", eb.rel_path.cyan());
+                let status_color = match eb.status.as_str() {
+                    "CMS-signed" => "green",
+                    "Ad-hoc"     => "yellow",
+                    _            => "red",
+                };
+                flag("    Status:", &eb.status, status_color);
+                if let Some(ref tid) = eb.team_id {
+                    flag_str("    Team ID:", tid);
+                }
+                flag_str("    Entitlements:", if eb.has_entitlements { "Yes" } else { "No" });
+                for w in &eb.warnings {
+                    warn(w);
+                }
+            }
+        }
+        println!();
+    }
+
     // ── Save output ───────────────────────────────────────────────────────────
     let save = args.get_flag("output") || args.contains_id("case");
     if save {
@@ -439,11 +603,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             codesig_dir.as_ref(),
             &cs,
             &flags_text,
+            &embedded,
             fmt,
         );
         let out_path = output_dir.join(&filename);
         fs::write(&out_path, &report)?;
         println!("{}", format!("Report saved to: {}", out_path.display()).green());
+
+        if let Some(case_name) = args.get_one::<String>("case") {
+            common_config::register_case_output("codesign_check", case_name, &display_name, &out_path);
+        }
 
         // Signal GUI save
         if is_gui_mode() {

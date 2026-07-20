@@ -31,6 +31,7 @@ nav:
   - Core Tools:
       - Overview: coretools/index.md
       - Usage: coretools/usage.md
+      - Analyze: coretools/analyze.md
       - CombineYARA: coretools/combine_yara.md
       - ExtractSamples: coretools/extract_samples.md
       - FileAnalyzer: coretools/fileanalyzer.md

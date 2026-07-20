@@ -12,6 +12,7 @@ Supported platforms: Kali Linux, REMnux/Ubuntu, macOS
 """
 
 import os
+import re
 import sys
 import json
 import subprocess
@@ -621,7 +622,7 @@ def home_screen():
     output = (
         f"{ascii_art}\n"
         f"            https://bakerstreetforensics.com\n\n"
-        f"            MalChela Analysis Toolkit v4.1\n\n"
+        f"            MalChela Analysis Toolkit v4.2\n\n"
         f"{koan}"
     )
     return jsonify({"success": True, "output": output})
@@ -1016,6 +1017,449 @@ def _cells_to_row(cells: list) -> Optional[dict]:
         }
     except Exception:
         return None
+
+
+# ── Analyze (auto-mode) ─────────────────────────────────────────────────────
+#
+# "Analyze" takes a single file, a folder, or a .app bundle and does what a
+# human would do by hand with FileMiner's suggestions: run every suggested
+# tool against every file, then produce one mechanical rollup report on top
+# of the individual per-tool reports that already get saved (and, per the
+# case.yaml fix, registered) the normal way.
+#
+# This intentionally reuses FileMiner's own suggestion engine rather than
+# re-deriving "which tool for which file type" here — that mapping lives in
+# fileminer/src/main.rs's ScanResult.suggested_tools and nowhere else, so
+# calling fileminer with --no-prompt (clean JSON to stdout, no interactive
+# table/keypress loop) keeps this endpoint from drifting out of sync with it.
+
+_ANALYZE_MAX_FILES = 25  # keep this a synchronous, single-sample/bundle operation;
+                         # corpus-scale scans belong to MZHash/MZCount/XMZHash.
+
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    """
+    Auto-run mode: classify a file/folder/bundle via FileMiner's suggestion
+    engine, run every suggested tool against every file found, and write one
+    combined rollup report alongside the individual reports.
+    """
+    data        = request.json or {}
+    raw_path    = data.get("path", "")
+    case_name   = data.get("case_name", "").strip()
+
+    target = safe_path(raw_path)
+    if target is None:
+        return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    if not target.exists():
+        return jsonify({"success": False, "error": "Path does not exist"}), 404
+
+    # A .app bundle is a directory on disk, so it's already handled the same
+    # way as any other folder — FileMiner's WalkDir walks into it naturally.
+    single_file_mode = target.is_file()
+    scan_dir = target.parent if single_file_mode else target
+
+    fm_args = [str(scan_dir), "--no-prompt"]
+    if case_name:
+        fm_args += ["--case", case_name]
+
+    fm_result = run_binary("fileminer", fm_args, timeout=120)
+    if not fm_result.get("success"):
+        return jsonify({"success": False, "error": fm_result.get("error", "fileminer failed to run")})
+
+    try:
+        fm_data = json.loads(fm_result["output"])
+    except (ValueError, KeyError) as e:
+        return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
+
+    scan_results = fm_data.get("results", [])
+
+    if single_file_mode:
+        try:
+            target_resolved = target.resolve()
+        except Exception:
+            target_resolved = target
+        scan_results = [
+            r for r in scan_results
+            if _paths_match(r.get("filepath", ""), target_resolved)
+        ]
+        if not scan_results:
+            return jsonify({
+                "success": False,
+                "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
+            })
+
+    if len(scan_results) > _ANALYZE_MAX_FILES:
+        return jsonify({
+            "success": False,
+            "error": (
+                f"{len(scan_results)} files found — Analyze is meant for a single sample or small bundle "
+                f"(limit {_ANALYZE_MAX_FILES} files). For corpus-scale scans, use MZHash/MZCount/XMZHash instead."
+            ),
+        })
+
+    per_file_results = []
+    for res in scan_results:
+        filepath  = res.get("filepath", "")
+        sha256    = res.get("sha256", "")
+        md5       = res.get("md5", "")
+        suggested = res.get("suggested_tools", [])  # [[label, slug], ...]
+
+        tool_runs = []
+        for pair in suggested:
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                continue
+            label, slug = pair
+
+            if slug == "tiquery":
+                args = [sha256] if sha256 else None
+            elif slug == "nsrlquery":
+                args = [md5] if md5 else None
+            else:
+                args = [filepath]
+
+            if args is None:
+                tool_runs.append({
+                    "label": label, "tool": slug, "success": False,
+                    "output": "", "error": "Missing hash required for this tool.",
+                })
+                continue
+
+            # Always save a markdown report — case or not — so the rollup can
+            # embed each tool's actual formatted output (headers, tables)
+            # instead of raw CLI stdout. Independent of any case's own
+            # save-format preference; -m is genuinely the richer artifact,
+            # and this is Analyze's own internal read-back, not the user's
+            # saved case file (that's still whatever -m/-t/-j produces).
+            args = args + ["-o", "-m"]
+            if case_name:
+                args = args + ["--case", case_name]
+
+            result = run_binary(slug, args, timeout=90)
+            markdown = _read_tool_markdown(slug, case_name) if result.get("success") else ""
+
+            if case_name and result.get("success"):
+                reg_target = sha256 if slug == "tiquery" else (md5 if slug == "nsrlquery" else filepath)
+                _register_cli_case_output(slug, case_name, reg_target, "md")
+
+            tool_runs.append({
+                "label":    label,
+                "tool":     slug,
+                "success":  result.get("success", False),
+                "output":   result.get("output", ""),
+                "error":    result.get("error", ""),
+                "markdown": markdown,
+            })
+
+        per_file_results.append({
+            "filename": res.get("filename", ""),
+            "filepath": filepath,
+            "filetype": res.get("filetype", ""),
+            "sha256":   sha256,
+            "md5":      md5,
+            "tool_runs": tool_runs,
+        })
+
+    rollup_md = _build_analyze_rollup(str(target), per_file_results)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # The "analyze" subfolder matters here, not just cosmetically: it's what
+    # lets _register_cli_case_output("analyze", ...) below find the file it
+    # just find via its case_dir/<tool>/ mtime-window scan. Without it the
+    # rollup saves fine but silently never lands in case.yaml.
+    rollup_dir = (CASES_DIR / case_name / "analyze") if case_name else (OUTPUT_DIR / "analyze")
+    rollup_dir.mkdir(parents=True, exist_ok=True)
+    rollup_path = rollup_dir / f"malchela_summary_{ts}.md"
+    rollup_path.write_text(rollup_md)
+
+    if case_name:
+        _register_cli_case_output("analyze", case_name, str(target), "md")
+
+    return jsonify({
+        "success":        True,
+        "target":         str(target),
+        "file_count":     len(per_file_results),
+        "results":        per_file_results,
+        "rollup_path":    str(rollup_path),
+        "rollup_content": rollup_md,
+    })
+
+
+def _paths_match(candidate: str, resolved_target: Path) -> bool:
+    """Best-effort path equality — fileminer reports paths as given, so
+    compare resolved forms to tolerate trailing slashes / relative prefixes."""
+    if not candidate:
+        return False
+    try:
+        return Path(candidate).resolve() == resolved_target
+    except Exception:
+        return candidate == str(resolved_target)
+
+
+_TIQUERY_VT_ROW = re.compile(r"^\s*VT\s+FOUND\s+.*?(\d+)/(\d+)", re.MULTILINE)
+_MD_HEADING = re.compile(r"^(#{1,6})( .*)$", re.MULTILINE)
+
+
+def _read_tool_markdown(tool: str, case_name: str) -> str:
+    """Read back the .md report a tool just wrote (Analyze always requests
+    -o -m, case or not — see the dispatch loop below) so the rollup can embed
+    genuinely formatted content instead of raw CLI stdout. Picks the
+    most-recently-modified report_*.md in the tool's output dir; safe because
+    dispatch is fully sequential — nothing else writes there between this
+    tool's run and this read."""
+    tool_dir = (CASES_DIR / case_name / tool) if case_name else (OUTPUT_DIR / tool)
+    if not tool_dir.exists():
+        return ""
+    md_files = sorted(tool_dir.glob("report_*.md"), key=lambda p: p.stat().st_mtime)
+    return md_files[-1].read_text() if md_files else ""
+
+
+def _demote_markdown_headings(md: str, shift: int = 2) -> str:
+    """Shift a tool's own ATX headings down by `shift` levels so its '# ...
+    Report' nests under the rollup's '## <filename>' section instead of
+    colliding with it."""
+    return _MD_HEADING.sub(lambda m: "#" * min(len(m.group(1)) + shift, 6) + m.group(2), md)
+
+
+_MD_MITRE_ROW = re.compile(r"^\|\s*(\d+)\s*\|[^|]*\|[^|]*\|\s*([^|]+?)\s*\|[^|]*\|[^|]*\|\s*$", re.MULTILINE)
+
+
+def _extract_mitre_tactics(markdown: str) -> tuple:
+    """Parse mstrings' markdown 'Detections' table (Count | Rule | Matched
+    Strings | Tactic | Technique | ID) into (raw_total, tactic_counts).
+    Scoped to a single mstrings run's markdown, so the digit-first/6-column
+    heuristic isn't at risk of matching some other tool's table. A rule
+    mapped to multiple tactics (comma-separated) credits its count to each
+    tactic — that's how ATT&CK tagging works — so tactic_counts can sum to
+    more than raw_total; raw_total is the true per-file match count."""
+    raw_total = 0
+    tactics: dict = {}
+    for count_str, tactic_field in _MD_MITRE_ROW.findall(markdown):
+        count = int(count_str)
+        raw_total += count
+        for tactic in tactic_field.split(","):
+            tactic = tactic.strip()
+            if tactic:
+                tactics[tactic] = tactics.get(tactic, 0) + count
+    return raw_total, tactics
+
+
+_TIQUERY_TAG_ROW = re.compile(r"^\|\s*[^\s|]+\s*\|\s*FOUND\s*\|\s*([^|]+?)\s*\|[^|]*\|[^|]*\|\s*$", re.MULTILINE)
+
+
+def _extract_tiquery_tags(markdown: str) -> list:
+    """Pull non-empty Family/Tags values from tiquery's markdown Results
+    table (Source | Status | Family / Tags | Detections | Link), for sources
+    that returned a FOUND hit. \\s*FOUND\\s* between pipes only matches a cell
+    that's exactly "FOUND" — "NOT FOUND" has "NOT " in the way, so it's
+    naturally excluded. Order-preserving, exact-text dedup only — sources use
+    their own naming conventions, so no attempt is made to merge near-
+    duplicate family names across sources."""
+    tags = []
+    seen = set()
+    for tag in _TIQUERY_TAG_ROW.findall(markdown):
+        tag = tag.strip()
+        if tag and tag not in seen:
+            seen.add(tag)
+            tags.append(tag)
+    return tags
+
+
+_MD_FLAG_BULLET = re.compile(r"^-\s*\*\*\[!\]\*\*\s*(.+)$", re.MULTILINE)
+_CODESIGN_WARN_LINE = re.compile(r"^\s*⚠\s+(.+)$", re.MULTILINE)
+
+
+def _extract_flags(tool: str, markdown: str) -> list:
+    """Pull '[!]'-style flag/indicator lines from a tool's markdown report.
+    macho_info and plist_analyzer emit an identical '- **[!]** ...' bullet
+    list under their own 'Flags / Indicators' heading; codesign_check's
+    markdown just wraps its raw colorized stdout in a code fence, where the
+    same kind of finding shows up as a '⚠  ...' line instead (its "No
+    suspicious indicators" clean case uses '✓', so it's naturally excluded
+    here) — scoped to codesign_check specifically so this pattern can't
+    match some other tool's content."""
+    if tool == "codesign_check":
+        return [m.strip() for m in _CODESIGN_WARN_LINE.findall(markdown)]
+    return [m.strip() for m in _MD_FLAG_BULLET.findall(markdown)]
+
+
+_MSTRINGS_FS_IOC_BLOCK = re.compile(r"## Potential Filesystem IOCs\n\n((?:- `.+`\n)+)")
+_MSTRINGS_NET_IOC_BLOCK = re.compile(r"## Potential Network IOCs\n\n((?:- `.+`\n)+)")
+_MD_BACKTICK_BULLET = re.compile(r"- `(.+)`")
+
+
+def _extract_mstrings_iocs(markdown: str) -> tuple:
+    """Pull filesystem/network IOC bullets out of mstrings' own markdown
+    sections ('## Potential Filesystem IOCs' / '## Potential Network IOCs',
+    each a plain '- `ioc`' bullet list — the only place mstrings emits that
+    exact bullet pattern, so no cross-section ambiguity)."""
+    def _bullets(block_pattern):
+        m = block_pattern.search(markdown)
+        return _MD_BACKTICK_BULLET.findall(m.group(1)) if m else []
+    return _bullets(_MSTRINGS_FS_IOC_BLOCK), _bullets(_MSTRINGS_NET_IOC_BLOCK)
+
+
+def _flag_verdict(tool_runs: list) -> tuple:
+    """Best-effort malicious flag for the triage banner — not a full
+    multi-source verdict, just enough signal without parsing every tool's
+    ad-hoc text output. Two signals, checked in order:
+      1. FileAnalyzer's own VirusTotal line (PE / generic-unknown files only —
+         FileAnalyzer isn't suggested for Mach-O).
+      2. tiquery's VT row detection ratio (suggested for PE, Mach-O, and
+         generic-unknown — the one source common across file types, so this
+         is what actually catches Mach-O malware)."""
+    for run in tool_runs:
+        if not run.get("success"):
+            continue
+        output = run.get("output") or ""
+        if "VirusTotal: Malicious" in output:
+            return True, "VirusTotal: Malicious"
+        m = _TIQUERY_VT_ROW.search(output)
+        if m and int(m.group(1)) > 0:
+            return True, f"VirusTotal: {m.group(1)}/{m.group(2)} (via tiquery)"
+    return False, ""
+
+
+def _build_analyze_rollup(target: str, per_file_results: list) -> str:
+    """Mechanical rollup only — every tool's captured output concatenated
+    under per-file/per-tool headings. No synthesis, no narrative; that's a
+    separate, human (or LLM-assisted) step on top of this.
+
+    Files are grouped by SHA256 for display: duplicate content saved under
+    different names (common with carved/exported network artifacts) gets one
+    write-up instead of the same tool output repeated verbatim per filename.
+    This only changes what's shown here — every path was still analyzed and
+    still has its own saved report and case.yaml entry."""
+    groups: dict = {}
+    order: list = []
+    for f in per_file_results:
+        key = f["sha256"] or f["filepath"]
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(f)
+
+    flagged = []
+    dup_groups = []
+    mitre_tactics: dict = {}
+    mitre_total = 0
+    malware_tags: list = []
+    malware_tags_seen: set = set()
+    flag_findings: list = []  # (filename, tool, flag_text)
+    fs_iocs: list = []
+    fs_iocs_seen: set = set()
+    net_iocs: list = []
+    net_iocs_seen: set = set()
+    for key in order:
+        members = groups[key]
+        is_flagged, reason = _flag_verdict(members[0]["tool_runs"])
+        if is_flagged:
+            flagged.append(members[0]["filename"])
+        if len(members) > 1:
+            dup_groups.append(members)
+        for run in members[0]["tool_runs"]:
+            if run.get("tool") == "mstrings" and run.get("success") and run.get("markdown"):
+                raw_total, tactics = _extract_mitre_tactics(run["markdown"])
+                mitre_total += raw_total
+                for tactic, count in tactics.items():
+                    mitre_tactics[tactic] = mitre_tactics.get(tactic, 0) + count
+                fs, net = _extract_mstrings_iocs(run["markdown"])
+                for ioc in fs:
+                    if ioc not in fs_iocs_seen:
+                        fs_iocs_seen.add(ioc)
+                        fs_iocs.append(ioc)
+                for ioc in net:
+                    if ioc not in net_iocs_seen:
+                        net_iocs_seen.add(ioc)
+                        net_iocs.append(ioc)
+            if is_flagged and run.get("tool") == "tiquery" and run.get("success") and run.get("markdown"):
+                for tag in _extract_tiquery_tags(run["markdown"]):
+                    if tag not in malware_tags_seen:
+                        malware_tags_seen.add(tag)
+                        malware_tags.append(tag)
+            if run.get("success") and run.get("markdown") and run.get("tool") in ("macho_info", "plist_analyzer", "codesign_check"):
+                for flag_text in _extract_flags(run["tool"], run["markdown"]):
+                    flag_findings.append((members[0]["filename"], run["tool"], flag_text))
+
+    lines = [
+        f"# MalChela Summary — {target}",
+        "",
+        f"Generated: {datetime.now().isoformat()}",
+        f"Files analyzed: {len(per_file_results)}",
+        "",
+        "## Triage Summary",
+        "",
+    ]
+    if len(order) != len(per_file_results):
+        lines.append(
+            f"- **{len(order)} unique file(s)** across {len(per_file_results)} path(s) "
+            f"({len(per_file_results) - len(order)} duplicate instance(s) collapsed below)"
+        )
+    else:
+        lines.append(f"- **{len(order)} file(s)** analyzed")
+    if flagged:
+        lines.append(f"- **⚠ {len(flagged)} flagged malicious** (VirusTotal): " + ", ".join(f"`{n}`" for n in flagged))
+    else:
+        lines.append("- No files flagged malicious by VirusTotal")
+    if malware_tags:
+        lines.append("- **Malware tags** (tiquery): " + ", ".join(f"`{t}`" for t in malware_tags))
+    if mitre_total:
+        by_tactic = sorted(mitre_tactics.items(), key=lambda kv: kv[1], reverse=True)
+        breakdown = ", ".join(f"{t} ({c})" for t, c in by_tactic)
+        lines.append(f"- **{mitre_total} MITRE ATT&CK finding(s)** (mstrings), by tactic: {breakdown}")
+    if fs_iocs:
+        lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in fs_iocs))
+    if net_iocs:
+        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in net_iocs))
+    if flag_findings:
+        flagged_files = len({f[0] for f in flag_findings})
+        lines.append(f"- **{len(flag_findings)} flag(s)/indicator(s)** across {flagged_files} file(s):")
+        for filename, tool, text in flag_findings:
+            lines.append(f"  - `{filename}` ({tool}): {text}")
+    for members in dup_groups:
+        names = ", ".join(f"`{m['filename']}`" for m in members)
+        lines.append(f"- **Duplicate content:** {names} share SHA256 `{members[0]['sha256']}`")
+    lines.append("")
+
+    for key in order:
+        members = groups[key]
+        primary = members[0]
+        lines.append(f"## {primary['filename']}")
+        lines.append("")
+        if len(members) > 1:
+            other_names = ", ".join(f"`{m['filename']}`" for m in members[1:])
+            lines.append(f"- **Also found as:** {other_names} — identical content, tool output shown once")
+        lines.append(f"- **Path:** `{primary['filepath']}`")
+        lines.append(f"- **Type:** {primary['filetype']}")
+        if primary["sha256"]:
+            lines.append(f"- **SHA256:** `{primary['sha256']}`")
+        if primary["md5"]:
+            lines.append(f"- **MD5:** `{primary['md5']}`")
+        lines.append("")
+
+        if not primary["tool_runs"]:
+            lines.append("_No suggested tools for this file type._")
+            lines.append("")
+            continue
+
+        for run in primary["tool_runs"]:
+            status = "✓" if run["success"] else "✕"
+            lines.append(f"### {status} {run['label']} (`{run['tool']}`)")
+            lines.append("")
+            if run["success"]:
+                if run.get("markdown"):
+                    lines.append(_demote_markdown_headings(run["markdown"]))
+                else:
+                    # Fallback for the rare case the .md read-back came up empty
+                    # (tool didn't actually write one) — raw stdout, code-fenced.
+                    lines.append("```")
+                    lines.append(run["output"] or "(no output)")
+                    lines.append("```")
+            else:
+                lines.append(f"**Error:** {run['error'] or 'Tool run failed.'}")
+            lines.append("")
+
+    return "\n".join(lines)
 
 
 @app.route("/tools/hashit", methods=["POST"])

@@ -81,6 +81,21 @@ struct MachoReport {
     flags: Vec<String>,
 }
 
+#[derive(Serialize)]
+struct BundleBinaryReport {
+    path: String,
+    report: MachoReport,
+}
+
+#[derive(Serialize)]
+struct BundleMachoReport {
+    bundle_path: String,
+    bundle_identifier: Option<String>,
+    bundle_executable: Option<String>,
+    bundle_version: Option<String>,
+    binaries: Vec<BundleBinaryReport>,
+}
+
 fn calculate_entropy(data: &[u8]) -> f64 {
     if data.is_empty() {
         return 0.0;
@@ -360,11 +375,330 @@ fn build_flags(arch: &ArchInfo) -> Vec<String> {
     flags
 }
 
+// Parse and print one Mach-O/fat binary's architecture info.
+// Returns None for non-Mach-O input (after printing the message), matching the
+// original early-return behavior.
+fn analyze_and_print(bytes: &[u8], temp_file: &mut File) -> Option<(bool, Vec<ArchInfo>, Vec<String>)> {
+    let mut all_arch_info: Vec<ArchInfo> = Vec::new();
+    let mut all_flags: Vec<String> = Vec::new();
+    let mut is_fat = false;
+
+    match Object::parse(bytes) {
+        Ok(Object::Mach(Mach::Binary(ref macho))) => {
+            println!();
+            writeln!(temp_file).ok();
+            let heading = styled_line("NOTE", "--- Architecture ---");
+            println!("{}", heading);
+            writeln!(temp_file, "{}", plain_text(&heading)).ok();
+
+            let arch = analyze_macho_single(bytes, macho);
+            print_arch_info(&arch, temp_file);
+            let flags = build_flags(&arch);
+            all_flags.extend(flags);
+            all_arch_info.push(arch);
+        }
+        Ok(Object::Mach(Mach::Fat(ref fat))) => {
+            is_fat = true;
+            let line = styled_line("stone", &format!("Fat/Universal binary ({} architectures)", fat.narches));
+            println!("{}", line);
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
+
+            for i in 0..fat.narches {
+                match fat.get(i) {
+                    Ok(SingleArch::MachO(ref macho)) => {
+                        println!();
+                        writeln!(temp_file).ok();
+                        let heading = styled_line("NOTE", &format!("--- Architecture {} ---", i + 1));
+                        println!("{}", heading);
+                        writeln!(temp_file, "{}", plain_text(&heading)).ok();
+
+                        let arch = analyze_macho_single(bytes, macho);
+                        print_arch_info(&arch, temp_file);
+                        let flags = build_flags(&arch);
+                        all_flags.extend(flags);
+                        all_arch_info.push(arch);
+                    }
+                    Ok(SingleArch::Archive(_)) => {
+                        let line = styled_line("stone", &format!("  Arch {}: Archive (skipped)", i + 1));
+                        println!("{}", line);
+                        writeln!(temp_file, "{}", plain_text(&line)).ok();
+                    }
+                    Err(e) => {
+                        let line = styled_line("yellow", &format!("  Failed to parse arch {}: {}", i + 1, e));
+                        println!("{}", line);
+                        writeln!(temp_file, "{}", plain_text(&line)).ok();
+                    }
+                }
+            }
+        }
+        Ok(_) => {
+            let line = styled_line("yellow", "File is not a Mach-O binary.");
+            println!("{}", line);
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
+            return None;
+        }
+        Err(e) => {
+            let line = styled_line("yellow", &format!("Failed to parse binary: {}", e));
+            println!("{}", line);
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
+            return None;
+        }
+    }
+
+    Some((is_fat, all_arch_info, all_flags))
+}
+
+// Print the "--- Flags / Indicators ---" section for a set of flags.
+fn print_flags_section(all_flags: &[String], temp_file: &mut File) {
+    if !all_flags.is_empty() {
+        println!();
+        writeln!(temp_file).ok();
+        let heading = styled_line("NOTE", "--- Flags / Indicators ---");
+        println!("{}", heading);
+        writeln!(temp_file, "{}", plain_text(&heading)).ok();
+        for flag in all_flags {
+            let line = styled_line("yellow", &format!("  [!] {}", flag));
+            println!("{}", line);
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
+        }
+    } else {
+        println!();
+        writeln!(temp_file).ok();
+        let line = styled_line("stone", "No suspicious Mach-O indicators found.");
+        println!("{}", line);
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
+    }
+}
+
+// Markdown body (architectures + flags) for one binary's report, with a
+// configurable heading level so single-file and bundle reports nest correctly.
+fn append_report_md(md: &mut String, report: &MachoReport, heading: &str) {
+    for (i, arch) in report.architectures.iter().enumerate() {
+        md.push_str(&format!("{} Architecture {}\n\n", heading, i + 1));
+        md.push_str("| Property | Value |\n|----------|-------|\n");
+        md.push_str(&format!("| CPU | {} |\n", arch.cpu_type));
+        md.push_str(&format!("| File Type | {} |\n", arch.file_type));
+        md.push_str(&format!("| PIE/ASLR | {} |\n", arch.has_pie));
+        md.push_str(&format!("| Symbols Stripped | {} |\n", arch.symbols_stripped));
+        md.push_str(&format!("| Symbol Count | {} |\n", arch.symbol_count));
+
+        if !arch.dylibs.is_empty() {
+            md.push_str(&format!("\n{}# Linked Libraries\n\n", heading));
+            for lib in &arch.dylibs {
+                md.push_str(&format!("- `{}`\n", lib));
+            }
+        }
+        if !arch.rpath_entries.is_empty() {
+            md.push_str(&format!("\n{}# RPATH Entries\n\n", heading));
+            for rp in &arch.rpath_entries {
+                md.push_str(&format!("- `{}`\n", rp));
+            }
+        }
+        if !arch.sections.is_empty() {
+            md.push_str(&format!("\n{}# Sections\n\n", heading));
+            md.push_str("| Segment | Section | Size | Entropy | High Entropy |\n");
+            md.push_str("|---------|---------|------|---------|:------------:|\n");
+            for s in &arch.sections {
+                md.push_str(&format!(
+                    "| {} | {} | {} | {:.4} | {} |\n",
+                    s.segment, s.name, s.size, s.entropy,
+                    if s.high_entropy { "**YES**" } else { "No" }
+                ));
+            }
+        }
+    }
+
+    if !report.flags.is_empty() {
+        md.push_str(&format!("\n{} Flags / Indicators\n\n", heading));
+        for f in &report.flags {
+            md.push_str(&format!("- **[!]** {}\n", f));
+        }
+    }
+}
+
+fn resolve_output_dir(args: &Args) -> std::path::PathBuf {
+    if let Some(ref case) = args.case {
+        common_config::ensure_case_json(case);
+        let path = format!("saved_output/cases/{}/macho_info", case);
+        std::fs::create_dir_all(&path).expect("Failed to create case output directory");
+        std::path::PathBuf::from(path)
+    } else {
+        let path = get_output_dir("macho_info");
+        std::fs::create_dir_all(&path).expect("Failed to create default output directory");
+        path
+    }
+}
+
+// ── Bundle mode: analyze every embedded Mach-O binary in a .app bundle ────────
+fn run_bundle(bundle_path: &Path, file_path: &str, args: &Args) {
+    let meta = common_macho::bundle_metadata(bundle_path);
+    let targets = common_macho::resolve_scan_targets(bundle_path);
+
+    println!();
+    let temp_path = std::env::temp_dir().join("malchela_temp_output.txt");
+    let mut temp_file = File::create(&temp_path).expect("Failed to create temp output file");
+
+    let heading = styled_line("NOTE", "--- Mach-O Info ---");
+    println!("{}", heading);
+    writeln!(temp_file, "{}", plain_text(&heading)).ok();
+
+    let line = styled_line("stone", &format!("Bundle: {}", file_path));
+    println!("{}", line);
+    writeln!(temp_file, "{}", plain_text(&line)).ok();
+
+    if let Some(ref m) = meta {
+        if let Some(ref id) = m.bundle_identifier {
+            let line = styled_line("stone", &format!("Bundle ID: {}", id));
+            println!("{}", line);
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
+        }
+        if let Some(ref exe) = m.bundle_executable {
+            let line = styled_line("stone", &format!("Executable: {}", exe));
+            println!("{}", line);
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
+        }
+        if let Some(ref ver) = m.bundle_version {
+            let line = styled_line("stone", &format!("Version: {}", ver));
+            println!("{}", line);
+            writeln!(temp_file, "{}", plain_text(&line)).ok();
+        }
+    }
+    {
+        let line = styled_line("stone", &format!("Embedded Mach-O binaries: {}", targets.len()));
+        println!("{}", line);
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
+    }
+
+    if targets.is_empty() {
+        let line = styled_line("yellow", "No Mach-O binaries found in bundle.");
+        println!("{}", line);
+        writeln!(temp_file, "{}", plain_text(&line)).ok();
+        return;
+    }
+
+    let mut binaries: Vec<BundleBinaryReport> = Vec::new();
+
+    for target in &targets {
+        let rel_path = target
+            .strip_prefix(bundle_path)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| target.display().to_string());
+
+        println!();
+        writeln!(temp_file).ok();
+        let heading = styled_line("NOTE", &format!("--- Binary: {} ---", rel_path));
+        println!("{}", heading);
+        writeln!(temp_file, "{}", plain_text(&heading)).ok();
+
+        let bytes = match fs::read(target) {
+            Ok(b) => b,
+            Err(e) => {
+                let line = styled_line("yellow", &format!("Failed to read file: {}", e));
+                println!("{}", line);
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
+                continue;
+            }
+        };
+
+        if let Some((is_fat, arch_info, flags)) = analyze_and_print(&bytes, &mut temp_file) {
+            print_flags_section(&flags, &mut temp_file);
+            binaries.push(BundleBinaryReport {
+                path: rel_path,
+                report: MachoReport {
+                    file_path: target.display().to_string(),
+                    is_fat,
+                    architectures: arch_info,
+                    flags,
+                },
+            });
+        }
+    }
+
+    temp_file.flush().expect("Failed to flush temp file");
+
+    if args.output {
+        let output_dir = resolve_output_dir(args);
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let format = if args.text { "txt" } else if args.json { "json" } else { "md" };
+
+        let report = BundleMachoReport {
+            bundle_path: file_path.to_string(),
+            bundle_identifier: meta.as_ref().and_then(|m| m.bundle_identifier.clone()),
+            bundle_executable: meta.as_ref().and_then(|m| m.bundle_executable.clone()),
+            bundle_version: meta.as_ref().and_then(|m| m.bundle_version.clone()),
+            binaries,
+        };
+
+        let out_path = match format {
+            "txt" => output_dir.join(format!("report_{}.txt", timestamp)),
+            "json" => output_dir.join(format!("report_{}.json", timestamp)),
+            _ => output_dir.join(format!("report_{}.md", timestamp)),
+        };
+
+        if let Some(parent) = out_path.parent() {
+            std::fs::create_dir_all(parent).expect("Failed to create output directories");
+        }
+
+        match format {
+            "txt" => {
+                fs::copy(&temp_path, &out_path).expect("Failed to save text report");
+                println!("\n{}\n", styled_line("green", &format!("Text report saved to: {}", out_path.display())));
+            }
+            "json" => {
+                let json = serde_json::to_string_pretty(&report).expect("Failed to serialize");
+                let mut f = File::create(&out_path).expect("Failed to create JSON report");
+                f.write_all(json.as_bytes()).expect("Failed to write JSON report");
+                println!("\n{}\n", styled_line("green", &format!("JSON report saved to: {}", out_path.display())));
+            }
+            _ => {
+                let mut md = String::new();
+                md.push_str("# Mach-O Info Report\n\n");
+                md.push_str(&format!("**Bundle:** `{}`  \n", report.bundle_path));
+                if let Some(ref id) = report.bundle_identifier {
+                    md.push_str(&format!("**Bundle ID:** `{}`  \n", id));
+                }
+                if let Some(ref exe) = report.bundle_executable {
+                    md.push_str(&format!("**Executable:** `{}`  \n", exe));
+                }
+                if let Some(ref ver) = report.bundle_version {
+                    md.push_str(&format!("**Version:** `{}`  \n", ver));
+                }
+                md.push_str(&format!("**Embedded Mach-O binaries:** {}  \n\n", report.binaries.len()));
+
+                for b in &report.binaries {
+                    md.push_str(&format!("## Binary: {}\n\n", b.path));
+                    md.push_str(&format!("**Fat/Universal:** {}  \n\n", b.report.is_fat));
+                    append_report_md(&mut md, &b.report, "###");
+                    md.push('\n');
+                }
+
+                let mut f = File::create(&out_path).expect("Failed to create markdown report");
+                f.write_all(md.as_bytes()).expect("Failed to write markdown report");
+                println!("\n{}\n", styled_line("green", &format!("Markdown report saved to: {}", out_path.display())));
+            }
+        }
+
+        if let Some(ref case) = args.case {
+            common_config::register_case_output("macho_info", case, file_path, &out_path);
+        }
+    } else if !is_gui_mode() {
+        println!();
+        let line = styled_line("stone", "Output was not saved. Use -o with -t, -j, or -m to export results.");
+        println!("{}", line);
+        println!();
+        let _ = std::io::stdout().flush();
+    }
+
+    if std::env::var("MALCHELA_GUI_MODE").is_ok() {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
     let file_path = match args.input {
-        Some(p) => p,
+        Some(ref p) => p.clone(),
         None => {
             let line = styled_line("yellow", "\nEnter the path to the Mach-O binary:");
             println!("{}", line);
@@ -376,6 +710,16 @@ fn main() {
 
     if !Path::new(&file_path).exists() {
         println!("{}", styled_line("yellow", "File not found!"));
+        return;
+    }
+
+    let input_path = Path::new(&file_path);
+    if common_macho::is_app_bundle(input_path) {
+        run_bundle(input_path, &file_path, &args);
+        return;
+    }
+    if input_path.is_dir() {
+        println!("{}", styled_line("yellow", "Not a file or a recognized .app bundle (no Contents/Info.plist found)."));
         return;
     }
 
@@ -399,90 +743,12 @@ fn main() {
     println!("{}", line);
     writeln!(temp_file, "{}", plain_text(&line)).ok();
 
-    let mut all_arch_info: Vec<ArchInfo> = Vec::new();
-    let mut all_flags: Vec<String> = Vec::new();
-    let mut is_fat = false;
+    let (is_fat, all_arch_info, all_flags) = match analyze_and_print(&bytes, &mut temp_file) {
+        Some(result) => result,
+        None => return,
+    };
 
-    match Object::parse(&bytes) {
-        Ok(Object::Mach(Mach::Binary(ref macho))) => {
-            println!();
-            writeln!(temp_file).ok();
-            let heading = styled_line("NOTE", "--- Architecture ---");
-            println!("{}", heading);
-            writeln!(temp_file, "{}", plain_text(&heading)).ok();
-
-            let arch = analyze_macho_single(&bytes, macho);
-            print_arch_info(&arch, &mut temp_file);
-            let flags = build_flags(&arch);
-            all_flags.extend(flags);
-            all_arch_info.push(arch);
-        }
-        Ok(Object::Mach(Mach::Fat(ref fat))) => {
-            is_fat = true;
-            let line = styled_line("stone", &format!("Fat/Universal binary ({} architectures)", fat.narches));
-            println!("{}", line);
-            writeln!(temp_file, "{}", plain_text(&line)).ok();
-
-            for i in 0..fat.narches {
-                match fat.get(i) {
-                    Ok(SingleArch::MachO(ref macho)) => {
-                        println!();
-                        writeln!(temp_file).ok();
-                        let heading = styled_line("NOTE", &format!("--- Architecture {} ---", i + 1));
-                        println!("{}", heading);
-                        writeln!(temp_file, "{}", plain_text(&heading)).ok();
-
-                        let arch = analyze_macho_single(&bytes, macho);
-                        print_arch_info(&arch, &mut temp_file);
-                        let flags = build_flags(&arch);
-                        all_flags.extend(flags);
-                        all_arch_info.push(arch);
-                    }
-                    Ok(SingleArch::Archive(_)) => {
-                        let line = styled_line("stone", &format!("  Arch {}: Archive (skipped)", i + 1));
-                        println!("{}", line);
-                        writeln!(temp_file, "{}", plain_text(&line)).ok();
-                    }
-                    Err(e) => {
-                        let line = styled_line("yellow", &format!("  Failed to parse arch {}: {}", i + 1, e));
-                        println!("{}", line);
-                        writeln!(temp_file, "{}", plain_text(&line)).ok();
-                    }
-                }
-            }
-        }
-        Ok(_) => {
-            let line = styled_line("yellow", "File is not a Mach-O binary.");
-            println!("{}", line);
-            writeln!(temp_file, "{}", plain_text(&line)).ok();
-            return;
-        }
-        Err(e) => {
-            let line = styled_line("yellow", &format!("Failed to parse binary: {}", e));
-            println!("{}", line);
-            writeln!(temp_file, "{}", plain_text(&line)).ok();
-            return;
-        }
-    }
-
-    if !all_flags.is_empty() {
-        println!();
-        writeln!(temp_file).ok();
-        let heading = styled_line("NOTE", "--- Flags / Indicators ---");
-        println!("{}", heading);
-        writeln!(temp_file, "{}", plain_text(&heading)).ok();
-        for flag in &all_flags {
-            let line = styled_line("yellow", &format!("  [!] {}", flag));
-            println!("{}", line);
-            writeln!(temp_file, "{}", plain_text(&line)).ok();
-        }
-    } else {
-        println!();
-        writeln!(temp_file).ok();
-        let line = styled_line("stone", "No suspicious Mach-O indicators found.");
-        println!("{}", line);
-        writeln!(temp_file, "{}", plain_text(&line)).ok();
-    }
+    print_flags_section(&all_flags, &mut temp_file);
 
     temp_file.flush().expect("Failed to flush temp file");
 
@@ -581,6 +847,10 @@ fn main() {
                 f.write_all(md.as_bytes()).expect("Failed to write markdown report");
                 println!("\n{}\n", styled_line("green", &format!("Markdown report saved to: {}", out_path.display())));
             }
+        }
+
+        if let Some(ref case) = args.case {
+            common_config::register_case_output("macho_info", case, &file_path, &out_path);
         }
     } else if !is_gui_mode() {
         println!();

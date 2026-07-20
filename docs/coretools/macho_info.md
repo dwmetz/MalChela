@@ -1,5 +1,7 @@
 Mach-O Info performs static analysis on macOS Mach-O binaries, including both thin (single-architecture) and fat/universal binaries. It reports architecture details, linked libraries, RPATH entries, per-section entropy, and symbol table status. Suspicious indicators are flagged automatically in the Indicators section.
 
+Accepts either a `.app` bundle path or a direct path to a Mach-O binary. When given a bundle, the main executable is auto-resolved via `Info.plist`'s `CFBundleExecutable`, falling back to the sole binary in `Contents/MacOS/` if that lookup fails.
+
 ![Mach-O Info](../images/macho.png)
 
 <p align="center"><strong>Mach-O Info</p>
@@ -41,7 +43,7 @@ Per-section entropy table. Sections above 7.0 are flagged as potentially packed 
 
 ### PWA Usage
 
-Select **Mach-O Info** from the Mac Analysis category and provide the path to a Mach-O binary. File Miner will suggest Mach-O Info for any file it identifies as `x-mach-binary`.
+Select **Mach-O Info** from the Mac Analysis category and provide the path to a `.app` bundle or a Mach-O binary. File Miner will suggest Mach-O Info for any file it identifies as `x-mach-binary`.
 
 ---
 
@@ -50,6 +52,9 @@ Select **Mach-O Info** from the Mac Analysis category and provide the path to a 
 ```bash
 # Analyze a Mach-O binary
 cargo run -p macho_info -- /path/to/binary
+
+# Analyze a .app bundle (main executable resolved automatically)
+cargo run -p macho_info -- /path/to/Sample.app
 
 # Save output as Markdown to a case folder
 cargo run -p macho_info -- /path/to/binary -o -m --case CaseXYZ

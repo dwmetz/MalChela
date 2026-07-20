@@ -496,6 +496,10 @@ fn main() {
                 println!("\n{}\n", styled_line("green", &format!("Markdown report saved to: {}", out_path.display())));
             }
         }
+
+        if let Some(ref case) = args.case {
+            common_config::register_case_output("plist_analyzer", case, &report.plist_path, &out_path);
+        }
     } else if !is_gui_mode() {
         println!();
         let line = styled_line("stone", "Output was not saved. Use -o with -t, -j, or -m to export results.");

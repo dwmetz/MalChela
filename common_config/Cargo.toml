@@ -1,8 +1,9 @@
 [package]
 name = "common_config"
-version = "4.1.0"
+version = "4.2.0"
 edition = "2021"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
+chrono = "0.4"

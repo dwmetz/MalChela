@@ -664,6 +664,10 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
                 println!("\n{}\n", styled_line("green", &format!("JSON report saved to: {}", output_file_path.display())));
             }
         }
+
+        if let Some(ref case) = args.case {
+            common_config::register_case_output("fileanalyzer", case, &file_path, &output_file_path);
+        }
     } else {
         if !is_gui_mode() {
             println!();

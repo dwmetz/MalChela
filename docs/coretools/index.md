@@ -7,6 +7,11 @@
 
 <p align="center"><strong> MalChela CLI</p>
 
+<h2 style="text-align: center;">Analyze</h2>
+<p style="text-align: center;">
+  One-click auto-triage: point Analyze at a file, folder, or .app bundle and it classifies everything with File Miner, dispatches every tool it suggests, and produces a combined <strong>MalChela Summary</strong> rollup report. See the <a href="analyze.md">Analyze</a> page for details.
+</p>
+
 <h2 style="text-align: center;">MalChela Core Tools</h2>
 <p style="text-align: center;">
   These built-in programs provide fast, flexible functionality for forensics and malware triage.
@@ -26,7 +31,7 @@
     <tr><td>File Miner</td><td>Scans a folder for file type mismatches and metadata, and provides suggested tools</td></tr>
     <tr><td>Hash Check</td><td>Check a hash against a .txt or .tsv lookup table</td></tr>
     <tr><td>Hash It</td><td>Point it to a file and get the MD5, SHA1 and SHA256 hash</td></tr>
-    <tr><td>mStrings</td><td>Analyzes files with Sigma rules (YAML), extracts strings, matches ReGex</td></tr>
+    <tr><td>mStrings</td><td>Analyzes files — including Mach-O binaries and .app bundles — with Sigma rules (YAML), extracts strings, matches ReGex</td></tr>
     <tr><td>MZHash</td><td>Recurse a directory, for files with MZ header, create hash list and lookup table</td></tr>
     <tr><td>MZcount</td><td>Recurse a directory, uses YARA to count MZ, Zip, PDF, other</td></tr>
     <tr><td>NSRL Query</td><td>Query a MD5 or SHA1 hash against NSRL</td></tr>
@@ -51,9 +56,14 @@
   <tbody>
     <tr><td>Code Sign Check</td><td>Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and get-task-allow flag</td></tr>
     <tr><td>Mach-O Info</td><td>Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection</td></tr>
+    <tr><td>mStrings</td><td>Extracts strings, IOCs, and MITRE ATT&CK matches from Mach-O binaries and .app bundles</td></tr>
     <tr><td>Plist Analyzer</td><td>Parses .plist files and .app bundle Info.plist for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection</td></tr>
   </tbody>
 </table>
+
+<p style="text-align: center;">
+  All four tools auto-resolve a .app bundle's main executable — point them at the bundle directly. Run all four together against a bundle or binary with <code>./mac_stack.sh</code>.
+</p>
 
 <p style="text-align: center;">
   <strong>*Threat Intel Query supports optional API keys for its sources.</strong> Keys can be managed via the API Keys panel in the MalChela web interface or by placing them in the <code>api/</code> directory. Sources without configured keys are skipped automatically.

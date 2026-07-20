@@ -1,0 +1,11 @@
+[package]
+name = "common_macho"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+goblin = "0.9.3"
+plist = "1.7"
+
+[dev-dependencies]
+tempfile = "3"

@@ -11,10 +11,11 @@ use common_ui::styled_line;
 
 use common_config::get_output_dir;
 
-use clap::{Arg, Command};
+use clap::{Arg, ArgMatches, Command};
 use regex::Regex;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+use std::path::Path;
 use colored::*;
 use tabled::{Table as TabledTable, Tabled};
 use tabled::settings::{Style, Modify, Alignment, Width};
@@ -246,88 +247,24 @@ fn tactic_priority(tactic: &str) -> u8 {
     else { 12 }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use std::collections::BTreeSet;
+// ── Per-file scan result ──────────────────────────────────────────────────────
+struct FileScanResult {
+    file_path: String,
+    sha256: String,
+    raw_match_count: usize,
+    display_matches: Vec<DisplayMatch>,
+    flat_matches: Vec<FlatMatch>,
+    fs_iocs: BTreeSet<String>,
+    net_iocs: BTreeSet<String>,
+    matches: Vec<Match>,
+}
 
+// Scan a single file: read bytes, hash, extract strings, apply detections,
+// build the grouped/flat match views and extract filesystem/network IOCs.
+fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> {
     let mut fs_iocs = BTreeSet::new();
     let mut net_iocs = BTreeSet::new();
 
-    let matches = Command::new("mstrings")
-        .version("0.1")
-        .author("Author Name <dwmetz@gmail.com>")
-        .about("Searches for strings in files with YARA-style detections")
-        .allow_hyphen_values(true)
-        .dont_collapse_args_in_usage(true)
-        .args_conflicts_with_subcommands(true)
-        .disable_help_subcommand(true)
-        .arg(
-            Arg::new("file")
-                .help("File to scan")
-                .required(false)
-                .index(1)
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("output")
-                .short('o')
-                .long("output")
-                .num_args(0)
-                .help("Save output (must be paired with -t, -j, or -m)"),
-        )
-        .arg(
-            Arg::new("text")
-                .short('t')
-                .long("text")
-                .help("Save report as text")
-                .action(clap::ArgAction::SetTrue)
-                .conflicts_with_all(&["json", "markdown"]),
-        )
-        .arg(
-            Arg::new("json")
-                .short('j')
-                .long("json")
-                .help("Save report as JSON")
-                .action(clap::ArgAction::SetTrue)
-                .conflicts_with_all(&["text", "markdown"]),
-        )
-        .arg(
-            Arg::new("markdown")
-                .short('m')
-                .long("markdown")
-                .help("Save report as Markdown")
-                .action(clap::ArgAction::SetTrue)
-                .conflicts_with_all(&["text", "json"]),
-        )
-        .arg(
-            Arg::new("case")
-                .long("case")
-                .num_args(1)
-                .help("Optional case name to group output"),
-        )
-        .arg(
-            Arg::new("output-file")
-                .long("output-file")
-                .num_args(1)
-                .help("Custom output file name (used with --output)"),
-        )
-        .get_matches();
-
-    let file_path = match matches.get_one::<String>("file").map(String::as_str) {
-        Some(path) => path.to_string(),
-        None => {
-            println!("Enter the file path:");
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            let input = input.trim();  // Remove trailing newline and whitespace
-
-
-            input.to_string()
-        }
-    };
-    let file_path_copy = file_path.clone(); // clone once for later reuse
-
-    // Ensure Path::new uses trimmed input (file_path is already trimmed at this point)
-    let path = std::path::Path::new(&file_path);
     let file = File::open(path)?;
     let mut mstrings = Mstrings::new();
     let mut buffer = Vec::new();
@@ -422,70 +359,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .collect();
-
-    if !is_gui_mode() {
-        println!("{}", styled_line("stone", &format!("File: {}", file_path_copy)));
-        println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
-        println!("\n{}\n", format!("{} matches across {} rules.", raw_match_count, display_matches.len()).truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
-    } else {
-        println!("{}", styled_line("stone", &format!("File: {}", file_path_copy)));
-        println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
-        println!("\n{} matches across {} rules.\n", raw_match_count, display_matches.len());
-    }
-
-    // Create the table using the `display_matches`
-    use tabled::settings::object::Columns;
-    let mut table = TabledTable::new(&display_matches);
-    table
-        .with(Style::modern())
-        .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
-        .with(Modify::new(Columns::single(0)).with(Width::wrap(5).keep_words(true)))   // Count
-        .with(Modify::new(Columns::single(1)).with(Width::wrap(30).keep_words(true)))  // Rule
-        .with(Modify::new(Columns::single(2)).with(Width::wrap(45).keep_words(true)))  // Matched Strings
-        .with(Modify::new(Columns::single(3)).with(Width::wrap(18).keep_words(true)))  // Tactic
-        .with(Modify::new(Columns::single(4)).with(Width::wrap(25).keep_words(true)))  // Technique
-        .with(Modify::new(Columns::single(5)).with(Width::wrap(10).keep_words(true))); // ID
-
-    // Stringify the table after applying formatting, for both display and output file
-    let table_str = table.to_string();
-
-    // Ensure the table is printed
-    if !is_gui_mode() {
-        let mut lines = table_str.lines();
-        if let Some(top_border) = lines.next() {
-            println!("{}", top_border);
-            if let Some(header_row) = lines.next() {
-                println!("{}", header_row);
-            }
-            if let Some(header_border) = lines.next() {
-                println!("{}", header_border);
-            }
-            for line in lines {
-                println!("{}", line);
-            }
-        } else {
-            println!("{table_str}");
-        }
-    } else {
-        // For GUI mode, print the table directly
-        println!("{table_str}");
-        // Handle clicking on "Open TXXXX" buttons (pseudo-code for illustration)
-        // In actual GUI, you would have event/callback handling here.
-        // For demonstration, if this were a GUI event loop, you might do:
-        /*
-        use open;
-        // Suppose 'row_clicked' is the index of the clicked row
-        if let Some(row_clicked) = get_clicked_row_index() {
-            if let Some(dm) = display_matches.get(row_clicked) {
-                if dm.mitre_button.starts_with("Open ") {
-                    if let Some(url) = dm.mitre_url() {
-                        let _ = open::that(url);
-                    }
-                }
-            }
-        }
-        */
-    }
 
     // Pre-compile IOC extraction regexes once, outside the loop.
     //
@@ -592,15 +465,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Use the print_iocs function for both headers, with color and proper handling for CLI/GUI
-    println!("\n");
-    print_iocs("POTENTIAL FILESYSTEM IOCs:", &fs_iocs);
-
-    if !net_iocs.is_empty() {
-        println!("\n");
-        print_iocs("POTENTIAL NETWORK IOCs:", &net_iocs);
-    }
-
     // Detail section: flat per-string table for drill-down (parsed by PWA toggle)
     let flat_matches: Vec<FlatMatch> = mstrings.matches.iter()
         .filter(|m| m.rule_name.is_some())
@@ -615,9 +479,91 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
+    Ok(FileScanResult {
+        file_path: path.display().to_string(),
+        sha256,
+        raw_match_count,
+        display_matches,
+        flat_matches,
+        fs_iocs,
+        net_iocs,
+        matches: mstrings.matches,
+    })
+}
+
+// ── Console printing helpers ──────────────────────────────────────────────────
+fn print_summary(file_path: &str, sha256: &str, raw_match_count: usize, rule_count: usize) {
+    if !is_gui_mode() {
+        println!("{}", styled_line("stone", &format!("File: {}", file_path)));
+        println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
+        println!("\n{}\n", format!("{} matches across {} rules.", raw_match_count, rule_count).truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
+    } else {
+        println!("{}", styled_line("stone", &format!("File: {}", file_path)));
+        println!("{}", styled_line("stone", &format!("SHA256: {}", sha256)));
+        println!("\n{} matches across {} rules.\n", raw_match_count, rule_count);
+    }
+}
+
+fn render_display_table(display_matches: &[DisplayMatch]) -> String {
+    use tabled::settings::object::Columns;
+    let mut table = TabledTable::new(display_matches);
+    table
+        .with(Style::modern())
+        .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
+        .with(Modify::new(Columns::single(0)).with(Width::wrap(5).keep_words(true)))   // Count
+        .with(Modify::new(Columns::single(1)).with(Width::wrap(30).keep_words(true)))  // Rule
+        .with(Modify::new(Columns::single(2)).with(Width::wrap(45).keep_words(true)))  // Matched Strings
+        .with(Modify::new(Columns::single(3)).with(Width::wrap(18).keep_words(true)))  // Tactic
+        .with(Modify::new(Columns::single(4)).with(Width::wrap(25).keep_words(true)))  // Technique
+        .with(Modify::new(Columns::single(5)).with(Width::wrap(10).keep_words(true))); // ID
+    table.to_string()
+}
+
+fn print_display_table(table_str: &str) {
+    // Ensure the table is printed
+    if !is_gui_mode() {
+        let mut lines = table_str.lines();
+        if let Some(top_border) = lines.next() {
+            println!("{}", top_border);
+            if let Some(header_row) = lines.next() {
+                println!("{}", header_row);
+            }
+            if let Some(header_border) = lines.next() {
+                println!("{}", header_border);
+            }
+            for line in lines {
+                println!("{}", line);
+            }
+        } else {
+            println!("{table_str}");
+        }
+    } else {
+        // For GUI mode, print the table directly
+        println!("{table_str}");
+        // Handle clicking on "Open TXXXX" buttons (pseudo-code for illustration)
+        // In actual GUI, you would have event/callback handling here.
+        // For demonstration, if this were a GUI event loop, you might do:
+        /*
+        use open;
+        // Suppose 'row_clicked' is the index of the clicked row
+        if let Some(row_clicked) = get_clicked_row_index() {
+            if let Some(dm) = display_matches.get(row_clicked) {
+                if dm.mitre_button.starts_with("Open ") {
+                    if let Some(url) = dm.mitre_url() {
+                        let _ = open::that(url);
+                    }
+                }
+            }
+        }
+        */
+    }
+}
+
+fn print_detail(flat_matches: &[FlatMatch]) {
+    use tabled::settings::object::Columns;
     if !flat_matches.is_empty() {
         println!("---DETAIL---");
-        let mut flat_table = TabledTable::new(&flat_matches);
+        let mut flat_table = TabledTable::new(flat_matches);
         flat_table
             .with(Style::modern())
             .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
@@ -627,143 +573,217 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with(Modify::new(Columns::single(2)).with(Width::wrap(30).keep_words(true)));
         println!("{}", flat_table.to_string());
     }
+}
+
+// ── Report-saving helpers ─────────────────────────────────────────────────────
+fn resolve_output_dir(matches: &ArgMatches) -> std::path::PathBuf {
+    match matches.get_one::<String>("case") {
+        Some(case_name) => {
+            common_config::ensure_case_json(case_name);
+            get_output_dir("cases").join(case_name).join("mstrings")
+        }
+        None => get_output_dir("mstrings"),
+    }
+}
+
+fn selected_format(matches: &ArgMatches) -> &'static str {
+    if matches.get_flag("text") {
+        "txt"
+    } else if matches.get_flag("json") {
+        "json"
+    } else if matches.get_flag("markdown") {
+        "md"
+    } else {
+        "md"
+    }
+}
+
+fn write_report(
+    output_dir: &std::path::Path,
+    format: &str,
+    custom_name: Option<&str>,
+    contents: &str,
+    matches: &ArgMatches,
+    target: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let out_path = match format {
+        "txt" => {
+            let text_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.txt", timestamp)));
+            if let Some(parent) = text_path.parent() {
+                std::fs::create_dir_all(parent).expect("Failed to create output directory");
+            }
+            let mut file = File::create(&text_path).expect("Failed to save text report");
+            file.write_all(contents.as_bytes()).expect("Failed to write report");
+            println!("\n{}\n", format!("Text report saved to: {}", text_path.display()).green());
+            text_path
+        }
+        "md" => {
+            let md_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.md", timestamp)));
+            if let Some(parent) = md_path.parent() {
+                std::fs::create_dir_all(parent).expect("Failed to create output directory");
+            }
+            let mut file = File::create(&md_path).expect("Failed to save markdown report");
+            file.write_all(contents.as_bytes()).expect("Failed to write report");
+            println!("\n{}\n", format!("Markdown report saved to: {}", md_path.display()).green());
+            md_path
+        }
+        _ => {
+            let json_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.json", timestamp)));
+            if let Some(parent) = json_path.parent() {
+                std::fs::create_dir_all(parent).expect("Failed to create output directory");
+            }
+            let mut file = File::create(&json_path).expect("Failed to create JSON report file");
+            file.write_all(contents.as_bytes()).expect("Failed to write JSON report");
+            println!("\n{}\n", format!("JSON report saved to: {}", json_path.display()).green());
+            json_path
+        }
+    };
+
+    if let Some(case_name) = matches.get_one::<String>("case") {
+        common_config::register_case_output("mstrings", case_name, target, &out_path);
+    }
+
+    Ok(())
+}
+
+// Build the txt/md report body for one scanned file (single-file layout).
+// `with_title` controls the top-level markdown title — the bundle report emits
+// its own title once and per-binary headings instead.
+fn build_file_report_body(result: &FileScanResult, table_str: &str, format: &str, with_title: bool) -> String {
+    let mut report_buffer = String::new();
+
+    // Add file and hash metadata at the top of the report
+    if format == "md" {
+        if with_title {
+            report_buffer.push_str("# mStrings Analysis Report\n\n");
+        }
+        report_buffer.push_str(&format!("**File:** `{}`  \n", result.file_path));
+        report_buffer.push_str(&format!("**SHA256:** `{}`  \n", result.sha256));
+        report_buffer.push_str(&format!(
+            "**Detections:** {} matches across {} rules  \n\n",
+            result.raw_match_count,
+            result.display_matches.len()
+        ));
+    } else {
+        report_buffer.push_str(&format!("File: {}\n", result.file_path));
+        report_buffer.push_str(&format!("SHA256: {}\n\n", result.sha256));
+    }
+
+    // Add summary for non-md
+    if format != "md" {
+        report_buffer.push_str(&format!(
+            "{} matches across {} rules.\n\n",
+            result.raw_match_count,
+            result.display_matches.len()
+        ));
+    }
+
+    // Add table content
+    if format == "txt" {
+        report_buffer.push_str(&format!("{}\n\n", table_str));
+    } else if format == "md" {
+        use tabled::settings::object::Columns;
+        let mut md_table = TabledTable::new(&result.display_matches);
+        md_table
+            .with(Style::markdown())
+            .with(Modify::new(Columns::new(0..)).with(Alignment::left()));
+        report_buffer.push_str(if with_title { "## Detections\n\n" } else { "### Detections\n\n" });
+        report_buffer.push_str(&format!("{}\n\n", md_table.to_string()));
+    }
+
+    report_buffer
+}
+
+// Append IOC sections to a txt/md report buffer.
+fn append_ioc_sections(
+    report_buffer: &mut String,
+    fs_iocs: &BTreeSet<String>,
+    net_iocs: &BTreeSet<String>,
+    format: &str,
+) {
+    if !fs_iocs.is_empty() {
+        if format == "md" {
+            report_buffer.push_str("## Potential Filesystem IOCs\n\n");
+            for ioc in fs_iocs {
+                report_buffer.push_str(&format!("- `{}`\n", ioc));
+            }
+        } else {
+            report_buffer.push_str("POTENTIAL FILESYSTEM IOCs:\n");
+            for ioc in fs_iocs {
+                report_buffer.push_str(&format!("{}\n", ioc));
+            }
+        }
+        report_buffer.push('\n');
+    }
+
+    if !net_iocs.is_empty() {
+        if format == "md" {
+            report_buffer.push_str("## Potential Network IOCs\n\n");
+            for ioc in net_iocs {
+                report_buffer.push_str(&format!("- `{}`\n", ioc));
+            }
+        } else {
+            report_buffer.push_str("POTENTIAL NETWORK IOCs:\n");
+            for ioc in net_iocs {
+                report_buffer.push_str(&format!("{}\n", ioc));
+            }
+        }
+        report_buffer.push('\n');
+    }
+}
+
+// ── Single-file mode (original behavior, output unchanged) ────────────────────
+fn run_single(
+    path: &Path,
+    file_path_copy: &str,
+    matches: &ArgMatches,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let result = scan_file(path)?;
+
+    print_summary(file_path_copy, &result.sha256, result.raw_match_count, result.display_matches.len());
+
+    // Stringify the table after applying formatting, for both display and output file
+    let table_str = render_display_table(&result.display_matches);
+    print_display_table(&table_str);
+
+    // Use the print_iocs function for both headers, with color and proper handling for CLI/GUI
+    println!("\n");
+    print_iocs("POTENTIAL FILESYSTEM IOCs:", &result.fs_iocs);
+
+    if !result.net_iocs.is_empty() {
+        println!("\n");
+        print_iocs("POTENTIAL NETWORK IOCs:", &result.net_iocs);
+    }
+
+    print_detail(&result.flat_matches);
 
     println!();
 
     let save_output = matches.get_flag("output") || matches.contains_id("case");
-    let text = matches.get_flag("text");
-    let json = matches.get_flag("json");
-    let markdown = matches.get_flag("markdown");
-
 
     if save_output {
-        let output_dir = match matches.get_one::<String>("case") {
-            Some(case_name) => {
-                common_config::ensure_case_json(case_name);
-                get_output_dir("cases").join(case_name).join("mstrings")
-            }
-            None => get_output_dir("mstrings"),
-        };
+        let output_dir = resolve_output_dir(matches);
         std::fs::create_dir_all(&output_dir)?;
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
 
-        let format = if text {
-            "txt"
-        } else if json {
-            "json"
-        } else if markdown {
-            "md"
-        } else {
-            "md"
-        };
-
+        let format = selected_format(matches);
         let custom_name = matches.get_one::<String>("output-file").map(|s| s.as_str());
 
-        // Build the report content (reuse printed table and IOCs)
-        let mut report_buffer = String::new();
-
-        // Add file and hash metadata at the top of the report
-        if format == "md" {
-            report_buffer.push_str("# mStrings Analysis Report\n\n");
-            report_buffer.push_str(&format!("**File:** `{}`  \n", file_path_copy));
-            report_buffer.push_str(&format!("**SHA256:** `{}`  \n", sha256));
-            report_buffer.push_str(&format!(
-                "**Detections:** {} matches across {} rules  \n\n",
-                raw_match_count,
-                display_matches.len()
-            ));
+        let contents = if format == "json" {
+            let matched_only: Vec<_> = result.matches.iter().filter(|m| m.rule_name.is_some()).collect();
+            serde_json::to_string_pretty(&serde_json::json!({
+                "file": file_path_copy,
+                "sha256": result.sha256,
+                "matches": matched_only
+            })).expect("Failed to serialize report")
         } else {
-            report_buffer.push_str(&format!("File: {}\n", file_path_copy));
-            report_buffer.push_str(&format!("SHA256: {}\n\n", sha256));
-        }
+            // Build the report content (reuse printed table and IOCs)
+            let mut report_buffer = build_file_report_body(&result, &table_str, format, true);
+            append_ioc_sections(&mut report_buffer, &result.fs_iocs, &result.net_iocs, format);
+            report_buffer
+        };
 
-        // Add summary for non-md
-        if format != "md" {
-            report_buffer.push_str(&format!(
-                "{} matches across {} rules.\n\n",
-                raw_match_count,
-                display_matches.len()
-            ));
-        }
-
-        // Add table content
-        if format == "txt" {
-            report_buffer.push_str(&format!("{}\n\n", table_str));
-        } else if format == "md" {
-            let mut md_table = TabledTable::new(&display_matches);
-            md_table
-                .with(Style::markdown())
-                .with(Modify::new(Columns::new(0..)).with(Alignment::left()));
-            report_buffer.push_str("## Detections\n\n");
-            report_buffer.push_str(&format!("{}\n\n", md_table.to_string()));
-        }
-
-        // Add IOCs
-        if !fs_iocs.is_empty() {
-            if format == "md" {
-                report_buffer.push_str("## Potential Filesystem IOCs\n\n");
-                for ioc in &fs_iocs {
-                    report_buffer.push_str(&format!("- `{}`\n", ioc));
-                }
-            } else {
-                report_buffer.push_str("POTENTIAL FILESYSTEM IOCs:\n");
-                for ioc in &fs_iocs {
-                    report_buffer.push_str(&format!("{}\n", ioc));
-                }
-            }
-            report_buffer.push('\n');
-        }
-
-        if !net_iocs.is_empty() {
-            if format == "md" {
-                report_buffer.push_str("## Potential Network IOCs\n\n");
-                for ioc in &net_iocs {
-                    report_buffer.push_str(&format!("- `{}`\n", ioc));
-                }
-            } else {
-                report_buffer.push_str("POTENTIAL NETWORK IOCs:\n");
-                for ioc in &net_iocs {
-                    report_buffer.push_str(&format!("{}\n", ioc));
-                }
-            }
-            report_buffer.push('\n');
-        }
-
-        match format {
-            "txt" => {
-                let text_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.txt", timestamp)));
-                if let Some(parent) = text_path.parent() {
-                    std::fs::create_dir_all(parent).expect("Failed to create output directory");
-                }
-                let mut file = File::create(&text_path).expect("Failed to save text report");
-                file.write_all(report_buffer.as_bytes()).expect("Failed to write report");
-                println!("\n{}\n", format!("Text report saved to: {}", text_path.display()).green());
-            }
-            "md" => {
-                let md_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.md", timestamp)));
-                if let Some(parent) = md_path.parent() {
-                    std::fs::create_dir_all(parent).expect("Failed to create output directory");
-                }
-                let mut file = File::create(&md_path).expect("Failed to save markdown report");
-                file.write_all(report_buffer.as_bytes()).expect("Failed to write report");
-                println!("\n{}\n", format!("Markdown report saved to: {}", md_path.display()).green());
-            }
-            _ => {
-                let json_path = output_dir.join(custom_name.unwrap_or(&format!("report_{}.json", timestamp)));
-                if let Some(parent) = json_path.parent() {
-                    std::fs::create_dir_all(parent).expect("Failed to create output directory");
-                }
-                let mut file = File::create(&json_path).expect("Failed to create JSON report file");
-                let matched_only: Vec<_> = mstrings.matches.iter().filter(|m| m.rule_name.is_some()).collect();
-                let json = serde_json::to_string_pretty(&serde_json::json!({
-                    "file": file_path_copy,
-                    "sha256": sha256,
-                    "matches": matched_only
-                })).expect("Failed to serialize report");
-                file.write_all(json.as_bytes()).expect("Failed to write JSON report");
-                println!("\n{}\n", format!("JSON report saved to: {}", json_path.display()).green());
-            }
-        }
+        write_report(&output_dir, format, custom_name, &contents, matches, file_path_copy)?;
     } else {
         if !is_gui_mode() {
             println!("\nOutput was not saved.\n");
@@ -775,4 +795,251 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Note: MITRE Tactic IDs can be referenced with MITRE_lookup tool.");
     }
     Ok(())
+}
+
+// ── Bundle mode: scan every embedded Mach-O binary in a .app bundle ───────────
+fn run_bundle(
+    bundle_path: &Path,
+    file_path_copy: &str,
+    matches: &ArgMatches,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let meta = common_macho::bundle_metadata(bundle_path);
+    let targets = common_macho::resolve_scan_targets(bundle_path);
+
+    // Bundle-level header
+    println!("{}", styled_line("stone", &format!("Bundle: {}", file_path_copy)));
+    if let Some(ref m) = meta {
+        if let Some(ref id) = m.bundle_identifier {
+            println!("{}", styled_line("stone", &format!("Bundle ID: {}", id)));
+        }
+        if let Some(ref exe) = m.bundle_executable {
+            println!("{}", styled_line("stone", &format!("Executable: {}", exe)));
+        }
+        if let Some(ref ver) = m.bundle_version {
+            println!("{}", styled_line("stone", &format!("Version: {}", ver)));
+        }
+    }
+    println!("{}", styled_line("stone", &format!("Embedded Mach-O binaries: {}", targets.len())));
+
+    if targets.is_empty() {
+        println!("\n{}", "No Mach-O binaries found in bundle.".yellow());
+        return Ok(());
+    }
+
+    let mut merged_fs_iocs: BTreeSet<String> = BTreeSet::new();
+    let mut merged_net_iocs: BTreeSet<String> = BTreeSet::new();
+    let mut scanned: Vec<(String, FileScanResult, String)> = Vec::new(); // (rel_path, result, table_str)
+
+    for target in &targets {
+        let rel_path = target
+            .strip_prefix(bundle_path)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| target.display().to_string());
+
+        println!("\n{}", format!("=== {} ===", rel_path).truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
+
+        let result = match scan_file(target) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("{}", format!("Failed to scan {}: {}", rel_path, e).yellow());
+                continue;
+            }
+        };
+
+        print_summary(&result.file_path, &result.sha256, result.raw_match_count, result.display_matches.len());
+
+        let table_str = render_display_table(&result.display_matches);
+        print_display_table(&table_str);
+        print_detail(&result.flat_matches);
+
+        merged_fs_iocs.extend(result.fs_iocs.iter().cloned());
+        merged_net_iocs.extend(result.net_iocs.iter().cloned());
+        scanned.push((rel_path, result, table_str));
+    }
+
+    // Combined IOC section across all binaries in the bundle
+    println!("\n");
+    print_iocs("POTENTIAL FILESYSTEM IOCs:", &merged_fs_iocs);
+
+    if !merged_net_iocs.is_empty() {
+        println!("\n");
+        print_iocs("POTENTIAL NETWORK IOCs:", &merged_net_iocs);
+    }
+
+    println!();
+
+    let save_output = matches.get_flag("output") || matches.contains_id("case");
+
+    if save_output {
+        let output_dir = resolve_output_dir(matches);
+        std::fs::create_dir_all(&output_dir)?;
+
+        let format = selected_format(matches);
+        let custom_name = matches.get_one::<String>("output-file").map(|s| s.as_str());
+
+        let contents = if format == "json" {
+            let binaries: Vec<serde_json::Value> = scanned
+                .iter()
+                .map(|(rel_path, result, _)| {
+                    let matched_only: Vec<_> = result.matches.iter().filter(|m| m.rule_name.is_some()).collect();
+                    serde_json::json!({
+                        "file": rel_path,
+                        "sha256": result.sha256,
+                        "matches": matched_only
+                    })
+                })
+                .collect();
+            serde_json::to_string_pretty(&serde_json::json!({
+                "bundle": file_path_copy,
+                "bundle_identifier": meta.as_ref().and_then(|m| m.bundle_identifier.clone()),
+                "bundle_executable": meta.as_ref().and_then(|m| m.bundle_executable.clone()),
+                "bundle_version": meta.as_ref().and_then(|m| m.bundle_version.clone()),
+                "binaries": binaries
+            })).expect("Failed to serialize report")
+        } else {
+            let mut report_buffer = String::new();
+            if format == "md" {
+                report_buffer.push_str("# mStrings Analysis Report\n\n");
+                report_buffer.push_str(&format!("**Bundle:** `{}`  \n", file_path_copy));
+                if let Some(ref m) = meta {
+                    if let Some(ref id) = m.bundle_identifier {
+                        report_buffer.push_str(&format!("**Bundle ID:** `{}`  \n", id));
+                    }
+                    if let Some(ref exe) = m.bundle_executable {
+                        report_buffer.push_str(&format!("**Executable:** `{}`  \n", exe));
+                    }
+                    if let Some(ref ver) = m.bundle_version {
+                        report_buffer.push_str(&format!("**Version:** `{}`  \n", ver));
+                    }
+                }
+                report_buffer.push_str(&format!("**Embedded Mach-O binaries:** {}  \n\n", scanned.len()));
+            } else {
+                report_buffer.push_str(&format!("Bundle: {}\n", file_path_copy));
+                if let Some(ref m) = meta {
+                    if let Some(ref id) = m.bundle_identifier {
+                        report_buffer.push_str(&format!("Bundle ID: {}\n", id));
+                    }
+                    if let Some(ref exe) = m.bundle_executable {
+                        report_buffer.push_str(&format!("Executable: {}\n", exe));
+                    }
+                    if let Some(ref ver) = m.bundle_version {
+                        report_buffer.push_str(&format!("Version: {}\n", ver));
+                    }
+                }
+                report_buffer.push_str(&format!("Embedded Mach-O binaries: {}\n\n", scanned.len()));
+            }
+
+            for (rel_path, result, table_str) in &scanned {
+                if format == "md" {
+                    report_buffer.push_str(&format!("## Binary: {}\n\n", rel_path));
+                } else {
+                    report_buffer.push_str(&format!("=== {} ===\n\n", rel_path));
+                }
+                report_buffer.push_str(&build_file_report_body(result, table_str, format, false));
+            }
+
+            append_ioc_sections(&mut report_buffer, &merged_fs_iocs, &merged_net_iocs, format);
+            report_buffer
+        };
+
+        write_report(&output_dir, format, custom_name, &contents, matches, file_path_copy)?;
+    } else {
+        if !is_gui_mode() {
+            println!("\nOutput was not saved.\n");
+        }
+    }
+    if !is_gui_mode() {
+        println!("Note: MITRE Tactic IDs can be referenced with MITRE_lookup tool.");
+    }
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let matches = Command::new("mstrings")
+        .version("0.1")
+        .author("Author Name <dwmetz@gmail.com>")
+        .about("Searches for strings in files with YARA-style detections")
+        .allow_hyphen_values(true)
+        .dont_collapse_args_in_usage(true)
+        .args_conflicts_with_subcommands(true)
+        .disable_help_subcommand(true)
+        .arg(
+            Arg::new("file")
+                .help("File to scan")
+                .required(false)
+                .index(1)
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("output")
+                .short('o')
+                .long("output")
+                .num_args(0)
+                .help("Save output (must be paired with -t, -j, or -m)"),
+        )
+        .arg(
+            Arg::new("text")
+                .short('t')
+                .long("text")
+                .help("Save report as text")
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with_all(&["json", "markdown"]),
+        )
+        .arg(
+            Arg::new("json")
+                .short('j')
+                .long("json")
+                .help("Save report as JSON")
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with_all(&["text", "markdown"]),
+        )
+        .arg(
+            Arg::new("markdown")
+                .short('m')
+                .long("markdown")
+                .help("Save report as Markdown")
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with_all(&["text", "json"]),
+        )
+        .arg(
+            Arg::new("case")
+                .long("case")
+                .num_args(1)
+                .help("Optional case name to group output"),
+        )
+        .arg(
+            Arg::new("output-file")
+                .long("output-file")
+                .num_args(1)
+                .help("Custom output file name (used with --output)"),
+        )
+        .get_matches();
+
+    let file_path = match matches.get_one::<String>("file").map(String::as_str) {
+        Some(path) => path.to_string(),
+        None => {
+            println!("Enter the file path:");
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();  // Remove trailing newline and whitespace
+
+
+            input.to_string()
+        }
+    };
+    let file_path_copy = file_path.clone(); // clone once for later reuse
+
+    // Ensure Path::new uses trimmed input (file_path is already trimmed at this point)
+    let path = std::path::Path::new(&file_path);
+
+    if common_macho::is_app_bundle(path) {
+        return run_bundle(path, &file_path_copy, &matches);
+    }
+
+    if path.is_dir() {
+        eprintln!("{}", "Not a file or a recognized .app bundle (no Contents/Info.plist found).".red());
+        std::process::exit(1);
+    }
+
+    run_single(path, &file_path_copy, &matches)
 }

@@ -646,6 +646,10 @@ async fn main() -> Result<()> {
         let path = output_dir.join(format!("report_{}.{}", ts, ext));
         std::fs::write(&path, &content)?;
         eprintln!("Report saved to: {}", path.display());
+
+        if let Some(ref case) = args.case {
+            common_config::register_case_output("tiquery", case, &hash, &path);
+        }
     }
 
     // ── MB download (SHA256 only) ─────────────────────────────────────────────

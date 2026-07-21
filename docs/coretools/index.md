@@ -26,6 +26,7 @@
   </thead>
   <tbody>
     <tr><td>Combine YARA</td><td>Point it at a directory of YARA files and it will output one combined rule</td></tr>
+    <tr><td>dpp Extract</td><td>Unwraps a .dmg or .pkg (UDIF &rarr; HFS+/APFS &rarr; XAR &rarr; PBZX/CPIO) to reach the real payload files inside</td></tr>
     <tr><td>Extract Samples</td><td>Point it at a directory of password protected malware files to extract all</td></tr>
     <tr><td>File Analyzer</td><td>Get the hash, entropy, packing, PE info, YARA and VT match status for a file</td></tr>
     <tr><td>File Miner</td><td>Scans a folder for file type mismatches and metadata, and provides suggested tools</td></tr>

@@ -33,6 +33,7 @@ nav:
       - Usage: coretools/usage.md
       - Analyze: coretools/analyze.md
       - CombineYARA: coretools/combine_yara.md
+      - dppExtract: coretools/dpp_extract.md
       - ExtractSamples: coretools/extract_samples.md
       - FileAnalyzer: coretools/fileanalyzer.md
       - FileMiner: coretools/fileminer.md

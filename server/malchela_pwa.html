@@ -2758,7 +2758,7 @@ function renderFileminerTable(rows) {
     const fullPath = row.full_path || (row.path + '/' + row.filename);
     const analyzeBtn = tools.length ? `<button class="fm-tool-btn fm-tool-analyze"
         onclick="analyzeFromFileminer('${escHtml(fullPath)}')"
-        title="Run every suggested tool below in one pass, plus a combined rollup report"
+        title="Open Analyze for this file — runs every suggested tool below in one pass, plus a combined rollup report"
         >Analyze</button>` : '';
     const toolBtns = analyzeBtn + tools.map(t => {
       const toolId = TOOL_MAP[t.toLowerCase()] || t.toLowerCase();
@@ -2836,12 +2836,13 @@ function launchFromFileminer(toolId, filePath, sha256) {
 }
 
 function analyzeFromFileminer(filePath) {
-  // "Analyze All" — run every suggested tool for this one file in a single
-  // pass instead of launching each individually. Reuses Analyze's own
-  // single-file mode (it already filters to just the selected path and
-  // builds one rollup) rather than duplicating that logic here.
+  // Populates the Analyze panel with this file and stops there — same
+  // pattern as launchFromFileminer's per-tool buttons — so the user has a
+  // chance to check Save to Case (and pick which case) before clicking Run.
+  // Auto-running immediately would skip that: Save to Case is opt-in and
+  // read at Run time, so firing the run here would always save nothing on
+  // the first pass, forcing a second run just to get it saved to a case.
   showAnalyzePanel(filePath);
-  runAnalyze(filePath);
 }
 
 // ── FileMiner Session Persistence ─────────────────────────────────────────

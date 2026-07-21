@@ -27,13 +27,15 @@ HardcodedIPAddress:
   title: "Hardcoded IP address"
   id: "b2e9a3d7-cf18-4b6f-987b-4d90d7a94b88"
   status: "experimental"
-  description: "Detection of hardcoded IP address"
+  description: "Detection of hardcoded IP address. Excludes X.0.0.0-shaped matches (the exclusion this rule shipped with, guarding a trailing 'version=' suffix, only ever covered an IP glued directly to a query-string-style version tag — not the far more common false positive of a bare assembly/manifest version string like version=\"1.0.0.0\" or version=\"6.0.0.0\", where 'version=' precedes the number instead of following it. A real target IP ending in three zero octets is operationally almost unheard of, so this exclusion has low risk of suppressing genuine hits."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b(?![^\\s]*version=)"
+      - "\\b(?!\\d{1,3}\\.0\\.0\\.0\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b(?![^\\s]*version=)"
+  falsepositives:
+    - "A real hardcoded IP that genuinely ends in .0.0.0 (rare — that's a network/supernet address, not a usable host target)"
   tags:
     - attack.t1071.001
   level: high

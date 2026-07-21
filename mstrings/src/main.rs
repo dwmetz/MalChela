@@ -11,6 +11,7 @@ use common_ui::styled_line;
 
 use common_config::get_output_dir;
 
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use clap::{Arg, ArgMatches, Command};
 use fancy_regex::Regex;
 use serde::Deserialize;
@@ -39,6 +40,7 @@ fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>) {
 enum Encoding {
     Ascii,
     Utf8,
+    Base64,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -136,6 +138,62 @@ impl Mstrings {
                 technique_id: None,
             });
         }
+    }
+
+    /// Detect long base64-looking strings, decode them, and add the decoded
+    /// text as new matches (encoding: Base64) so the existing detection and
+    /// IOC-extraction passes run against what's actually inside — not just
+    /// the encoded blob itself. Malware embedding a full script/payload as
+    /// a base64 string (observed: a 2,514-line Python RAT decoded from one
+    /// 149KB base64 string in a Dok/Bella sample) is otherwise invisible to
+    /// every string-matching rule, since none of its real content exists as
+    /// a literal substring anywhere in the binary pre-decode. Candidates are
+    /// filtered by charset/length/padding before attempting to decode, and
+    /// decoded output must be mostly printable before being kept — both to
+    /// avoid wasting time decoding coincidental base64-alphabet runs that
+    /// are really just binary data, and to avoid adding garbage matches.
+    fn decode_base64_blobs(&mut self) {
+        const MIN_LEN: usize = 60;
+        const MIN_DECODED_LEN: usize = 20;
+        const MIN_PRINTABLE_RATIO: f64 = 0.85;
+
+        let candidates: Vec<(usize, String)> = self
+            .matches
+            .iter()
+            .filter(|m| {
+                let s = m.matched_str.trim();
+                s.len() >= MIN_LEN
+                    && s.len() % 4 == 0
+                    && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+                    && s.chars().any(|c| c.is_ascii_alphabetic())
+            })
+            .map(|m| (m.offset, m.matched_str.trim().to_string()))
+            .collect();
+
+        let mut decoded_matches = Vec::new();
+        for (offset, candidate) in candidates {
+            let decoded = match BASE64_STANDARD.decode(&candidate) {
+                Ok(d) if d.len() >= MIN_DECODED_LEN => d,
+                _ => continue,
+            };
+            let printable = decoded
+                .iter()
+                .filter(|&&b| (0x20..=0x7e).contains(&b) || b == b'\n' || b == b'\r' || b == b'\t')
+                .count();
+            if (printable as f64 / decoded.len() as f64) < MIN_PRINTABLE_RATIO {
+                continue;
+            }
+            decoded_matches.push(Match {
+                offset,
+                encoding: Encoding::Base64,
+                matched_str: String::from_utf8_lossy(&decoded).to_string(),
+                rule_name: None,
+                tactic: None,
+                technique: None,
+                technique_id: None,
+            });
+        }
+        self.matches.extend(decoded_matches);
     }
 
     pub fn apply_yara_detections(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -299,6 +357,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         }
     }
 
+    mstrings.decode_base64_blobs();
     mstrings.apply_yara_detections()?;
 
     // Group matched strings by rule name; track tactic/technique for sort.

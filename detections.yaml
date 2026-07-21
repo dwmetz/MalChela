@@ -2250,6 +2250,80 @@ MacInMemoryMachOLoading:
       technique_name: "Reflective Code Loading"
       tactics: ["Defense Evasion"]
 
+BellaMacRatSignature:
+  title: "Bella macOS RAT signature (Python post-exploitation payload)"
+  id: "mac-bella-rat-001"
+  status: "experimental"
+  description: "Detects internal function/variable names unique to Bella, a publicly available macOS post-exploitation RAT (Python), embedded as a payload. Observed in a Dok/Dokument sample as a ~150KB base64 string decoding to a 2,500+ line Python script with a hardcoded C2 host/port, Chrome saved-password theft, Apple ID phishing, iCloud/Find My iPhone abuse, rogue root CA certificate installation for MITM, and LaunchAgent persistence. These identifiers only exist post-decode — mstrings' base64 auto-decode-and-rescan step (added alongside this rule) is what makes them visible to string matching at all."
+  references:
+    - "https://github.com/topics/bella-rat"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "bella_version"
+      - "create_bella_helpers"
+      - "chrome_safe_storage"
+      - "appleIDPhish"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1059.006
+  mitre:
+    - technique_id: "T1059.006"
+      technique_name: "Command and Scripting Interpreter: Python"
+      tactics: ["Execution"]
+
+EmbeddedBase64Payload:
+  title: "Large embedded base64 blob"
+  id: "obfuscation-b64blob-001"
+  status: "experimental"
+  description: "Detects a single extracted string that is almost entirely a long, unbroken base64-alphabet run (200+ chars) — the shape of an embedded encoded payload (script, executable, config) rather than incidental text. A backstop signal alongside mstrings' base64 auto-decode-and-rescan step: this still fires even when the blob doesn't decode to printable text (e.g. it's encrypted before being base64-encoded) or in any context that only runs detections.yaml pattern matching without the decode step."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "^[A-Za-z0-9+/]{200,}={0,2}$"
+  falsepositives:
+    - "Long non-encoded alphanumeric identifiers (rare at this length), embedded font/resource data that happens to be base64-alphabet-shaped without being a deliberately encoded payload"
+  level: medium
+  tags:
+    - attack.t1027
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+SelfDecodingBase64Cli:
+  title: "Self-decoding via macOS base64 CLI"
+  id: "mac-selfdecode-cli-001"
+  status: "experimental"
+  description: "Detects a format-string invocation of /usr/bin/base64 in decode mode (base64 -i <in> -o <out> -D), shelled out to via NSTask/subprocess rather than decoding natively. A dropper that reveals its real payload this way — instead of a library call like FromBase64String, which would itself be a static string a scanner might flag — is deliberately routing around simpler detection. Observed in a Dok/Dokument sample decoding an embedded Bella RAT payload this way."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "base64 -i %@ -o %@ -D"
+      - "base64\\s+-D\\b"
+  falsepositives:
+    - "Legitimate shell scripts/tools that pipe through base64 -D for benign encoding/decoding needs"
+  level: medium
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
 MacKeyloggerKeyNameTable:
   title: "macOS Keylogger Key-Name Table"
   id: "mac-keylogger-keytable-001"

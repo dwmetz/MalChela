@@ -3855,6 +3855,28 @@ async function runAnalyze(path) {
       return;
     }
 
+    if (data.success && data.redirect_to_fileminer) {
+      // Too many files for Analyze's own auto-run (routine for a
+      // dpp-extracted DMG/PKG payload, but can happen for a plain folder
+      // too) — hand off to File Miner's own interactive per-file table
+      // (real per-row "run this tool" buttons) instead of a static summary.
+      showToast(
+        `${data.file_count} file(s) found — over the auto-run cap, opening in File Miner`,
+        'success'
+      );
+      lastRows = [];
+      fmLastPath = '';
+      selectTool('fileminer');
+      // Match launchFromFileminer's handoff pattern: give the freshly
+      // rendered File Miner panel a beat before touching its DOM.
+      setTimeout(() => {
+        const pathInput = document.getElementById('path-input');
+        if (pathInput) pathInput.value = data.target;
+        runTool();
+      }, 50);
+      return;
+    }
+
     if (data.success) {
       if (conciseOutput && data.rollup_content) {
         renderMarkdownOutput(data.rollup_content);

@@ -12,7 +12,7 @@ use common_ui::styled_line;
 use common_config::get_output_dir;
 
 use clap::{Arg, ArgMatches, Command};
-use regex::Regex;
+use fancy_regex::Regex;
 use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
@@ -164,7 +164,7 @@ impl Mstrings {
             let mut any_match = false;
             let mut seen_rules: std::collections::HashSet<String> = std::collections::HashSet::new();
             for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
-                if regex.is_match(&m.matched_str) && seen_rules.insert(rule_name.clone()) {
+                if regex.is_match(&m.matched_str).unwrap_or(false) && seen_rules.insert(rule_name.clone()) {
                     new_matches.push(Match {
                         offset: m.offset,
                         encoding: m.encoding.clone(),
@@ -370,8 +370,10 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
     // Short strings use the original logic unchanged.
     //
     // \x22 is used in char classes instead of \" to avoid raw-string issues.
-    // The regex crate does not support lookarounds, so IP boundary validation
-    // is done in Rust after matching.
+    // IP boundary validation is done in Rust after matching (kept this way
+    // even after the fancy-regex migration added lookaround support — a
+    // manual byte check is simpler to read here than a lookaround, and
+    // faster since it skips backtracking on every candidate match).
     let re_url      = Regex::new(r"https?://[^\s\x22'<>]{8,}").unwrap();
     let re_ip       = Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap();
     // Windows-style paths
@@ -385,7 +387,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
             if m.matched_str.len() > 300 {
                 // Blob path: extract well-formed IOCs via regex
-                for cap in re_url.find_iter(&m.matched_str) {
+                for cap in re_url.find_iter(&m.matched_str).flatten() {
                     net_iocs.insert(cap.as_str().to_string());
                 }
                 // IP boundary check: regex crate has no lookarounds, so verify
@@ -395,7 +397,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                 // strings is a meaningful tell (lateral movement target, lab
                 // infrastructure leak, etc.).
                 let blob = m.matched_str.as_bytes();
-                for mat in re_ip.find_iter(&m.matched_str) {
+                for mat in re_ip.find_iter(&m.matched_str).flatten() {
                     let start = mat.start();
                     let end   = mat.end();
                     let before_ok = start == 0 || !matches!(blob[start - 1], b'0'..=b'9' | b'.');
@@ -404,14 +406,14 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                         net_iocs.insert(mat.as_str().to_string());
                     }
                 }
-                for cap in re_fspath.find_iter(&m.matched_str) {
+                for cap in re_fspath.find_iter(&m.matched_str).flatten() {
                     let extracted = cap.as_str();
                     // Skip template variables like ${EXTENSION}-FILES.txt
                     if !extracted.starts_with("${") && !extracted.starts_with('%') {
                         fs_iocs.insert(extracted.to_string());
                     }
                 }
-                for cap in re_mac_path.find_iter(&m.matched_str) {
+                for cap in re_mac_path.find_iter(&m.matched_str).flatten() {
                     fs_iocs.insert(cap.as_str().to_string());
                 }
             } else {

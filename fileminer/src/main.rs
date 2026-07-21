@@ -391,6 +391,16 @@ fn analyze_directory(
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type.contains("x-apple-property-list") || file_type.contains("application/xml") {
                 suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
+            } else if file_type.starts_with("text/") {
+                // Shell/Python/plain-text scripts land here — e.g. a dpp_extract'd
+                // PKG's preinstall/postinstall, where the real payload logic often
+                // lives when Payload itself is empty. mStrings runs detections.yaml
+                // against the script's own text, which is exactly the analysis a
+                // script needs.
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type == "Unknown" && file_size > 10_000 {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));

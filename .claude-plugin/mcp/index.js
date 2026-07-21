@@ -140,12 +140,17 @@ const TOOLS = [
     category: 'File Analysis',
     input_type: 'analyze',
     description:
-      'One-shot auto-triage: runs fileminer against a file, folder, or .app bundle, then ' +
-      'automatically dispatches every tool fileminer suggests for every file found (no need ' +
-      'to call fileminer yourself and manually decide which follow-up tools to run). Writes a ' +
-      'combined rollup report alongside the individual per-tool reports. Best entry point for ' +
-      'a single sample or small bundle (limit 25 files) — use fileminer + MZHash/MZCount/XMZHash ' +
-      'directly for corpus-scale scans. Requires an active case (set_case first).',
+      'One-shot auto-triage: runs fileminer against a file, folder, .app bundle, .dmg, or .pkg, ' +
+      'then automatically dispatches every tool fileminer suggests for every file found (no need ' +
+      'to call fileminer yourself and manually decide which follow-up tools to run). A .dmg/.pkg ' +
+      'target is auto-unwrapped via dpp_extract first (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO). ' +
+      'Writes a combined rollup report alongside the individual per-tool reports. Best entry ' +
+      'point for a single sample or small bundle (limit 25 files) — over that (common for a ' +
+      'dpp-extracted PKG payload, which often bundles the full legitimate app it trojanized ' +
+      'alongside the injected malicious file(s)), returns a file listing (mismatches first) ' +
+      'instead of auto-running everything; call individual tools yourself on files of interest, ' +
+      'or fileminer + MZHash/MZCount/XMZHash directly for corpus-scale scans. Requires an active ' +
+      'case (set_case first).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -402,6 +407,30 @@ const TOOLS = [
       required: ['folderpath'],
     },
   },
+
+  {
+    name: 'dpp_extract',
+    category: 'Utilities',
+    input_type: 'dpp_extract',
+    description:
+      'Unwraps a .dmg or .pkg container (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO) to reach the ' +
+      'real payload files inside — fileanalyzer/mstrings/macho_info can\'t see through either ' +
+      'container format directly. Also pulls each PKG component\'s Scripts (preinstall/' +
+      'postinstall) archive alongside Payload, since some installers ship an empty Payload and ' +
+      'put their actual behavior there instead. A trojanized installer commonly bundles the ' +
+      'full legitimate app it trojanized alongside the injected malicious file(s), so the ' +
+      'extracted directory can be large — follow up with fileminer on the result rather than ' +
+      'fileanalyzer/mstrings directly on the whole tree. analyze() calls this automatically ' +
+      'when pointed at a .dmg/.pkg; call it directly only if you need the extracted files ' +
+      'without Analyze\'s auto-dispatch.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filepath: { type: 'string', description: 'Absolute path to a .dmg or .pkg file' },
+      },
+      required: ['filepath'],
+    },
+  },
 ];
 
 // ── Mac bundle resolution helpers ────────────────────────────────────────────
@@ -495,6 +524,11 @@ function buildCommand(toolName, args) {
         return { bin: binary, args: [args.folderpath, '--', ...flags] };
       }
       return { bin: binary, args: [args.folderpath] };
+    }
+    case 'dpp_extract': {
+      const cmdArgs = [args.filepath];
+      if (currentCase) cmdArgs.push('--case', currentCase);
+      return { bin: binary, args: cmdArgs };
     }
     case 'hash': {
       const caseArgs = currentCase ? ['--case', currentCase, '-o', '-t'] : [];
@@ -608,6 +642,7 @@ function registerCaseOutput(tool, caseName, target, outputPath) {
 const ANALYZE_MAX_FILES = 25; // matches _ANALYZE_MAX_FILES in malchela_server.py
 const ANALYZE_TIMEOUT_MS = 90000;
 const FILEMINER_TIMEOUT_MS = 120000;
+const DPP_EXTRACT_TIMEOUT_MS = 180000;
 const ANALYZE_MAX_BUFFER = 50 * 1024 * 1024; // fileminer's JSON dump easily exceeds execFileSync's 1MB default
 
 function pathsMatch(candidate, resolvedTarget) {
@@ -898,6 +933,42 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   return lines.join('\n');
 }
 
+const OVER_CAP_LIST_LIMIT = 40; // beyond mismatches, cap the plain listing so the
+                                 // response stays a reasonable size for the caller
+
+function buildOverCapSummary(target, scanResults, extractionNote) {
+  const mismatches = scanResults.filter(r => r.extension_mismatch);
+  const rest = scanResults.filter(r => !r.extension_mismatch);
+
+  const describe = r => {
+    const tools = (r.suggested_tools || [])
+      .filter(p => Array.isArray(p) && p.length === 2)
+      .map(p => p[0]);
+    return `- \`${r.filepath}\` (${r.filetype || 'unknown'})` +
+      (tools.length ? ` — suggested: ${tools.join(', ')}` : '');
+  };
+
+  const lines = [
+    `Analyze found ${scanResults.length} file(s) at ${target} — over the auto-run cap ` +
+      `(${ANALYZE_MAX_FILES}), so suggested tools were not auto-run.`,
+  ];
+  if (extractionNote) lines.push(`_${extractionNote}_`);
+  lines.push('', 'Call fileanalyzer/mstrings/macho_info/etc. yourself on whichever files below matter, ' +
+    'or call fileminer directly on the target for the complete list.', '');
+
+  if (mismatches.length) {
+    lines.push(`## Extension mismatches (${mismatches.length}) — start here`, '', ...mismatches.map(describe), '');
+  }
+
+  const shown = rest.slice(0, OVER_CAP_LIST_LIMIT);
+  lines.push(`## Other files (${rest.length})`, '', ...shown.map(describe));
+  if (rest.length > shown.length) {
+    lines.push(`- …and ${rest.length - shown.length} more — call fileminer directly on ${target} for the full list.`);
+  }
+
+  return lines.join('\n');
+}
+
 // If target is a .zip (the only way to get a directory-based sample like a
 // .app bundle into a system through a file-only upload path), extract it
 // into a sibling '<stem>_extracted' directory and return that as the new
@@ -937,12 +1008,69 @@ function maybeExtractZip(targetPath) {
   );
 }
 
+// If target is a .dmg or .pkg, shell out to dpp_extract to walk
+// UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO and return the extracted directory
+// as the new analyze target, plus a note for the rollup. Ports
+// server/malchela_server.py's _maybe_extract_dpp(). Returns
+// { target: targetPath, note: null } unchanged if target isn't a .dmg/.pkg.
+function maybeExtractDpp(targetPath) {
+  const ext = targetPath.toLowerCase().slice(targetPath.lastIndexOf('.'));
+  if (ext !== '.dmg' && ext !== '.pkg') {
+    return { target: targetPath, note: null };
+  }
+
+  const filename = basename(targetPath);
+  const stem = filename.slice(0, filename.length - ext.length);
+  const extractDir = `${dirname(targetPath)}/${stem}_extracted`;
+  try { rmSync(extractDir, { recursive: true, force: true }); } catch { /* didn't exist */ }
+
+  const binary = `${RELEASE_DIR}/dpp_extract`;
+  if (!existsSync(binary)) {
+    throw new Error(`Binary not found: ${binary}\nBuild MalChela first: cd ${MALCHELA_DIR} && ./release.sh`);
+  }
+
+  let output;
+  try {
+    output = execFileSync(binary, [targetPath, '-o', extractDir, '--json'], {
+      cwd: MALCHELA_DIR, encoding: 'utf8', timeout: DPP_EXTRACT_TIMEOUT_MS,
+    });
+  } catch (err) {
+    throw new Error(`dpp_extract failed to run: ${err.message}`);
+  }
+
+  let summary;
+  try {
+    summary = JSON.parse(output);
+  } catch (e) {
+    throw new Error(`Could not parse dpp_extract output: ${e.message}`);
+  }
+  if (!summary.success) {
+    throw new Error(summary.error || `dpp_extract could not unpack ${filename}`);
+  }
+
+  let note = `Auto-extracted \`${filename}\` via dpp_extract — ${summary.note || ''}`.trim();
+  if (summary.skipped?.length) {
+    note += ` (${summary.skipped.length} entries skipped — see dpp_extract output for detail)`;
+  }
+  return { target: summary.extracted_dir, note };
+}
+
+// Dispatch to the right auto-extraction step for Analyze's target based on
+// file type: .zip (a directory-based sample) or .dmg/.pkg (an Apple disk
+// image / installer). Mirrors server/malchela_server.py's
+// _maybe_extract_container().
+function maybeExtractContainer(targetPath) {
+  const zipResult = maybeExtractZip(targetPath);
+  if (zipResult.note !== null) return zipResult;
+  return maybeExtractDpp(targetPath);
+}
+
 function runAnalyze(rawTargetPath) {
   if (!existsSync(rawTargetPath)) {
     throw new Error(`Path does not exist: ${rawTargetPath}`);
   }
 
-  const { target: targetPath, note: extractionNote } = maybeExtractZip(rawTargetPath);
+  const { target: targetPath, note: extractionNote } = maybeExtractContainer(rawTargetPath);
 
   const fmBinary = `${RELEASE_DIR}/fileminer`;
   if (!existsSync(fmBinary)) {
@@ -988,10 +1116,17 @@ function runAnalyze(rawTargetPath) {
   }
 
   if (scanResults.length > ANALYZE_MAX_FILES) {
-    throw new Error(
-      `${scanResults.length} files found — Analyze is meant for a single sample or small bundle ` +
-      `(limit ${ANALYZE_MAX_FILES} files). For corpus-scale scans, use MZHash/MZCount/XMZHash instead.`
-    );
+    // Too many files to auto-run every suggested tool on every one — routine
+    // for a dpp-extracted PKG payload (a trojanized installer commonly
+    // bundles the full legitimate app it trojanized alongside the injected
+    // malicious file(s); EvilQuest: 624 files for one Mach-O of actual
+    // interest) but can happen pointed straight at a folder too. The web UI
+    // hands this off to File Miner's interactive table; there's no browser
+    // here, so return the same information directly as text — mismatched
+    // files first — so the calling agent can call fileanalyzer/mstrings/
+    // macho_info/etc. itself on whichever files matter, or call fileminer
+    // directly on targetPath for the complete un-truncated list.
+    return buildOverCapSummary(targetPath, scanResults, extractionNote);
   }
 
   const perFileResults = [];

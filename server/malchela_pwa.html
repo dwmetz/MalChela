@@ -2756,16 +2756,17 @@ function renderFileminerTable(rows) {
       ? row.suggested.split(',').map(t => t.trim()).filter(Boolean)
       : [];
     const fullPath = row.full_path || (row.path + '/' + row.filename);
-    const toolBtns = tools.map(t => {
+    const analyzeBtn = tools.length ? `<button class="fm-tool-btn fm-tool-analyze"
+        onclick="analyzeFromFileminer('${escHtml(fullPath)}')"
+        title="Run every suggested tool below in one pass, plus a combined rollup report"
+        >Analyze</button>` : '';
+    const toolBtns = analyzeBtn + tools.map(t => {
       const toolId = TOOL_MAP[t.toLowerCase()] || t.toLowerCase();
       const done = fmExecutedTools.has(`${toolId}::${fullPath}`);
       return `<button class="fm-tool-btn${done ? ' fm-tool-done' : ''}"
         onclick="launchFromFileminer('${escHtml(toolId)}','${escHtml(fullPath)}','${escHtml(row.sha256)}')"
         >${escHtml(t)}</button>`;
-    }).join('') + (tools.length ? `<button class="fm-tool-btn fm-tool-analyze"
-        onclick="analyzeFromFileminer('${escHtml(fullPath)}')"
-        title="Run every suggested tool above in one pass, plus a combined rollup report"
-        >▶ Analyze All</button>` : '');
+    }).join('');
 
     return `<tr>
       <td>${escHtml(row.filename)}</td>

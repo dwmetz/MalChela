@@ -858,196 +858,105 @@ def fileanalyzer():
 @app.route("/tools/fileminer", methods=["POST"])
 def fileminer():
     """
-    Scan a folder for file type mismatches and metadata.
-    FileMiner outputs a table then prompts interactively.
-    We capture stdout until the prompt appears, then terminate.
+    Scan a folder for file type mismatches and metadata via FileMiner's
+    --no-prompt JSON mode.
+
+    Previously this spawned fileminer interactively and scraped its
+    pretty-printed box-drawing table, reconstructing cells from fixed
+    column positions derived from the header separator. That broke on long
+    paths: the `tabled` crate word-wraps a cell that doesn't fit its
+    column, and continuation lines get rejoined with no separator (on the
+    assumption a wrap only ever splits mid-word) — when a wrap happens to
+    land on a path's own space character, that space silently vanishes or
+    moves, corrupting the reconstructed full_path (surfaced by dpp_extract's
+    long nested paths: a File Miner suggested-tool button would launch with
+    a mangled path and fail with "no such file", while the identical path
+    typed by hand via Browse worked fine). JSON has no column-width
+    constraint, so this sidesteps the whole bug class rather than patching
+    the reconstruction logic.
     """
     data = request.json or {}
     path = safe_path(data.get("path", ""))
     if not path:
         return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    case_name = _sanitize_case_name(data.get("case_name", "").strip()) or ""
 
-    binary_path = BINARY_DIR / "fileminer"
-    if not binary_path.exists():
-        return jsonify({"success": False, "error": "Binary not found: fileminer"})
+    fm_args = [str(path), "--no-prompt"]
+    if case_name:
+        fm_args += ["--case", case_name]
 
-    import threading
+    result = run_binary("fileminer", fm_args, timeout=120)
+    if not result.get("success"):
+        return jsonify(result)
 
     try:
-        proc = subprocess.Popen(
-            [str(binary_path), str(path)],
-            cwd=str(MALCHELA_ROOT),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        fm_data = json.loads(result["output"])
+    except (ValueError, KeyError) as e:
+        return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
 
-        output_lines = []
-        done = threading.Event()
+    rows = [_scan_result_to_row(r) for r in fm_data.get("results", [])]
 
-        def read_output():
-            for line in proc.stdout:
-                output_lines.append(line)
-                # Stop reading once we hit the interactive prompt
-                if "Select a file" in line or "press 'x'" in line.lower():
-                    break
-            done.set()
-
-        reader = threading.Thread(target=read_output, daemon=True)
-        reader.start()
-
-        # Wait up to 60s for the table to be fully output
-        done.wait(timeout=60)
-
-        # Terminate cleanly
-        try:
-            proc.stdin.write("x\n")
-            proc.stdin.flush()
-        except Exception:
-            pass
-        try:
-            proc.terminate()
-            proc.wait(timeout=3)
-        except Exception:
-            proc.kill()
-
-        output = "".join(output_lines).strip()
-        stderr_out = proc.stderr.read().strip() if proc.stderr else ""
-        if stderr_out:
-            output += f"\n[stderr]\n{stderr_out}"
-
-        rows = _parse_fileminer_output(output)
-
-        import sys
-        if rows:
-            print(f"DEBUG fileminer rows[0]: {rows[0]}", file=sys.stderr)
-
-        return jsonify({
-            "success": True,
-            "output": output,
-            "returncode": 0,
-            "rows": rows,
-        })
-
-    except Exception as e:
-        return jsonify({"success": False, "error": _safe_error(e)})
+    return jsonify({
+        "success": True,
+        "output": result["output"],
+        "returncode": result.get("returncode", 0),
+        "rows": rows,
+    })
 
 
-def _parse_fileminer_output(output: str) -> list:
-    """
-    Parse FileMiner table output using fixed column positions derived from the header row.
-    The table uses fixed-width columns — we find │ positions from the header separator
-    and slice each line accordingly, rather than splitting on │ (which fails on continuation lines).
-    """
-    lines = output.split('\n')
-
-    # Find the header separator line (┌...┐ or ├...┤) to derive column boundary positions
-    col_positions = []
-    for line in lines:
-        if line.startswith('┌') or line.startswith('├'):
-            # Find all │ equivalent positions — in separator lines these are ┬ or ┼
-            positions = [i for i, ch in enumerate(line) if ch in ('┬', '┼', '┐', '┤')]
-            if len(positions) >= 8:
-                col_positions = positions
-                break
-
-    if not col_positions:
-        return []
-
-    # Column slices: from position after previous │ to position of next │
-    # Table structure: │ # │ Filename │ Path │ Type │ Size │ SHA256 │ Ext │ Inferred │ Mismatch │ Suggested │
-    # col_positions gives us the right-edge of each column
-
-    rows = []
-    current_cells = [''] * 9  # 9 data columns (skip row number)
-    in_data = False
-
-    for line in lines:
-        if not line.startswith('│'):
-            if line.startswith('├') or line.startswith('┌'):
-                in_data = True
-            if line.startswith('└') or line.startswith('├'):
-                # Row boundary — save current if populated
-                if any(c.strip() for c in current_cells):
-                    row = _cells_to_row(current_cells)
-                    if row:
-                        rows.append(row)
-                    current_cells = [''] * 9
-            continue
-
-        if not in_data:
-            continue
-
-        # Skip header row
-        if '# ' in line[:6] or 'Filename' in line:
-            continue
-
-        # Use col_positions to slice the line into cells
-        # First cell (index 0) is the row number — skip it
-        # Remaining cells map to our 9 data columns
-        try:
-            prev = 0
-            all_cells = []
-            for pos in col_positions:
-                cell = line[prev+1:pos].strip() if pos <= len(line) else ''
-                all_cells.append(cell)
-                prev = pos
-            # all_cells[0] = row number, [1..9] = data columns
-            if len(all_cells) >= 10:
-                is_new_row = all_cells[0].isdigit()
-                if is_new_row:
-                    if any(c.strip() for c in current_cells):
-                        row = _cells_to_row(current_cells)
-                        if row:
-                            rows.append(row)
-                    current_cells = [all_cells[i] for i in range(1, 10)]
-                else:
-                    # Continuation — append non-empty cells without separator
-                    for i in range(9):
-                        part = all_cells[i+1] if i+1 < len(all_cells) else ''
-                        if part:
-                            # Path-like cells (0=filename, 1=path, 4=sha256): no space
-                            sep = '' if i in (0, 1, 4) else ' '
-                            current_cells[i] = current_cells[i] + sep + part
-        except Exception:
-            continue
-
-    # Don't forget the last row
-    if any(c.strip() for c in current_cells):
-        row = _cells_to_row(current_cells)
-        if row:
-            rows.append(row)
-
-    return rows
+# Mirrors fileminer/src/main.rs's simplify_mime() exactly, for the web UI's
+# "Type" column — that shortening only happens in fileminer's own table
+# renderer, not as a JSON field, so it's replicated here rather than shipped
+# as raw MIME strings.
+_MIME_SIMPLIFY = {
+    "application/vnd.microsoft.portable-executable": "PE-EXE",
+    "application/zip": "ZIP",
+    "application/pdf": "PDF",
+    "image/jpeg": "JPG",
+    "image/png": "PNG",
+    "text/plain": "TXT",
+    "Unknown": "Unknown",
+}
 
 
-def _cells_to_row(cells: list) -> Optional[dict]:
-    """Convert fixed-width sliced cells into a structured dict."""
-    if len(cells) < 4:
-        return None
+def _simplify_mime(mime: str) -> str:
+    return _MIME_SIMPLIFY.get(mime, "Other")
+
+
+def _format_size(n) -> str:
+    """Mirrors fileminer/src/main.rs's format_size() exactly."""
     try:
-        filename = cells[0].strip()
-        path     = cells[1].strip()
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n)
+    if n >= 1_048_576:
+        return f"{n / 1_048_576:.1f} MB"
+    if n >= 1024:
+        return f"{n / 1024:.1f} KB"
+    return f"{n} B"
 
-        # Path cell contains the full path including filename — use directly
-        # Strip any whitespace artifacts from fixed-width slicing
-        full_path = path if path else filename
 
-        return {
-            "filename":  filename,
-            "path":      path,
-            "full_path": full_path,
-            "type":      cells[2].strip() if len(cells) > 2 else "",
-            "size":      cells[3].strip() if len(cells) > 3 else "",
-            "sha256":    cells[4].strip() if len(cells) > 4 else "",
-            "ext":       cells[5].strip() if len(cells) > 5 else "",
-            "inferred":  cells[6].strip() if len(cells) > 6 else "",
-            "mismatch":  cells[7].strip() if len(cells) > 7 else "",
-            "suggested": cells[8].strip() if len(cells) > 8 else "",
-        }
-    except Exception:
-        return None
+def _scan_result_to_row(r: dict) -> dict:
+    """Map a fileminer ScanResult (--no-prompt JSON mode) to the row shape
+    the web UI's File Miner table expects — same field names the old
+    table-scraping code produced, just sourced reliably."""
+    filepath = r.get("filepath", "")
+    suggested = ", ".join(
+        pair[0] for pair in r.get("suggested_tools", [])
+        if isinstance(pair, (list, tuple)) and len(pair) == 2 and isinstance(pair[0], str)
+    )
+    return {
+        "filename":  r.get("filename", ""),
+        "path":      filepath,
+        "full_path": filepath,
+        "type":      _simplify_mime(r.get("actual_type", "")),
+        "size":      _format_size(r.get("size", 0)),
+        "sha256":    r.get("sha256", ""),
+        "ext":       r.get("extension_label", ""),
+        "inferred":  r.get("extension_inferred", ""),
+        "mismatch":  str(bool(r.get("extension_mismatch", False))).lower(),
+        "suggested": suggested,
+    }
 
 
 # ── Analyze (auto-mode) ─────────────────────────────────────────────────────

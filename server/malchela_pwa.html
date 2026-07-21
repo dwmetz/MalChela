@@ -1273,6 +1273,8 @@
   .fm-tool-btn:hover { border-color: var(--cyan); color: var(--cyan); }
   .fm-tool-done { border-color: var(--green); color: var(--green); }
   .fm-tool-done:hover { border-color: var(--green); color: var(--green); opacity: 0.75; }
+  .fm-tool-analyze { color: var(--orange); border-color: var(--orange-dim); }
+  .fm-tool-analyze:hover { border-color: var(--orange); color: var(--orange); }
 
   /* ── TI Query tabs ── */
   .ti-tab {
@@ -2753,14 +2755,17 @@ function renderFileminerTable(rows) {
     const tools = row.suggested
       ? row.suggested.split(',').map(t => t.trim()).filter(Boolean)
       : [];
+    const fullPath = row.full_path || (row.path + '/' + row.filename);
     const toolBtns = tools.map(t => {
       const toolId = TOOL_MAP[t.toLowerCase()] || t.toLowerCase();
-      const fullPath = row.full_path || (row.path + '/' + row.filename);
       const done = fmExecutedTools.has(`${toolId}::${fullPath}`);
       return `<button class="fm-tool-btn${done ? ' fm-tool-done' : ''}"
         onclick="launchFromFileminer('${escHtml(toolId)}','${escHtml(fullPath)}','${escHtml(row.sha256)}')"
         >${escHtml(t)}</button>`;
-    }).join('');
+    }).join('') + (tools.length ? `<button class="fm-tool-btn fm-tool-analyze"
+        onclick="analyzeFromFileminer('${escHtml(fullPath)}')"
+        title="Run every suggested tool above in one pass, plus a combined rollup report"
+        >▶ Analyze All</button>` : '');
 
     return `<tr>
       <td>${escHtml(row.filename)}</td>
@@ -2827,6 +2832,15 @@ function launchFromFileminer(toolId, filePath, sha256) {
       if (pathInput) pathInput.value = filePath;
     }
   }, 50);
+}
+
+function analyzeFromFileminer(filePath) {
+  // "Analyze All" — run every suggested tool for this one file in a single
+  // pass instead of launching each individually. Reuses Analyze's own
+  // single-file mode (it already filters to just the selected path and
+  // builds one rollup) rather than duplicating that logic here.
+  showAnalyzePanel(filePath);
+  runAnalyze(filePath);
 }
 
 // ── FileMiner Session Persistence ─────────────────────────────────────────

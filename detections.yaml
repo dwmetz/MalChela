@@ -60,6 +60,32 @@ SuspiciousC2ApiPhp:
     - technique_id: "T1071.001"
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
+
+HandbuiltHttpRequestTemplate:
+  title: "Hand-built raw HTTP request template"
+  id: "c2-raw-http-template-001"
+  status: "experimental"
+  description: "Detects a printf/sprintf-style HTTP/1.0 request-line format string (e.g. 'GET /%s HTTP/1.0') or an unusual compact query-string template (e.g. 'q?s=%s&h=%s'). Malware that talks HTTP over a raw socket instead of a standard HTTP client library (NSURLSession, WinHTTP, libcurl) has to build the request text itself — this is the format-string skeleton left behind by that approach, and doesn't appear in normal use of a standard HTTP library. Found via a macOS backdoor/ransomware sample (EvilQuest/ThiefQuest) constructing its C2 beacon this way. OS-agnostic — the technique isn't platform-specific."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "GET /%s HTTP/1\\.0"
+      - "POST /%s HTTP/1\\.0"
+      - "q\\?s=%s&h=%s"
+  falsepositives:
+    - "Minimal embedded/IoT HTTP client implementations that legitimately hand-build requests to avoid a full HTTP library dependency"
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
 SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
@@ -1396,6 +1422,31 @@ RansomwareCryptoAPIs:
       technique_name: "Data Encrypted for Impact"
       tactics: ["Impact"]
 
+BitcoinAddressP2PKH:
+  title: "Hardcoded Bitcoin address (P2PKH/P2SH)"
+  id: "ransom-btc-address-001"
+  status: "experimental"
+  description: "Detects a Base58Check-encoded legacy Bitcoin address (P2PKH, starting '1', or P2SH, starting '3') embedded as a plain string. Ransom notes and extortion payloads commonly hardcode a payment address directly in the binary rather than fetching it from a C2 server, since the demand still needs to display even if C2 is unreachable. Found via a heavily string-obfuscated macOS ransomware/backdoor sample (EvilQuest/ThiefQuest) whose ransom note text itself is encrypted, but the payment address survived in the clear. OS-agnostic — this is not a macOS-specific indicator."
+  references:
+    - "https://en.bitcoin.it/wiki/Address"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "\\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b"
+  falsepositives:
+    - "Base58 text that happens to fit the length/charset envelope without being a real address (rare given the length/charset constraints, but not cryptographically verified — no checksum validation is performed)"
+  level: high
+  tags:
+    - attack.t1486
+  mitre:
+    - technique_id: "T1486"
+      technique_name: "Data Encrypted for Impact"
+      tactics: ["Impact"]
+
 
 StringEncodingObfuscation:
   title: "String Encoding / Obfuscation"
@@ -2172,6 +2223,82 @@ MacSensitiveFileAccess:
     - technique_id: "T1539"
       technique_name: "Steal Web Session Cookie"
       tactics: ["Credential Access"]
+
+MacInMemoryMachOLoading:
+  title: "macOS In-Memory Mach-O Loading (dyld NSCreateObjectFileImage)"
+  id: "mac-inmem-macho-001"
+  status: "experimental"
+  description: "Detects debug-assertion strings from Apple's NSCreateObjectFileImageFromMemory implementation (the API used to load and execute a Mach-O image entirely from a memory buffer rather than a file on disk). WorkAroundRadarID4189935 is a literal internal Radar bug-ID comment/assertion string from that dyld code path — its presence in a binary is a strong indicator the sample bundles a copy of it for fileless/reflective Mach-O execution, a documented technique used by EvilQuest/ThiefQuest to run a payload without writing it to disk first."
+  references:
+    - "https://opensource.apple.com/source/dyld/"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "WorkAroundRadarID4189935"
+      - "NSCreateObjectFileImageFromMemory"
+  falsepositives:
+    - "A legitimate tool that statically links or vendors Apple's open-source dyld loader code for its own purposes (uncommon outside of loader/injection tooling)"
+  level: high
+  tags:
+    - attack.t1620
+  mitre:
+    - technique_id: "T1620"
+      technique_name: "Reflective Code Loading"
+      tactics: ["Defense Evasion"]
+
+MacKeyloggerKeyNameTable:
+  title: "macOS Keylogger Key-Name Table"
+  id: "mac-keylogger-keytable-001"
+  status: "experimental"
+  description: "Detects bracketed human-readable key-name strings ([left-cmd], [caps], [volup], etc.) used to translate captured keycodes/modifier state into readable text before logging or exfiltration — the same table structure documented in EvilQuest/ThiefQuest's keylogging component. Legitimate accessibility/input-remapping software can use similar labels, so this is a heuristic rather than a definitive indicator."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "^\\[(left-cmd|right-cmd|left-shift|right-shift|left-option|right-option|left-ctrl|right-ctrl|caps|volup|voldown|mute|fwddel|pgup|pgdown)\\]$"
+  falsepositives:
+    - "Accessibility tools, keyboard remapping utilities, or input-testing apps that display the same human-readable key names"
+  level: medium
+  tags:
+    - attack.t1056.001
+  mitre:
+    - technique_id: "T1056.001"
+      technique_name: "Input Capture: Keylogging"
+      tactics: ["Collection"]
+
+MacSelfReexecRootEscalation:
+  title: "macOS Self Re-Exec Root/Admin Escalation Flags"
+  id: "mac-selfreexec-root-001"
+  status: "experimental"
+  description: "Detects internal CLI control flags a binary passes to itself when re-invoking as root/admin, paired with explicit privilege-requirement messages. EvilQuest/ThiefQuest re-launches itself with hidden flags (observed: --reroot, --noroot, --ignrp) to control its own re-exec/escalation flow rather than using a standard privileged-helper mechanism. Individually thin signals (root-requirement messages are common in legitimate installers), so this is a medium-confidence heuristic — strongest when multiple patterns match the same sample."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "--reroot\\b"
+      - "--noroot\\b"
+      - "--ignrp\\b"
+      - "This application has to be run by root"
+      - "This program is designed to run with admin privileges"
+  falsepositives:
+    - "Legitimate installers/updaters that require root and print a similar message, or CLI tools with coincidentally similar flag names"
+  level: medium
+  tags:
+    - attack.t1548
+  mitre:
+    - technique_id: "T1548"
+      technique_name: "Abuse Elevation Control Mechanism"
+      tactics: ["Privilege Escalation"]
 
 
 # ── Linux / IoT-specific detections ───────────────────────────────────────────

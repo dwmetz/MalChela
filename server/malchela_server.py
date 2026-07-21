@@ -1973,6 +1973,21 @@ def extract_samples():
     return jsonify(run_binary("extract_samples", args))
 
 
+@app.route("/tools/dpp_extract", methods=["POST"])
+def dpp_extract():
+    """Unwrap a .dmg/.pkg container (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO)
+    to reach the real payload files inside. Args: path [case_name]"""
+    data = request.json or {}
+    path = safe_path(data.get("path", ""))
+    if not path:
+        return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    case_name = _sanitize_case_name(data.get("case_name", "").strip()) or ""
+    args = [str(path)]
+    if case_name:
+        args += ["--case", case_name]
+    return jsonify(run_binary("dpp_extract", args, timeout=180))
+
+
 @app.route("/tools/strings_to_yara", methods=["POST"])
 def strings_to_yara():
     """

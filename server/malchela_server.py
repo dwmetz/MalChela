@@ -1105,6 +1105,58 @@ def _maybe_extract_zip(target: Path) -> tuple:
     )
 
 
+def _maybe_extract_dpp(target: Path) -> tuple:
+    """If target is a .dmg or .pkg, shell out to dpp_extract to walk
+    UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO and return the extracted directory
+    as the new analyze target, plus a note for the rollup. Returns
+    (target, None) unchanged if target isn't a .dmg/.pkg."""
+    if target.suffix.lower() not in (".dmg", ".pkg"):
+        return target, None
+
+    extract_dir = target.parent / f"{target.stem}_extracted"
+    shutil.rmtree(extract_dir, ignore_errors=True)
+
+    result = run_binary(
+        "dpp_extract", [str(target), "-o", str(extract_dir), "--json"], timeout=180
+    )
+    if not result.get("success"):
+        raise ValueError(result.get("error", "dpp_extract failed to run"))
+
+    try:
+        summary = json.loads(result["output"])
+    except (ValueError, KeyError) as e:
+        raise ValueError(f"Could not parse dpp_extract output: {e}")
+
+    if not summary.get("success"):
+        raise ValueError(summary.get("error", f"dpp_extract could not unpack {target.name}"))
+
+    note = f"Auto-extracted `{target.name}` via dpp_extract — {summary.get('note', '')}".strip()
+    skipped = summary.get("skipped") or []
+    if skipped:
+        note += f" ({len(skipped)} entries skipped — see dpp_extract output for detail)"
+    return Path(summary["extracted_dir"]), note
+
+
+def _maybe_extract_container(target: Path) -> tuple:
+    """Dispatch to the right auto-extraction step for Analyze's target based
+    on file type: .zip (a directory-based sample uploaded through the PWA's
+    file-only widget) or .dmg/.pkg (an Apple disk image / installer). Returns
+    (new_target, note, via_dpp) — via_dpp is True only for the .dmg/.pkg path,
+    since that's the one whose extracted trees commonly blow past
+    _ANALYZE_MAX_FILES (a trojanized installer usually bundles the full
+    legitimate app payload alongside the injected malicious file(s)) and
+    needs different over-cap handling in analyze()."""
+    zip_target, zip_note = _maybe_extract_zip(target)
+    if zip_note is not None:
+        return zip_target, zip_note, False
+
+    dpp_target, dpp_note = _maybe_extract_dpp(target)
+    if dpp_note is not None:
+        return dpp_target, dpp_note, True
+
+    return target, None, False
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     """
@@ -1123,8 +1175,9 @@ def analyze():
         return jsonify({"success": False, "error": "Path does not exist"}), 404
 
     extraction_note = None
+    via_dpp = False
     try:
-        target, extraction_note = _maybe_extract_zip(target)
+        target, extraction_note, via_dpp = _maybe_extract_container(target)
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -1163,7 +1216,7 @@ def analyze():
                 "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
             })
 
-    if len(scan_results) > _ANALYZE_MAX_FILES:
+    if len(scan_results) > _ANALYZE_MAX_FILES and not via_dpp:
         return jsonify({
             "success": False,
             "error": (
@@ -1171,6 +1224,31 @@ def analyze():
                 f"(limit {_ANALYZE_MAX_FILES} files). For corpus-scale scans, use MZHash/MZCount/XMZHash instead."
             ),
         })
+
+    if len(scan_results) > _ANALYZE_MAX_FILES:
+        # dpp-extracted containers routinely blow past the cap — a trojanized
+        # installer's payload commonly bundles the full legitimate app it
+        # trojanized alongside the injected malicious file(s) (EvilQuest:
+        # 624 files for one Mach-O of actual interest). Auto-running every
+        # suggested tool on every one of those isn't practical, so fall back
+        # to a FileMiner-only rollup: list what was found and what's
+        # suggested, without running anything. Drill into specific files
+        # (starting with any extension mismatches) via the web UI's per-file
+        # tool launcher instead.
+        per_file_results = [
+            {
+                "filename": res.get("filename", ""),
+                "filepath": res.get("filepath", ""),
+                "filetype": res.get("filetype", ""),
+                "sha256": res.get("sha256", ""),
+                "md5": res.get("md5", ""),
+                "extension_mismatch": res.get("extension_mismatch", False),
+                "suggested_tools": res.get("suggested_tools", []),
+            }
+            for res in scan_results
+        ]
+        rollup_md = _build_fileminer_rollup(str(target), per_file_results, extraction_note)
+        return _save_analyze_rollup(target, case_name, per_file_results, rollup_md, extraction_note)
 
     per_file_results = []
     for res in scan_results:
@@ -1235,7 +1313,14 @@ def analyze():
         })
 
     rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note)
+    return _save_analyze_rollup(target, case_name, per_file_results, rollup_md, extraction_note)
 
+
+def _save_analyze_rollup(target: Path, case_name: str, per_file_results: list,
+                          rollup_md: str, extraction_note: Optional[str]):
+    """Shared tail for both analyze() paths (full per-file tool run, and the
+    over-cap FileMiner-only fallback): save the rollup, register it with the
+    case if there is one, and build the JSON response."""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     # The "analyze" subfolder matters here, not just cosmetically: it's what
     # lets _register_cli_case_output("analyze", ...) below find the file it
@@ -1537,6 +1622,56 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
             else:
                 lines.append(f"**Error:** {run['error'] or 'Tool run failed.'}")
             lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_fileminer_rollup(target: str, per_file_results: list, extraction_note: str = None) -> str:
+    """Over-cap fallback rollup for dpp-extracted (.dmg/.pkg) targets: list
+    every file FileMiner found and what it suggests, without running
+    anything. Extension-mismatched files are called out first — that's
+    exactly the anomaly a trojanized installer produces (e.g. a Mach-O with
+    no extension dropped alongside a legitimate app's normal files)."""
+    mismatches = [r for r in per_file_results if r.get("extension_mismatch")]
+
+    lines = [
+        f"# MalChela Summary — {target}",
+        "",
+        f"Generated: {datetime.now().isoformat()}",
+        f"Files found: {len(per_file_results)}",
+    ]
+    if extraction_note:
+        lines.append(f"_{extraction_note}_")
+    lines += [
+        "",
+        "## Triage Summary",
+        "",
+        f"- **{len(per_file_results)} file(s)** found — over the Analyze auto-run cap "
+        f"({_ANALYZE_MAX_FILES}), so suggested tools were **not** auto-run here.",
+        "- Use the table below to pick specific files to run manually (the web UI's "
+        "per-file tool launcher), starting with any extension mismatches.",
+    ]
+    if mismatches:
+        names = ", ".join(f"`{m['filename']}`" for m in mismatches)
+        lines.append(f"- **⚠ {len(mismatches)} extension mismatch(es):** {names}")
+    lines.append("")
+
+    lines.append("## Files")
+    lines.append("")
+    lines.append("| File | Type | Mismatch | Suggested Tools |")
+    lines.append("|---|---|---|---|")
+    ordered = mismatches + [r for r in per_file_results if r not in mismatches]
+    for r in ordered:
+        suggested = ", ".join(
+            label for pair in r.get("suggested_tools", [])
+            if isinstance(pair, (list, tuple)) and len(pair) == 2
+            for label in [pair[0]]
+        )
+        flag = "⚠" if r.get("extension_mismatch") else ""
+        lines.append(
+            f"| `{r.get('filename', '')}` | {r.get('filetype', '')} | {flag} | {suggested or '—'} |"
+        )
+    lines.append("")
 
     return "\n".join(lines)
 

@@ -94,14 +94,14 @@ SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
   status: "experimental"
-  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names. Scheme prefix required to avoid Go import path false positives. Optional subdomain prefix (e.g. www.) handled via non-capturing group to correctly match cases like the WannaCry kill switch domain (http://www.iuqerfsodp9...). URL must be cleanly delimited (preceded by whitespace, quote, or start-of-string) to avoid matching URLs embedded mid-blob in Go binary data sections or DGA word lists."
+  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names, AND a 5+ character minimum on that portion — DGA domains are long by design (more entropy = harder to preemptively block/collide), whereas a short digit-containing label is far more often a legitimate abbreviated brand (w3.org, mp3.com, id3.org). Without the length floor, the W3C's own w3.org — appearing in essentially every HTML DOCTYPE and XML namespace declaration in existence — matched this rule every time. Scheme prefix required to avoid Go import path false positives. Optional subdomain prefix (e.g. www.) handled via non-capturing group to correctly match cases like the WannaCry kill switch domain (http://www.iuqerfsodp9...). URL must be cleanly delimited (preceded by whitespace, quote, or start-of-string) to avoid matching URLs embedded mid-blob in Go binary data sections or DGA word lists."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(?:^|[\\s\"'`(])https?://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
-      - "(?:^|[\\s\"'`(])ftp://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "(?:^|[\\s\"'`(])https?://(?:[a-zA-Z0-9-]+\\.)*(?=[a-zA-Z0-9]*[0-9])[a-zA-Z0-9]{5,}\\.(com|biz|net|org|info)"
+      - "(?:^|[\\s\"'`(])ftp://(?:[a-zA-Z0-9-]+\\.)*(?=[a-zA-Z0-9]*[0-9])[a-zA-Z0-9]{5,}\\.(com|biz|net|org|info)"
   tags:
     - attack.t1071.001
   level: high

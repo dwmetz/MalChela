@@ -725,6 +725,91 @@ def home_screen():
     return jsonify({"success": True, "output": output})
 
 
+@app.route("/home_stats", methods=["GET"])
+def home_stats():
+    """
+    At-a-glance stats for the Home screen's stats card:
+    case counts, detections.yaml rule count, API key configuration,
+    and MalChela-native-tool vs. third-party-integration availability
+    (reusing the same tools.yaml exec_type/available logic as the
+    sidebar and /tools_yaml).
+    """
+    # Cases: open vs. closed, same status field/default as /cases
+    cases_open = 0
+    cases_closed = 0
+    if CASES_DIR.exists():
+        for case_dir in CASES_DIR.iterdir():
+            if not case_dir.is_dir():
+                continue
+            status = "open"
+            yaml_file = case_dir / "case.yaml"
+            if yaml_file.exists():
+                try:
+                    with open(yaml_file) as f:
+                        meta = yaml.safe_load(f) or {}
+                    status = meta.get("status", "open")
+                except Exception:
+                    pass
+            if status == "closed":
+                cases_closed += 1
+            else:
+                cases_open += 1
+
+    # detections.yaml — count of top-level Sigma-lite rules
+    detections_count = 0
+    detections_path = MALCHELA_ROOT / "detections.yaml"
+    if detections_path.exists():
+        try:
+            with open(detections_path) as f:
+                detections_count = len(yaml.safe_load(f) or {})
+        except Exception:
+            pass
+
+    # API keys — same 12-source list as /api_keys, just a configured/total count
+    api_key_files = [
+        "vt-api.txt", "mb-api.txt", "otx-api.txt", "md-api.txt", "mp-api.txt",
+        "ha-api.txt", "mw-api.txt", "tr-api.txt", "fs-api.txt", "ms-api.txt",
+        "url-api.txt", "gsb-api.txt",
+    ]
+    api_keys_configured = sum(
+        1 for fname in api_key_files
+        if (API_DIR / fname).exists() and (API_DIR / fname).read_text().strip() != ""
+    )
+
+    # Tools: same availability check as /tools_yaml, split into MalChela-native
+    # (exec_type: cargo, checked against our own compiled release binaries) vs.
+    # integrations (anything else in tools.yaml, checked against PATH).
+    malchela_available = malchela_total = 0
+    integrations_available = integrations_total = 0
+    if TOOLS_YAML_PATH.exists():
+        try:
+            with open(TOOLS_YAML_PATH) as f:
+                tools_data = yaml.safe_load(f) or {}
+            for tool in tools_data.get("tools", []):
+                cmd = tool.get("command", [])
+                binary = cmd[0] if cmd else ""
+                exec_type = tool.get("exec_type", "cargo")
+                if exec_type == "cargo":
+                    malchela_total += 1
+                    if (BINARY_DIR / binary).exists():
+                        malchela_available += 1
+                else:
+                    integrations_total += 1
+                    if find_tool(binary) is not None:
+                        integrations_available += 1
+        except Exception:
+            pass
+
+    return jsonify({
+        "success": True,
+        "cases": {"open": cases_open, "closed": cases_closed},
+        "detections": detections_count,
+        "api_keys": {"configured": api_keys_configured, "total": len(api_key_files)},
+        "malchela_tools": {"available": malchela_available, "total": malchela_total},
+        "integrations": {"available": integrations_available, "total": integrations_total},
+    })
+
+
 @app.route("/about", methods=["GET"])
 def about_screen():
     """

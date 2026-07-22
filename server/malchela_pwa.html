@@ -5615,10 +5615,14 @@ async function showHome(e) {
   setOutput('<span class="out-dim">Loading home screen…</span>');
 
   try {
-    const res = await fetch(serverUrl + '/home', { method: 'GET' });
+    const [res, statsRes] = await Promise.all([
+      fetch(serverUrl + '/home', { method: 'GET' }),
+      fetch(serverUrl + '/home_stats', { method: 'GET' }).catch(() => null),
+    ]);
     const data = await res.json();
+    const stats = statsRes ? await statsRes.json().catch(() => null) : null;
     if (data.success) {
-      renderHomeOutput(data.output);
+      renderHomeOutput(data.output, stats?.success ? stats : null);
     } else {
       setOutput(`<span class="out-red">Error: ${data.error}</span>`);
     }
@@ -5651,7 +5655,37 @@ async function showAbout(e) {
   }
 }
 
-function renderHomeOutput(text) {
+function _homeStatValueColor(avail, total) {
+  if (total === 0) return 'var(--text-dim)';
+  if (avail === total) return 'var(--green)';
+  if (avail === 0) return 'var(--text-dim)';
+  return 'var(--yellow)';
+}
+
+function renderHomeStatsCard(stats) {
+  if (!stats) return '';
+  const rows = [
+    ['Cases', `${stats.cases.open} open &middot; ${stats.cases.closed} closed`, 'var(--text-primary)'],
+    ['Detections Loaded', `${stats.detections} rules`, 'var(--cyan)'],
+    ['API Keys', `${stats.api_keys.configured}/${stats.api_keys.total} configured`,
+      _homeStatValueColor(stats.api_keys.configured, stats.api_keys.total)],
+    ['MalChela Tools', `${stats.malchela_tools.available}/${stats.malchela_tools.total} available`,
+      _homeStatValueColor(stats.malchela_tools.available, stats.malchela_tools.total)],
+    ['Integrations', `${stats.integrations.available}/${stats.integrations.total} available`,
+      _homeStatValueColor(stats.integrations.available, stats.integrations.total)],
+  ];
+  return `
+    <div style="background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:6px;padding:16px 20px;min-width:260px;max-width:320px;height:fit-content">
+      <div style="font-size:11px;font-weight:600;color:var(--cyan);letter-spacing:.08em;margin-bottom:12px">AT A GLANCE</div>
+      ${rows.map(([label, value, color]) => `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;color:var(--text-dim)">${escHtml(label)}</span>
+          <span style="font-size:12px;color:${color};font-weight:600">${value}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderHomeOutput(text, stats) {
   const cleaned = text
     .replace(/Press Enter to continue\.\.\./gi, '')
     .trimEnd();
@@ -5781,8 +5815,12 @@ function renderHomeOutput(text) {
     ? `<pre class="ascii-art">${escHtml(artBlock.join('\n'))}</pre>`
     : '';
   const textHtml = `<div style="line-height:1.8">${rendered.join('')}${featureTableHtml}${renderedPost.join('')}</div>`;
+  const statsCardHtml = renderHomeStatsCard(stats);
 
-  html = `<div style="padding:16px 0 0 24px">${artHtml}${textHtml}</div>`;
+  html = `<div style="display:flex;gap:32px;flex-wrap:wrap;padding:16px 24px 0 24px">
+      <div>${artHtml}${textHtml}</div>
+      ${statsCardHtml}
+    </div>`;
   document.getElementById('output-content').innerHTML = html;
   document.getElementById('output-content').scrollTop = 0;
 }

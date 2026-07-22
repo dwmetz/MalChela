@@ -1360,14 +1360,18 @@ PackedOrStubExecutable:
   title: "Packed Executable or Stub Artifact"
   id: "packer-stub-hint"
   status: "experimental"
-  description: "Hints that the binary is packed or a stub loader (e.g., UPX or DOS headers only)."
+  description: "Hints that the binary is packed or a stub loader (e.g., UPX or DOS headers only). The leading-dot .UPX! pattern only matches when some other character happens to immediately precede the marker within the same extracted string — a UPX-packed Mach-O (iWorm/JavaW, from the 2014 Virus Bulletin analysis) extracts \"UPX!\" as its own clean isolated string, which the leading dot then fails to match at all. Added the bare marker plus UPX's own info/copyright strings, which are unambiguous. Cross-platform, not Windows-specific — genuinely more notable on macOS, where packers are uncommon."
+  references:
+    - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
   logsource:
     category: "file_event"
-    product: "windows"
+    product: any
   detection:
     strings:
-      - ".UPX!"
+      - "UPX!"
       - "This program cannot be run in DOS mode"
+      - "packed with the UPX executable packer"
+      - "UPX \\d+\\.\\d+ Copyright"
   tags:
     - attack.T1027
   level: medium
@@ -1975,6 +1979,58 @@ MacLaunchAgentDaemonPersistence:
     - technique_id: "T1543.001"
       technique_name: "Create or Modify System Process: Launch Agent"
       tactics: ["Persistence", "Privilege Escalation"]
+
+IWormJavaWPersistence:
+  title: "iWorm/JavaW persistence indicators"
+  id: "mac-iworm-javaw-001"
+  status: "experimental"
+  description: "Detects the exact persistence artifacts of iWorm's second-stage dropper (the '0' binary in TAOMM's Install.app sample): it creates /Library/Application Support/JavaW/, drops the embedded payload there as JavaW, and installs a LaunchDaemon labeled com.JavaW (/Library/LaunchDaemons/com.JavaW.plist) with RunAtLoad set, then loads/starts it via launchctl. These strings are already present in the dropper itself, not just the payload it writes — the generic LaunchDaemon rule catches the launchctl/LaunchDaemons paths already present in this sample, but not the family-specific label/path that identifies it as iWorm specifically."
+  references:
+    - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "com\\.JavaW"
+      - "/Library/Application Support/JavaW"
+  falsepositives:
+    - "A legitimate, unrelated tool that happens to use the literal bundle identifier com.JavaW (effectively unheard of)"
+  level: high
+  tags:
+    - attack.t1543.004
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+RedditDeadDropC2:
+  title: "Reddit used as a C2 dead-drop resolver"
+  id: "c2-reddit-deaddrop-001"
+  status: "experimental"
+  description: "Detects references to the specific Reddit accounts/subreddits iWorm queried to locate its C2 server list: comments posted by the account vtnhiaovyd under the subreddit post minecraftserverlists (since banned), and the subreddit ilikedota2 (still active as of the original analysis). Using a public web service's search/comments as a dead-drop to publish rotating C2 addresses — rather than hardcoding them — is the same technique OS X Flashback used with Twitter. In this sample the strings only exist inside the UPX-packed JavaW payload (not visible until unpacked: upx -d JavaW); dropper/installer components won't match this rule."
+  references:
+    - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "minecraftserverlists"
+      - "vtnhiaovyd"
+      - "ilikedota2"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1102.001
+  mitre:
+    - technique_id: "T1102.001"
+      technique_name: "Web Service: Dead Drop Resolver"
+      tactics: ["Command and Control"]
 
 MacLoginItemPersistence:
   title: "macOS Login Item Persistence"

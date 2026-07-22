@@ -2429,13 +2429,27 @@ function stopTiqueryProgressPolling() {
 // target can take minutes with no other feedback otherwise.
 
 let _analyzeProgressTimer = null;
+// clearInterval only stops *future* ticks — a tick already in flight (its
+// await api(...) mid-fetch) keeps running and will still call setOutput()
+// when it resolves, even after the main /analyze request has already
+// rendered the final results. That race is what caused the progress bar to
+// reach 100% and then silently overwrite the just-rendered results a beat
+// later. This flag closes the window: markAnalyzeFinished() is called the
+// instant runAnalyze() has its final response, before any rendering, and
+// every poll tick checks it again right after its own await resolves —
+// not just before starting — so a tick already in flight when the flag
+// flips still bails out instead of overwriting the final output.
+let _analyzeFinished = false;
 
 function startAnalyzeProgressPolling() {
   clearInterval(_analyzeProgressTimer);
+  _analyzeFinished = false;
   setOutput('<span class="out-dim">Starting Analyze…</span>');
   _analyzeProgressTimer = setInterval(async () => {
+    if (_analyzeFinished) { stopAnalyzeProgressPolling(); return; }
     try {
       const data = await api('/analyze/progress');
+      if (_analyzeFinished) return; // finished while this poll was in flight — don't stomp the real output
       if (!data.running && !data.total && !data.phase) return;
       const lines = [`<span class="out-dim">${escHtml(data.phase || 'Working…')}</span>`];
       if (data.detail) lines.push(`<span class="out-dim">${escHtml(data.detail)}</span>`);
@@ -2456,6 +2470,11 @@ function startAnalyzeProgressPolling() {
 function stopAnalyzeProgressPolling() {
   clearInterval(_analyzeProgressTimer);
   _analyzeProgressTimer = null;
+}
+
+function markAnalyzeFinished() {
+  _analyzeFinished = true;
+  stopAnalyzeProgressPolling();
 }
 
 // ── TI Query Tab Switcher ──────────────────────────────────────────────────
@@ -3885,6 +3904,11 @@ async function runAnalyze(path) {
       body: JSON.stringify({ path, case_name: selectedCase }),
     });
     const bodyText = await res.text();
+    // Mark finished the instant we have any response body, before any
+    // rendering below — closes the race where a progress-poll tick already
+    // in flight resolves a moment later and overwrites what we're about to
+    // render. See the comment on _analyzeFinished above.
+    markAnalyzeFinished();
     if (!res.ok) {
       console.error('[Analyze] HTTP', res.status, bodyText);
       setOutput(
@@ -3944,11 +3968,15 @@ async function runAnalyze(path) {
       showToast(data.error || 'Analyze failed', 'error');
     }
   } catch (e) {
+    // fetch() itself threw (network error, before any response body) — the
+    // early markAnalyzeFinished() below never ran for this path, so set the
+    // flag here too before rendering the error.
+    markAnalyzeFinished();
     console.error('[Analyze] Exception:', e);
     setOutput(`<span class="out-red">Network error: ${escHtml(e.name + ': ' + e.message)}</span>`);
     showToast('Analyze failed: ' + e.message, 'error');
   } finally {
-    stopAnalyzeProgressPolling();
+    markAnalyzeFinished();
     if (btn) { btn.textContent = 'Run'; btn.classList.remove('running'); btn.disabled = false; }
   }
 }

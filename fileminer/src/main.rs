@@ -389,6 +389,16 @@ fn analyze_directory(
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if file_type.contains("x-executable") {
+                // infer maps ELF (any subtype — exec, shared object, core, relocatable)
+                // to a single "application/x-executable" MIME, with no dedicated
+                // branch here to catch it — it fell through every check below with
+                // an empty suggested_tools list even though mStrings/detections.yaml
+                // works fine against ELF. Observed on a real m68k ELF malware sample.
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type.contains("x-apple-property-list") || file_type.contains("application/xml") {
                 suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
             } else if file_type.starts_with("text/") {

@@ -3205,3 +3205,29 @@ ProtonMacFakePasswordPromptPhishing:
       technique_name: "Input Capture: GUI Input Capture"
       tactics: ["Credential Access"]
 
+PythonSelfDecompressingExec:
+  title: "Python payload self-decompression via exec(zlib.decompress(base64.b64decode(...)))"
+  id: "python-zlib-b64-exec-001"
+  status: "experimental"
+  description: "Detects the entire real payload of a .py file being hidden as a single compressed+base64-encoded blob, unwrapped and run in one line at import time: exec(zlib.decompress(base64.b64decode('...'))) (or eval(...) in place of exec). Legitimate Python code essentially never does this — it defeats static string/AST analysis of the actual logic, which only exists at runtime after decompression. Found in the Proton.D sample (fake Symantec Malware Detector): its cb.py is a same-named, same-purpose file as Proton.C's cb.py, but where Proton.C ships the chainbreaker keychain-parsing logic in the clear (see ProtonMacChainbreakerKeychainDump), Proton.D's copy is wrapped this way — the underlying logic is presumably similar or identical, but invisible to static string matching until decompressed."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "exec\\s*\\(\\s*zlib\\.decompress\\s*\\(\\s*base64\\.b64decode\\s*\\("
+      - "eval\\s*\\(\\s*zlib\\.decompress\\s*\\(\\s*base64\\.b64decode\\s*\\("
+  falsepositives:
+    - "Some legitimate Python packaging/bootstrap tools use this exact pattern to embed a vendored dependency or installer payload — rare, but not unheard of. Worth a quick check of what's actually inside the decompressed blob before treating a hit as malicious on its own."
+  level: high
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+

@@ -231,6 +231,13 @@
     flex-direction: column;
     overflow-y: auto;
     flex-shrink: 0;
+    transition: width 0.15s ease;
+  }
+  #sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-right: none;
   }
   #sidebar::-webkit-scrollbar { width: 4px; }
   #sidebar::-webkit-scrollbar-track { background: transparent; }
@@ -1306,7 +1313,10 @@
     <h1>MalChela <span>Analysis Toolkit</span> <span style="color:var(--text-dim);font-weight:300">v4.2</span></h1>
 
     <div id="header-toolbar">
+      <button class="tb-btn" id="tb-sidebar-toggle" onclick="toggleSidebar(event)" title="Hide Tools Panel">☰</button>
       <button class="tb-btn" onclick="showHome(event)" title="Home"><img src="/icons/home.svg"></button>
+      <button class="tb-btn" onclick="openAnalyzeBrowser()" title="Analyze">▶</button>
+      <button class="tb-btn" onclick="showCases(event)" title="Cases">⊞</button>
       <button class="tb-btn" onclick="showAbout(event)" title="About"><img src="/icons/about.svg"></button>
       <div class="tb-divider"></div>
       <div style="position:relative">
@@ -1328,7 +1338,10 @@
       <div style="position:relative">
         <button class="tb-btn" id="tb-overflow-btn" onclick="toggleTbOverflow(event)" title="More">⋯</button>
         <div id="tb-overflow-dropdown">
+          <button class="tb-dropdown-item" onclick="toggleSidebar();closeTbDropdowns()">☰ Toggle Tools Panel</button>
           <button class="tb-dropdown-item" onclick="showHome(event);closeTbDropdowns()">⌂ Home</button>
+          <button class="tb-dropdown-item" onclick="openAnalyzeBrowser();closeTbDropdowns()">▶ Analyze</button>
+          <button class="tb-dropdown-item" onclick="showCases(event);closeTbDropdowns()">⊞ Cases</button>
           <button class="tb-dropdown-item" onclick="showAbout(event);closeTbDropdowns()">◉ About</button>
           <button class="tb-dropdown-item" onclick="showConfig(event);closeTbDropdowns()">⚙ Server Config</button>
           <button class="tb-dropdown-item" onclick="showApiKeys(event);closeTbDropdowns()">🔑 API Keys</button>
@@ -1353,20 +1366,6 @@
 
     <!-- Sidebar -->
     <div id="sidebar">
-
-      <div class="sidebar-section">
-        <div class="sidebar-section-label">Analyze</div>
-        <button class="sidebar-btn" onclick="openAnalyzeBrowser()" title="Auto-run every tool FileMiner suggests for a file, folder, or bundle, plus a combined rollup report">
-          <span class="icon">▶</span> Select Target
-        </button>
-      </div>
-
-      <div class="sidebar-section">
-        <div class="sidebar-section-label">Case Management</div>
-        <button class="sidebar-btn" onclick="showCases(event)">
-          <span class="icon">⊞</span> Cases
-        </button>
-      </div>
 
       <div class="sidebar-section">
         <div style="display:flex;align-items:center;padding:10px 8px 4px">
@@ -5193,6 +5192,15 @@ function closeTbDropdowns() {
   document.getElementById('tb-overflow-dropdown')?.classList.remove('open');
 }
 
+function toggleSidebar(e) {
+  e?.stopPropagation();
+  const sidebar = document.getElementById('sidebar');
+  const collapsed = sidebar.classList.toggle('collapsed');
+  localStorage.setItem('malchela_sidebar_collapsed', collapsed ? '1' : '0');
+  const btn = document.getElementById('tb-sidebar-toggle');
+  if (btn) btn.title = collapsed ? 'Show Tools Panel' : 'Hide Tools Panel';
+}
+
 // Close dropdowns when clicking elsewhere
 document.addEventListener('click', () => closeTbDropdowns());
 
@@ -5834,6 +5842,12 @@ function showToast(msg, type = '') {
 // Restore active case badge
 if (activeCase) {
   document.getElementById('active-case-badge').textContent = `Active: ${activeCase}`;
+}
+
+// Restore sidebar collapsed state
+if (localStorage.getItem('malchela_sidebar_collapsed') === '1') {
+  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('tb-sidebar-toggle').title = 'Show Tools Panel';
 }
 
 // Check health on load and every 30s

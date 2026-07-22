@@ -271,6 +271,72 @@ def _register_cli_case_output(tool: str, case_name: str, target: str,
             yaml.dump(meta, fh, default_flow_style=False)
 
 
+_FILENAME_SANITIZE_RE = re.compile(r"[^\w.\-]+")
+
+
+def _rename_case_report(tool: str, case_name: str, display_name: str, window_secs: int = 30) -> None:
+    """Rename the report a tool just wrote inside a case from its default
+    report_<timestamp>.<ext> to <display_name>_<timestamp>.<ext>, so browsing
+    saved_output/cases/<case>/<tool>/ directly shows which source file each
+    report is about instead of an opaque timestamp. Called right after a
+    tool run succeeds, before _read_tool_markdown/_register_cli_case_output
+    — both just find "the most recently modified file in this dir", so
+    renaming first means neither needs to know or care that this happened.
+    Only for Analyze's case-saving path; a report saved outside a case, or
+    saved directly (not via Analyze), keeps its default name.
+
+    Several tools (fileanalyzer, mstrings, tiquery, codesign_check,
+    macho_info, plist_analyzer) self-register into case.yaml from their own
+    Rust code the instant they write the file — before this function ever
+    runs. Renaming out from under that would leave a stale entry pointing at
+    a path that no longer exists (the case browser's "View" link 404ing),
+    on top of _register_cli_case_output adding a second, correct entry right
+    after. So this also drops any existing case.yaml entry for the old path
+    before renaming — the fresh, correct one gets added straight after by
+    the caller, same as it always has."""
+    case_name = _sanitize_case_name(case_name) or case_name
+    case_dir = CASES_DIR / case_name
+    tool_dir = case_dir / tool
+    if not tool_dir.exists():
+        return
+
+    cutoff = datetime.now().timestamp() - window_secs
+    candidates = sorted(
+        [f for f in tool_dir.iterdir() if f.is_file() and f.stat().st_mtime >= cutoff],
+        key=lambda f: f.stat().st_mtime,
+    )
+    if not candidates:
+        return
+    latest = candidates[-1]
+    old_rel_path = f"{tool}/{latest.name}"
+
+    stem = _FILENAME_SANITIZE_RE.sub("_", Path(display_name).stem).strip("_")[:80] or "file"
+    # Reuse the tool's own report_<timestamp> suffix rather than generating a
+    # fresh one — keeps this a pure rename, so calling it twice for the same
+    # file (shouldn't happen, but) can't produce two different names for it.
+    ts_match = re.search(r"report_(\d{8}_\d{6})", latest.stem)
+    ts = ts_match.group(1) if ts_match else datetime.now().strftime("%Y%m%d_%H%M%S")
+    new_path = latest.parent / f"{stem}_{ts}{latest.suffix}"
+    if new_path == latest or new_path.exists():
+        return
+    latest.rename(new_path)
+
+    yaml_file = case_dir / "case.yaml"
+    if not yaml_file.exists():
+        return
+    try:
+        with open(yaml_file) as fh:
+            meta = yaml.safe_load(fh) or {}
+        files = meta.get("files", [])
+        pruned = [f for f in files if f.get("path") != old_rel_path]
+        if len(pruned) != len(files):
+            meta["files"] = pruned
+            with open(yaml_file, "w") as fh:
+                yaml.dump(meta, fh, default_flow_style=False)
+    except Exception:
+        pass  # best-effort cleanup — a stale entry here is a cosmetic issue, not worth failing the run over
+
+
 def safe_path(raw: str) -> Optional[Path]:
     """
     Resolve and jail-check a path against BROWSER_ROOT.
@@ -1201,6 +1267,10 @@ def analyze():
                     args = args + ["--case", case_name]
 
                 result = run_binary(slug, args, timeout=90)
+
+                if case_name and result.get("success"):
+                    _rename_case_report(slug, case_name, filename)
+
                 markdown = _read_tool_markdown(slug, case_name) if result.get("success") else ""
 
                 if case_name and result.get("success"):
@@ -1281,13 +1351,15 @@ def _read_tool_markdown(tool: str, case_name: str) -> str:
     """Read back the .md report a tool just wrote (Analyze always requests
     -o -m, case or not — see the dispatch loop below) so the rollup can embed
     genuinely formatted content instead of raw CLI stdout. Picks the
-    most-recently-modified report_*.md in the tool's output dir; safe because
+    most-recently-modified .md in the tool's output dir; safe because
     dispatch is fully sequential — nothing else writes there between this
-    tool's run and this read."""
+    tool's run and this read. Not anchored to the report_*.md default name:
+    for a case run, _rename_case_report() has already renamed it to
+    <source-filename>_<timestamp>.md by the time this runs."""
     tool_dir = (CASES_DIR / case_name / tool) if case_name else (OUTPUT_DIR / tool)
     if not tool_dir.exists():
         return ""
-    md_files = sorted(tool_dir.glob("report_*.md"), key=lambda p: p.stat().st_mtime)
+    md_files = sorted(tool_dir.glob("*.md"), key=lambda p: p.stat().st_mtime)
     return md_files[-1].read_text() if md_files else ""
 
 

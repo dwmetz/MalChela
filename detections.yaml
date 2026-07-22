@@ -27,13 +27,15 @@ HardcodedIPAddress:
   title: "Hardcoded IP address"
   id: "b2e9a3d7-cf18-4b6f-987b-4d90d7a94b88"
   status: "experimental"
-  description: "Detection of hardcoded IP address. Excludes X.0.0.0-shaped matches (the exclusion this rule shipped with, guarding a trailing 'version=' suffix, only ever covered an IP glued directly to a query-string-style version tag — not the far more common false positive of a bare assembly/manifest version string like version=\"1.0.0.0\" or version=\"6.0.0.0\", where 'version=' precedes the number instead of following it. A real target IP ending in three zero octets is operationally almost unheard of, so this exclusion has low risk of suppressing genuine hits."
+  description: "Detection of hardcoded IP address. Excludes X.0.0.0-shaped matches (assembly/manifest version numbers), 127.0.0.1 (loopback — zero analytical value, matches the same exclusion the internal blob-IOC extractor already applies), and — the fix that matters most — requires the match not be immediately preceded or followed by another digit or dot. Without that, \\b alone lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer dotted-decimal sequence: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth — routine in any binary statically linking OpenSSL/libcrypto) has a valid \\b transition right after its first four segments, so \"1.3.6.1\" matched and the whole 9-segment OID string got listed as a network IOC. Same fix applies to 2.5.29.37.0 (anyExtendedKeyUsage) and similar cert-extension OIDs."
+  references:
+    - "https://oidref.com/1.3.6.1.5.5.7.3.1"
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "\\b(?!\\d{1,3}\\.0\\.0\\.0\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b(?![^\\s]*version=)"
+      - "(?<![\\d.])(?!127\\.0\\.0\\.1\\b)(?!\\d{1,3}\\.0\\.0\\.0\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\d.])(?![^\\s]*version=)"
   falsepositives:
     - "A real hardcoded IP that genuinely ends in .0.0.0 (rare — that's a network/supernet address, not a usable host target)"
   tags:
@@ -2235,7 +2237,7 @@ MacSandboxVMEvasion:
   title: "macOS Sandbox / VM Detection"
   id: "mac-sandbox-evade-001"
   status: "experimental"
-  description: "Detects strings used to identify virtual machine or analysis environments on macOS. VMware and Parallels leave detectable artifacts in IOKit. sysctl hw.logicalcpu is used to detect low-CPU sandboxes."
+  description: "Detects strings used to identify virtual machine or analysis environments on macOS. VMware and Parallels leave detectable artifacts in IOKit. sysctl hw.logicalcpu is used to detect low-CPU sandboxes. Bare \"QEMU\" was dropped: unlike the product names below, a binary that simply IS QEMU (bundled as the emulation vehicle itself — BirdMiner does exactly this to run a full Linux VM for cryptomining) references its own name hundreds of times throughout its own help text and class names, drowning out everything else — 459 of 802 total matches on one real sample were this single pattern. VMware/Parallels/VirtualBox remain because a binary essentially never legitimately contains its own name matching one of those strings."
   logsource:
     category: "file_event"
     product: "macos"
@@ -2245,7 +2247,6 @@ MacSandboxVMEvasion:
       - "Parallels"
       - "VirtualBox"
       - "hw\\.logicalcpu"
-      - "QEMU"
   tags:
     - attack.T1497.001
   level: high
@@ -2253,6 +2254,56 @@ MacSandboxVMEvasion:
     - technique_id: "T1497.001"
       technique_name: "Virtualization/Sandbox Evasion: System Checks"
       tactics: ["Defense Evasion"]
+
+MacActivityMonitorEvasion:
+  title: "macOS Activity Monitor process-check evasion"
+  id: "mac-actmon-evade-001"
+  status: "experimental"
+  description: "Detects a check for a running 'Activity Monitor' process (macOS's built-in CPU/resource monitor) used to gate malicious activity — pgrep \"Activity Monitor\" combined with launchctl load/unload of the checking script's own LaunchDaemon. Observed in BirdMiner (a disguised cryptominer that emulates Linux via QEMU to run XMRig): a startup script unloads its own daemon if Activity Monitor is open (so the victim's CPU usage looks normal if they go looking), and a companion watchdog re-checks every 15 minutes, unloading again if Activity Monitor is still running or reloading once it's closed. A user opening the exact tool that would reveal high CPU usage from mining is exactly the trigger malware needs to hide from."
+  references:
+    - "https://blog.malwarebytes.com/mac/2019/06/new-mac-cryptominer-malwarebytes-detects-as-bird-miner-runs-by-emulating-linux/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "pgrep\\s+[\"']?Activity Monitor[\"']?"
+  falsepositives:
+    - "A legitimate system health/monitoring script that checks whether Activity Monitor is already open before launching its own copy"
+  level: high
+  tags:
+    - attack.t1497.001
+  mitre:
+    - technique_id: "T1497.001"
+      technique_name: "Virtualization/Sandbox Evasion: System Checks"
+      tactics: ["Defense Evasion"]
+
+MacLaunchDaemonLabelIsFilename:
+  title: "macOS LaunchDaemon/LaunchAgent Label literally ends in .plist"
+  id: "mac-launchd-label-plist-001"
+  status: "experimental"
+  description: "Detects a launchd plist whose Label value (the daemon/agent's own identifier, conventionally reverse-DNS like com.company.product) literally includes the .plist file extension, e.g. <string>com.unshavedly.plist</string>. A real developer never does this — Label is an identifier, not a filename, and Apple's own convention plus every real-world example omits the extension. It's a distinctive tell of a plist churned out by an automated malware-builder script rather than written by hand. Observed in both of BirdMiner's persistence plists (com.unshavedly.plist, com.woolgrowing.plist), neither of which otherwise contains anything a generic rule would flag."
+  references:
+    - "https://blog.malwarebytes.com/mac/2019/06/new-mac-cryptominer-malwarebytes-detects-as-bird-miner-runs-by-emulating-linux/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "<key>Label</key><string>[^<]*\\.plist</string>"
+  falsepositives:
+    - "A hand-authored plist that happens to make this same naming mistake (uncommon, but not impossible)"
+  level: medium
+  tags:
+    - attack.t1543.004
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
 
 MacSensitiveFileAccess:
   title: "macOS Sensitive File and Directory Access"

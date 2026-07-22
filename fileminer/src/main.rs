@@ -401,6 +401,19 @@ fn analyze_directory(
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if file_type == "Unknown" && file_size > 10_000 && looks_like_text(&path) {
+                // infer has no magic signature for plain text at all, so a large
+                // script (shell/Python/etc.) with no recognizable extension lands
+                // here as "Unknown" just like a packed/unknown binary would. Route
+                // it the same as the text/* branch above instead of the generic
+                // binary fallback below, or mstrings/detections.yaml never runs
+                // against it. Observed: XCSSET's b.sh/jey.sh (47KB/36KB ASCII
+                // shell scripts containing the actual multi-layer base64 C2
+                // payloads) got FileAnalyzer+tiquery+nsrlquery but never mStrings.
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type == "Unknown" && file_size > 10_000 {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
@@ -411,6 +424,25 @@ fn analyze_directory(
             if path.extension().and_then(|e| e.to_str()) == Some("plist") {
                 if suggested_tools.is_empty() {
                     suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
+                }
+            }
+
+            // Compiled AppleScript (.scpt/.scptd) by extension: infer has no
+            // magic-byte signature for this format at all, so it always
+            // reports Unknown regardless of size — the size>10_000 branch
+            // above never has a chance to catch these, since malicious .scpt
+            // payloads are typically a few KB. Without this, a compiled
+            // AppleScript dropper gets zero suggested tools and Analyze
+            // silently never runs mstrings against it (observed: an XCSSET
+            // sample's two malicious .scpt payloads got scanned by nothing
+            // at all in a directory-wide Analyze run, while every other file
+            // in the same directory got its normal suggestions).
+            if matches!(path.extension().and_then(|e| e.to_str()), Some("scpt") | Some("scptd")) {
+                if suggested_tools.is_empty() {
+                    suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                    suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                    suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                    suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
                 }
             }
 

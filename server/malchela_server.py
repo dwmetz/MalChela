@@ -725,6 +725,38 @@ def home_screen():
     return jsonify({"success": True, "output": output})
 
 
+@app.route("/update_check", methods=["GET"])
+def update_check():
+    """
+    Check whether the local git checkout is behind its remote — the same
+    check malchela/src/main.rs::check_for_updates() used to run in the old
+    TUI. Deliberately its own endpoint, fetched lazily/separately from
+    /home_stats: `git remote update` touches the network and can be slow
+    or hang on a bad connection, so it must never block the rest of the
+    (all-local, instant) stats card. Both git calls are timeout-guarded;
+    any failure or timeout just reports "unknown" rather than erroring.
+    """
+    try:
+        remote_update = subprocess.run(
+            ["git", "remote", "update"],
+            cwd=str(MALCHELA_ROOT),
+            capture_output=True, text=True, timeout=8,
+        )
+        if remote_update.returncode != 0:
+            return jsonify({"success": True, "status": "unknown"})
+
+        status = subprocess.run(
+            ["git", "status", "-uno"],
+            cwd=str(MALCHELA_ROOT),
+            capture_output=True, text=True, timeout=5,
+        )
+        if "branch is behind" in status.stdout:
+            return jsonify({"success": True, "status": "behind"})
+        return jsonify({"success": True, "status": "up_to_date"})
+    except Exception:
+        return jsonify({"success": True, "status": "unknown"})
+
+
 @app.route("/home_stats", methods=["GET"])
 def home_stats():
     """

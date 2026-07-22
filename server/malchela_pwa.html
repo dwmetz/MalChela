@@ -5662,27 +5662,52 @@ function _homeStatValueColor(avail, total) {
   return 'var(--yellow)';
 }
 
+// Single-line — the output panel has white-space:pre-wrap for console text,
+// so a pretty-printed multi-line template literal here would render its own
+// indentation/newlines as visible blank space between rows.
+function _homeStatRow(id, label, value, color) {
+  const idAttr = id ? ` id="${id}"` : '';
+  return `<div${idAttr} style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--text-dim)">${escHtml(label)}</span><span style="font-size:12px;color:${color};font-weight:600">${value}</span></div>`;
+}
+
 function renderHomeStatsCard(stats) {
   if (!stats) return '';
   const rows = [
-    ['Cases', `${stats.cases.open} open &middot; ${stats.cases.closed} closed`, 'var(--text-primary)'],
-    ['Detections Loaded', `${stats.detections} rules`, 'var(--cyan)'],
-    ['API Keys', `${stats.api_keys.configured}/${stats.api_keys.total} configured`,
-      _homeStatValueColor(stats.api_keys.configured, stats.api_keys.total)],
-    ['MalChela Tools', `${stats.malchela_tools.available}/${stats.malchela_tools.total} available`,
-      _homeStatValueColor(stats.malchela_tools.available, stats.malchela_tools.total)],
-    ['Integrations', `${stats.integrations.available}/${stats.integrations.total} available`,
-      _homeStatValueColor(stats.integrations.available, stats.integrations.total)],
+    _homeStatRow(null, 'Cases', `${stats.cases.open} open &middot; ${stats.cases.closed} closed`, 'var(--text-primary)'),
+    _homeStatRow(null, 'Detections Loaded', `${stats.detections}`, 'var(--cyan)'),
+    _homeStatRow(null, 'API Keys', `${stats.api_keys.configured}/${stats.api_keys.total}`, 'var(--text-primary)'),
+    _homeStatRow(null, 'MalChela Tools', `${stats.malchela_tools.available}/${stats.malchela_tools.total}`,
+      _homeStatValueColor(stats.malchela_tools.available, stats.malchela_tools.total)),
+    _homeStatRow(null, 'Integrations', `${stats.integrations.available}/${stats.integrations.total}`,
+      _homeStatValueColor(stats.integrations.available, stats.integrations.total)),
+    _homeStatRow('home-stat-update', 'Update', 'checking&hellip;', 'var(--text-dim)'),
   ];
-  return `
-    <div style="background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:6px;padding:16px 20px;min-width:260px;max-width:320px;height:fit-content">
-      <div style="font-size:11px;font-weight:600;color:var(--cyan);letter-spacing:.08em;margin-bottom:12px">AT A GLANCE</div>
-      ${rows.map(([label, value, color]) => `
-        <div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:11px;color:var(--text-dim)">${escHtml(label)}</span>
-          <span style="font-size:12px;color:${color};font-weight:600">${value}</span>
-        </div>`).join('')}
-    </div>`;
+  return `<div style="white-space:normal;background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:6px;padding:14px 18px;min-width:240px;max-width:300px;height:fit-content"><div style="font-size:11px;font-weight:600;color:var(--cyan);letter-spacing:.08em;margin-bottom:8px">AT A GLANCE</div>${rows.join('')}</div>`;
+}
+
+async function _loadUpdateCheck() {
+  try {
+    const res = await fetch(serverUrl + '/update_check', { method: 'GET' });
+    const data = await res.json();
+    const el = document.getElementById('home-stat-update');
+    if (!el) return; // user navigated away before this resolved
+    const valueEl = el.querySelector('span:last-child');
+    if (!valueEl) return;
+    if (data.status === 'behind') {
+      valueEl.style.color = 'var(--yellow)';
+      valueEl.textContent = 'Update available';
+    } else if (data.status === 'up_to_date') {
+      valueEl.style.color = 'var(--green)';
+      valueEl.textContent = 'Up to date';
+    } else {
+      valueEl.style.color = 'var(--text-dim)';
+      valueEl.textContent = 'Unknown';
+    }
+  } catch (e) {
+    const el = document.getElementById('home-stat-update');
+    const valueEl = el?.querySelector('span:last-child');
+    if (valueEl) { valueEl.style.color = 'var(--text-dim)'; valueEl.textContent = 'Unknown'; }
+  }
 }
 
 function renderHomeOutput(text, stats) {
@@ -5817,12 +5842,10 @@ function renderHomeOutput(text, stats) {
   const textHtml = `<div style="line-height:1.8">${rendered.join('')}${featureTableHtml}${renderedPost.join('')}</div>`;
   const statsCardHtml = renderHomeStatsCard(stats);
 
-  html = `<div style="display:flex;gap:32px;flex-wrap:wrap;padding:16px 24px 0 24px">
-      <div>${artHtml}${textHtml}</div>
-      ${statsCardHtml}
-    </div>`;
+  html = `<div style="display:flex;justify-content:space-between;gap:32px;flex-wrap:wrap;padding:16px 24px 0 24px"><div>${artHtml}${textHtml}</div>${statsCardHtml}</div>`;
   document.getElementById('output-content').innerHTML = html;
   document.getElementById('output-content').scrollTop = 0;
+  if (stats) _loadUpdateCheck();
 }
 
 function _activateSidebarBtn(e) {

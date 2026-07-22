@@ -2164,6 +2164,81 @@ MacAppleScriptExecution:
       technique_name: "Command and Scripting Interpreter: AppleScript"
       tactics: ["Execution"]
 
+MacCompiledAppleScriptShellExec:
+  title: "Compiled AppleScript with do-shell-script capability"
+  id: "mac-compiled-scpt-shellexec-001"
+  status: "experimental"
+  description: "Detects the .sysoexecTEXT AppleEvent code — the literal bytes a compiled AppleScript (.scpt) contains whenever it uses 'do shell script'. Malware authors routinely compile their .scpt payloads WITHOUT retaining source (osacompile strips it, or Script Editor's 'Run-only' export) specifically to defeat osadecompile and any plaintext-source detection — the existing MacAppleScriptExecution rule's \"do shell script\" string never appears in such a file, since the command is stored as this 4+4+4-byte event code instead of source text. Observed across all three compiled .scpt payloads in an XCSSET sample (all of which failed osadecompile with errOSASourceNotAvailable)."
+  references:
+    - "https://blog.trendmicro.com/trendlabs-security-intelligence/xcsset-mac-malware-infects-xcode-projects-performs-uxss-attack-on-safari-other-browsers-leverages-zero-day-exploits/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "sysoexecTEXT"
+  falsepositives:
+    - "Any legitimate compiled AppleScript (source-retained or not) that uses do shell script for benign automation — this is a strict superset of what the plaintext do-shell-script rule already accepts as a risk tradeoff, just extended to binaries that string-search alone can't see into"
+  level: high
+  tags:
+    - attack.t1059.002
+  mitre:
+    - technique_id: "T1059.002"
+      technique_name: "Command and Scripting Interpreter: AppleScript"
+      tactics: ["Execution"]
+
+MacAppleScriptFilelessRemoteExec:
+  title: "AppleScript fileless remote script execution (curl piped into osascript -e)"
+  id: "mac-scpt-fileless-remote-001"
+  status: "experimental"
+  description: "Detects the pattern osascript -e \"$(curl ...)\" — fetching a remote script and evaluating it inline via osascript's -e flag, so the downloaded payload is never written to disk. Found decoded from an 8-layer-nested base64 blob in an XCSSET dropper (b.sh/jey.sh): a 'boot(moduleName)' function that curls a per-module payload from a C2 staging path and pipes it directly into osascript -e, alongside a separate curl-only path that downloads a module to /tmp/.f, runs it, then deletes it — both avoid a payload with any real dwell time on disk."
+  references:
+    - "https://www.microsoft.com/en-us/security/blog/2025/09/25/xcsset-evolves-again-analyzing-the-latest-updates-to-xcssets-inventory/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "osascript -e \\\\?\\\"\\$\\(curl"
+      - "osascript -e '\\$\\(curl"
+  falsepositives:
+    - "A legitimate admin/automation script that intentionally evaluates a trusted remote script this way (uncommon, but not impossible in CI/deployment tooling)"
+  level: high
+  tags:
+    - attack.t1620
+  mitre:
+    - technique_id: "T1620"
+      technique_name: "Reflective Code Loading"
+      tactics: ["Defense Evasion"]
+
+XcssetCdntorC2:
+  title: "XCSSET cdntor.ru C2 domain (2025 campaign)"
+  id: "c2-xcsset-cdntor-001"
+  status: "experimental"
+  description: "Detects the hardcoded C2 domain cdntor.ru from a 2025 XCSSET variant: telemetry beacons post to https://cdntor.ru/j with a colon-delimited 'b:<user>:<serial>:<module>:<message>' body, and per-module payloads are staged at https://cdntor.ru/s/<moduleName>. A domain-specific IOC — expect this infrastructure to rotate — but concrete and directly tied to a documented, actively analyzed campaign."
+  references:
+    - "https://www.microsoft.com/en-us/security/blog/2025/09/25/xcsset-evolves-again-analyzing-the-latest-updates-to-xcssets-inventory/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "cdntor\\.ru"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
 MacUnixShellExecution:
   title: "macOS Unix Shell Execution via POSIX API"
   id: "mac-posix-exec-001"
@@ -2632,17 +2707,20 @@ LinuxProcEnumeration:
 
 
 BusyboxIoTIndicator:
-  title: "BusyBox Reference (IoT Malware Indicator)"
+  title: "BusyBox Reference or Embedded BusyBox Shell"
   id: "busybox-iot-001"
   status: "experimental"
-  description: "Detects hardcoded /bin/busybox references. BusyBox is the standard Unix utility suite on embedded Linux devices; its presence as a string in malware indicates targeting of IoT/router/DVR platforms."
+  description: "Detects hardcoded /bin/busybox references, or the ash shell's own distinctive startup error text ('E: neither argv[0] nor $_ works.') for cases where a statically-linked BusyBox is embedded directly rather than just referenced by path. BusyBox is the standard Unix utility suite on embedded Linux devices, so its presence often indicates IoT/router/DVR targeting — but it's also used cross-platform to smuggle a full POSIX toolset inside a single binary. Observed disguised as fake Xcode project artifacts (files named 'Pods' and 'xcassets', both actually Mach-O executables containing this exact error string) in an XCSSET sample."
+  references:
+    - "https://www.microsoft.com/en-us/security/blog/2025/09/25/xcsset-evolves-again-analyzing-the-latest-updates-to-xcssets-inventory/"
   logsource:
     category: "file_event"
-    product: "linux"
+    product: any
   detection:
     strings:
       - "/bin/busybox"
       - "\\bbusybox\\b"
+      - "neither argv\\[0\\] nor \\$_ works"
   tags:
     - attack.T1059.004
   level: medium

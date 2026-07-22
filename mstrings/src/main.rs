@@ -169,15 +169,31 @@ impl Mstrings {
     /// string in a Dok/Bella sample), and a blob embedded inline in a
     /// larger command line (`echo <blob> | base64 -d | python`, an EmPyre-
     /// style shell stager, where the whole line — not just the blob — is
-    /// what gets extracted as one string). Candidates are filtered by
-    /// length/padding before attempting to decode, and decoded output must
-    /// be mostly printable before being kept — both to avoid wasting time
-    /// decoding coincidental base64-alphabet runs that are really just
-    /// binary data, and to avoid adding garbage matches.
+    /// what gets extracted as one string).
+    ///
+    /// Decoding is recursive, up to MAX_LAYERS: an XCSSET shell-script
+    /// dropper was found nesting the same encoding 8 times — a single
+    /// decode pass just produces another base64-shaped string each time,
+    /// so anything short of peeling every layer never reaches the real
+    /// payload (in that sample: an AppleScript module with a hardcoded C2
+    /// domain, a beacon format, and download-and-osascript-exec logic).
+    /// Each layer is only accepted as the final result once decoding
+    /// stops producing something that itself still looks like base64 —
+    /// hitting MAX_LAYERS while still base64-shaped, or a failed decode
+    /// partway through, discards the candidate rather than emitting a
+    /// still-encoded intermediate layer as if it were the real payload.
     fn decode_base64_blobs(&mut self) {
         const MIN_LEN: usize = 60;
         const MIN_DECODED_LEN: usize = 20;
         const MIN_PRINTABLE_RATIO: f64 = 0.85;
+        const MAX_LAYERS: usize = 12;
+
+        fn is_base64_shaped(s: &str) -> bool {
+            s.len() >= MIN_LEN
+                && s.len() % 4 == 0
+                && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+                && s.chars().any(|c| c.is_ascii_alphabetic())
+        }
 
         let base64_run = Regex::new(&format!(r"[A-Za-z0-9+/]{{{MIN_LEN},}}={{0,2}}")).unwrap();
 
@@ -188,7 +204,7 @@ impl Mstrings {
                 base64_run
                     .find_iter(&m.matched_str)
                     .flatten()
-                    .filter(|mat| mat.as_str().len() % 4 == 0 && mat.as_str().chars().any(|c| c.is_ascii_alphabetic()))
+                    .filter(|mat| is_base64_shaped(mat.as_str()))
                     .map(|mat| (m.offset, mat.as_str().to_string()))
                     .collect::<Vec<_>>()
             })
@@ -196,10 +212,27 @@ impl Mstrings {
 
         let mut decoded_matches = Vec::new();
         for (offset, candidate) in candidates {
-            let decoded = match BASE64_STANDARD.decode(&candidate) {
-                Ok(d) if d.len() >= MIN_DECODED_LEN => d,
-                _ => continue,
-            };
+            let mut current = candidate;
+            let mut terminal: Option<Vec<u8>> = None;
+
+            for _ in 0..MAX_LAYERS {
+                let decoded = match BASE64_STANDARD.decode(current.trim()) {
+                    Ok(d) if d.len() >= MIN_DECODED_LEN => d,
+                    _ => break, // invalid/too-short at this layer — abandon this candidate
+                };
+                match std::str::from_utf8(&decoded) {
+                    Ok(s) if is_base64_shaped(s.trim()) => {
+                        current = s.trim().to_string();
+                        continue; // still encoded — peel another layer
+                    }
+                    _ => {
+                        terminal = Some(decoded); // reached the real payload (text or binary)
+                        break;
+                    }
+                }
+            }
+
+            let Some(decoded) = terminal else { continue };
             let printable = decoded
                 .iter()
                 .filter(|&&b| (0x20..=0x7e).contains(&b) || b == b'\n' || b == b'\r' || b == b'\t')

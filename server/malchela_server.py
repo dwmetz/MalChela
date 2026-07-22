@@ -2505,6 +2505,9 @@ def set_api_key(key_id):
     path.write_text(value + "\n" if value else "")
 
     return jsonify({"success": True, "configured": bool(value)})
+
+
+@app.route("/read_file", methods=["POST"])
 def read_file():
     """Read any file within the browser jail — used by View Reports."""
     data = request.json or {}

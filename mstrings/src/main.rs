@@ -611,7 +611,8 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                     } else if rule_lc.contains("ip address")
                         || sc.contains("http:")
                         || sc.contains("https:")
-                        || (sc.contains('.') && sc.split('.').count() == 4)
+                        || (sc.split('.').count() == 4
+                            && sc.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())))
                     {
                         net_iocs.insert(candidate.to_string());
                     }
@@ -628,6 +629,11 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
             // incidentally match (e.g. a version string) stay out, while
             // filesystem-flavored dotted strings (bundle IDs, LaunchDaemon
             // labels) picked up by non-C2 rules are never considered here.
+            // Also require all-lowercase: a C2-tactic rule can legitimately
+            // match a dotted Objective-C class/namespace string (e.g.
+            // "com.pusher.libPusher", found by the libPusher C2 rule itself)
+            // which is dotted but NOT a domain — real domains harvested from
+            // binaries are lowercase, camelCase/PascalCase identifiers aren't.
             if let Some(tactic) = &m.tactic {
                 if tactic.contains("Command and Control") {
                     let d = m.display_str.trim();
@@ -637,6 +643,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                         && !d.contains('_')
                         && !d.contains('\\')
                         && d.len() < 100
+                        && !d.chars().any(|c| c.is_ascii_uppercase())
                     {
                         net_iocs.insert(d.to_string());
                     }

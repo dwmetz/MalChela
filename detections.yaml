@@ -3024,3 +3024,184 @@ CreateProcessExecution:
       technique_name: "Native API"
       tactics: ["Execution"]
 
+
+ProtonMacXmlExfilBeacon:
+  title: "Proton macOS RAT XML exfiltration beacon"
+  id: "proton-xml-exfil-001"
+  status: "experimental"
+  description: "Detects the hardcoded XML template Proton (OSX/Proton.B-D) uses to phone home stolen data: <client id=\"[dbid]\"><conxdata><ip>[ip]</ip><raddr>...<password>...</password>...</metadata>. Found byte-identical in both the Proton.C (Eltima/Elmedia Updater) and Proton.D (fake Symantec Malware Detector) samples despite different lure apps, confirming a shared C2/exfil framework across variants. Captures admin credentials phished via a fake authorization dialog directly in cleartext inside the beacon."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+    - "https://www.malwarebytes.com/blog/threat-analysis/mac-threat-analysis/2017/11/osx-proton-spreading-through-fake-symantec-blog"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "<conxdata><ip>\\[ip\\]</ip><raddr>"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1041
+  mitre:
+    - technique_id: "T1041"
+      technique_name: "Exfiltration Over C2 Channel"
+      tactics: ["Exfiltration"]
+
+ProtonMacChainbreakerKeychainDump:
+  title: "Offline macOS Keychain file parser (chainbreaker-style)"
+  id: "proton-chainbreaker-kych-001"
+  status: "experimental"
+  description: "Detects the raw Keychain file-format signatures (KEYCHAIN_SIGNATURE 'kych', DBBLOB_SIGNATURE 0xfade0711) used by chainbreaker-style offline keychain parsers to decrypt login.keychain-db directly from disk, bypassing the Keychain API entirely — a different implementation path than SecItemCopyMatching/SecKeychainFindGenericPassword (see MacKeychainAccess). Found as a bundled cb.py resource (paired with pbkdf2.py/pyDes.py for the 3DES key unwrap) in both the Proton.C and Proton.D samples."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "unhexlify\\('fade0711'\\)"
+      - "KEYCHAIN_SIGNATURE\\s*=\\s*\"kych\""
+  falsepositives:
+    - "Legitimate forensic/pentest use of chainbreaker or similar offline keychain-parsing tools"
+  level: high
+  tags:
+    - attack.t1555.001
+  mitre:
+    - technique_id: "T1555.001"
+      technique_name: "Credentials from Password Stores: Keychain"
+      tactics: ["Credential Access"]
+
+ProtonMacChromeSafeStorageTheft:
+  title: "Chrome Safe Storage keychain query for Login/Web Data decryption"
+  id: "proton-chrome-safestorage-001"
+  status: "experimental"
+  description: "Detects the keychain generic-record XPath-style query Proton's compiled binary uses to fetch Chrome's 'Chrome Safe Storage' master key from the login keychain, which it then passes as an argument to a bundled ch.py helper (PBKDF2 + AES) to decrypt saved passwords and credit cards straight out of Chrome's Login Data / Web Data SQLite databases. Identical string found in both the Proton.C and Proton.D compiled binaries."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "generic-record\\[name='Chrome Safe Storage'\\]/password"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1555.003
+  mitre:
+    - technique_id: "T1555.003"
+      technique_name: "Credentials from Password Stores: Credentials from Web Browsers"
+      tactics: ["Credential Access"]
+
+ProtonMacPusherC2Channel:
+  title: "libPusher WebSocket channel used as C2 transport"
+  id: "proton-pusher-c2-001"
+  status: "experimental"
+  description: "Detects libPusher (PTPusher/PTPusherChannel) class names and the 'ws-%@.pusher.com' WebSocket endpoint format string. Proton abuses Pusher.com, a legitimate real-time pub/sub service, as its command-and-control transport — blending C2 traffic in with normal HTTPS/WSS connections to a well-known SaaS domain rather than a bespoke C2 server. Found in both the Proton.B (activity_agent) and Proton.C (Updater) binaries alongside an embedded SSH-tunnel implementation."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.hackread.com/hackers-selling-undetectable-proton-mac-malware/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "ws-%@\\.pusher\\.com"
+      - "com\\.pusher\\.libPusher"
+  falsepositives:
+    - "Legitimate macOS/iOS apps that use the libPusher library for real-time notifications"
+  level: high
+  tags:
+    - attack.t1102.002
+  mitre:
+    - technique_id: "T1102.002"
+      technique_name: "Web Service: Bidirectional Communication"
+      tactics: ["Command and Control"]
+
+ProtonMacRemoteAccessEnableChain:
+  title: "Apple Remote Desktop full-access backdoor enablement"
+  id: "proton-ard-backdoor-001"
+  status: "experimental"
+  description: "Detects the exact kickstart flag chain Proton uses to silently turn a victim Mac into a fully remote-controllable host: ARDAgent kickstart activated with -allowAccessFor -allUsers (grants Apple Remote Desktop/VNC access to every account, no per-user opt-in), chained in the same shell command with 'systemsetup -setremotelogin on' (enables SSH) and loading com.apple.smbd (enables file sharing). Legitimate IT/MDM tooling scripts these flags individually far more narrowly; this exact combination in one binary is a backdoor-enablement TTP, not routine admin work."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "kickstart\\s+-activate\\s+-configure\\s+-access\\s+-off\\s+-restart\\s+-agent\\s+-privs\\s+-all\\s+-allowAccessFor\\s+-allUsers"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1021.005
+  mitre:
+    - technique_id: "T1021.005"
+      technique_name: "Remote Services: VNC"
+      tactics: ["Persistence", "Lateral Movement"]
+
+ProtonMacDynamicLaunchAgentPlistTemplate:
+  title: "Self-installing LaunchAgent plist template embedded in binary"
+  id: "proton-dynamic-launchagent-001"
+  status: "experimental"
+  description: "Detects a hardcoded LaunchAgent plist XML template (KeepAlive/Label/ProgramArguments with %@ format-string placeholders) that malware fills in at runtime and writes to /Library/LaunchAgents or ~/Library/LaunchAgents itself, rather than shipping a static .plist resource. A binary that builds its own persistence plist as a string is deliberately avoiding a static file an AV/EDR product could fingerprint ahead of time."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "KeepAlive</key><true/><key>Label</key><string>%@</string><key>ProgramArguments"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1543.001
+  mitre:
+    - technique_id: "T1543.001"
+      technique_name: "Create or Modify System Process: Launch Agent"
+      tactics: ["Persistence"]
+
+ProtonMacFakePasswordPromptPhishing:
+  title: "Proton-style fake authorization dialog for password phishing"
+  id: "proton-fake-auth-prompt-001"
+  status: "experimental"
+  description: "Detects the exact lure sentences Proton uses in fake native authorization dialogs to phish the admin password in cleartext (captured via a plain NSSecureTextField, not the real Security/Authorization framework): 'Network Configuration needs to update DHCP settings.' (Proton.B/HandBrake) and 'Finder wants to make changes.' (Proton.C/Elmedia), both suffixed with the genuine-sounding 'Type your password to allow this.' Scoped to the exact known lure sentences rather than the generic suffix alone, since that suffix closely mimics real macOS SecurityAgent prompt wording by design."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "Network Configuration needs to update DHCP settings\\. Type your password to allow this\\."
+      - "Finder wants to make changes\\. Type your password to allow this\\."
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1056.002
+  mitre:
+    - technique_id: "T1056.002"
+      technique_name: "Input Capture: GUI Input Capture"
+      tactics: ["Credential Access"]
+

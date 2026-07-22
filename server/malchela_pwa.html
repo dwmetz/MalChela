@@ -2422,6 +2422,42 @@ function stopTiqueryProgressPolling() {
   _tiqueryProgressTimer = null;
 }
 
+// ── Analyze Progress ─────────────────────────────────────────────────────────
+// Same shared-dict-plus-polling pattern as bulk TIQuery above, but Analyze
+// doesn't batch a single count — it has named phases (container extraction,
+// FileMiner scan, then one line per tool per file) since a tiquery-heavy
+// target can take minutes with no other feedback otherwise.
+
+let _analyzeProgressTimer = null;
+
+function startAnalyzeProgressPolling() {
+  clearInterval(_analyzeProgressTimer);
+  setOutput('<span class="out-dim">Starting Analyze…</span>');
+  _analyzeProgressTimer = setInterval(async () => {
+    try {
+      const data = await api('/analyze/progress');
+      if (!data.running && !data.total && !data.phase) return;
+      const lines = [`<span class="out-dim">${escHtml(data.phase || 'Working…')}</span>`];
+      if (data.detail) lines.push(`<span class="out-dim">${escHtml(data.detail)}</span>`);
+      if (data.total) {
+        const pct = Math.round((data.done / data.total) * 100);
+        const filled = Math.floor(pct / 5);
+        const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
+        lines.push('');
+        lines.push(`<span style="color:var(--cyan);font-family:var(--font-mono);font-size:14px">${bar} ${pct}%</span>`);
+        lines.push(`<span class="out-dim">${data.done} of ${data.total} file(s) complete</span>`);
+      }
+      setOutput(lines.join('\n'));
+      if (!data.running) stopAnalyzeProgressPolling();
+    } catch(e) { stopAnalyzeProgressPolling(); }
+  }, 1000);
+}
+
+function stopAnalyzeProgressPolling() {
+  clearInterval(_analyzeProgressTimer);
+  _analyzeProgressTimer = null;
+}
+
 // ── TI Query Tab Switcher ──────────────────────────────────────────────────
 
 let tiMode = 'hash';
@@ -3834,7 +3870,7 @@ async function runAnalyze(path) {
   }
 
   if (btn) { btn.textContent = 'Running…'; btn.classList.add('running'); btn.disabled = true; }
-  setOutput('<span class="out-dim">Running FileMiner and dispatching suggested tools — this can take a bit for several files…</span>\n');
+  startAnalyzeProgressPolling();
 
   try {
     // Not using the shared api() helper here on purpose: if the server
@@ -3912,6 +3948,7 @@ async function runAnalyze(path) {
     setOutput(`<span class="out-red">Network error: ${escHtml(e.name + ': ' + e.message)}</span>`);
     showToast('Analyze failed: ' + e.message, 'error');
   } finally {
+    stopAnalyzeProgressPolling();
     if (btn) { btn.textContent = 'Run'; btn.classList.remove('running'); btn.disabled = false; }
   }
 }

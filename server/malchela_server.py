@@ -976,6 +976,19 @@ def _scan_result_to_row(r: dict) -> dict:
 _ANALYZE_MAX_FILES = 25  # keep this a synchronous, single-sample/bundle operation;
                          # corpus-scale scans belong to MZHash/MZCount/XMZHash.
 
+# Shared progress state for a running Analyze request, mirroring the
+# _tiquery_progress pattern below. Unlike bulk tiquery, this doesn't need a
+# manual background thread — app.run(threaded=True) already gives the
+# /analyze POST its own thread, so a concurrent GET to /analyze/progress
+# just reads whatever this dict currently holds while that thread runs.
+_analyze_progress = {"running": False, "phase": "", "detail": "", "done": 0, "total": 0}
+
+
+@app.route("/analyze/progress", methods=["GET"])
+def analyze_progress():
+    """Poll progress for a running Analyze request."""
+    return jsonify(_analyze_progress)
+
 
 _ZIP_PASSWORDS = ["", "infected", "malware", "virus"]  # "" tried first = no password
 
@@ -1079,128 +1092,145 @@ def analyze():
     if not target.exists():
         return jsonify({"success": False, "error": "Path does not exist"}), 404
 
-    extraction_note = None
+    _analyze_progress.update({"running": True, "phase": "Starting", "detail": target.name, "done": 0, "total": 0})
     try:
-        target, extraction_note = _maybe_extract_container(target)
-    except ValueError as e:
-        return jsonify({"success": False, "error": str(e)})
-
-    # A .app bundle is a directory on disk, so it's already handled the same
-    # way as any other folder — FileMiner's WalkDir walks into it naturally.
-    single_file_mode = target.is_file()
-    scan_dir = target.parent if single_file_mode else target
-
-    fm_args = [str(scan_dir), "--no-prompt"]
-    if case_name:
-        fm_args += ["--case", case_name]
-
-    fm_result = run_binary("fileminer", fm_args, timeout=120)
-    if not fm_result.get("success"):
-        return jsonify({"success": False, "error": fm_result.get("error", "fileminer failed to run")})
-
-    try:
-        fm_data = json.loads(fm_result["output"])
-    except (ValueError, KeyError) as e:
-        return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
-
-    scan_results = fm_data.get("results", [])
-
-    if single_file_mode:
+        extraction_note = None
         try:
-            target_resolved = target.resolve()
-        except Exception:
-            target_resolved = target
-        scan_results = [
-            r for r in scan_results
-            if _paths_match(r.get("filepath", ""), target_resolved)
-        ]
-        if not scan_results:
-            return jsonify({
-                "success": False,
-                "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
-            })
+            _analyze_progress.update({"phase": "Checking container", "detail": target.name})
+            target, extraction_note = _maybe_extract_container(target)
+        except ValueError as e:
+            return jsonify({"success": False, "error": str(e)})
 
-    if len(scan_results) > _ANALYZE_MAX_FILES:
-        # Too many files to auto-run every suggested tool on every one —
-        # routine for a dpp-extracted PKG payload (a trojanized installer
-        # commonly bundles the full legitimate app it trojanized alongside
-        # the injected malicious file(s); EvilQuest: 624 files for one
-        # Mach-O of actual interest) but can happen pointed straight at a
-        # folder too. Hand off to File Miner's own interactive per-file
-        # table (real per-row "run this tool" buttons) instead of either
-        # erroring out or building a static, non-interactive summary here.
-        return jsonify({
-            "success": True,
-            "redirect_to_fileminer": True,
-            "target": str(target),
-            "file_count": len(scan_results),
-            "extraction_note": extraction_note,
-        })
+        # A .app bundle is a directory on disk, so it's already handled the same
+        # way as any other folder — FileMiner's WalkDir walks into it naturally.
+        single_file_mode = target.is_file()
+        scan_dir = target.parent if single_file_mode else target
 
-    per_file_results = []
-    for res in scan_results:
-        filepath  = res.get("filepath", "")
-        sha256    = res.get("sha256", "")
-        md5       = res.get("md5", "")
-        suggested = res.get("suggested_tools", [])  # [[label, slug], ...]
+        fm_args = [str(scan_dir), "--no-prompt"]
+        if case_name:
+            fm_args += ["--case", case_name]
 
-        tool_runs = []
-        for pair in suggested:
-            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
-                continue
-            label, slug = pair
+        _analyze_progress.update({"phase": "Scanning with File Miner", "detail": str(scan_dir)})
+        fm_result = run_binary("fileminer", fm_args, timeout=120)
+        if not fm_result.get("success"):
+            return jsonify({"success": False, "error": fm_result.get("error", "fileminer failed to run")})
 
-            if slug == "tiquery":
-                args = [sha256] if sha256 else None
-            elif slug == "nsrlquery":
-                args = [md5] if md5 else None
-            else:
-                args = [filepath]
+        try:
+            fm_data = json.loads(fm_result["output"])
+        except (ValueError, KeyError) as e:
+            return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
 
-            if args is None:
-                tool_runs.append({
-                    "label": label, "tool": slug, "success": False,
-                    "output": "", "error": "Missing hash required for this tool.",
+        scan_results = fm_data.get("results", [])
+
+        if single_file_mode:
+            try:
+                target_resolved = target.resolve()
+            except Exception:
+                target_resolved = target
+            scan_results = [
+                r for r in scan_results
+                if _paths_match(r.get("filepath", ""), target_resolved)
+            ]
+            if not scan_results:
+                return jsonify({
+                    "success": False,
+                    "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
                 })
-                continue
 
-            # Always save a markdown report — case or not — so the rollup can
-            # embed each tool's actual formatted output (headers, tables)
-            # instead of raw CLI stdout. Independent of any case's own
-            # save-format preference; -m is genuinely the richer artifact,
-            # and this is Analyze's own internal read-back, not the user's
-            # saved case file (that's still whatever -m/-t/-j produces).
-            args = args + ["-o", "-m"]
-            if case_name:
-                args = args + ["--case", case_name]
-
-            result = run_binary(slug, args, timeout=90)
-            markdown = _read_tool_markdown(slug, case_name) if result.get("success") else ""
-
-            if case_name and result.get("success"):
-                reg_target = sha256 if slug == "tiquery" else (md5 if slug == "nsrlquery" else filepath)
-                _register_cli_case_output(slug, case_name, reg_target, "md")
-
-            tool_runs.append({
-                "label":    label,
-                "tool":     slug,
-                "success":  result.get("success", False),
-                "output":   result.get("output", ""),
-                "error":    result.get("error", ""),
-                "markdown": markdown,
+        if len(scan_results) > _ANALYZE_MAX_FILES:
+            # Too many files to auto-run every suggested tool on every one —
+            # routine for a dpp-extracted PKG payload (a trojanized installer
+            # commonly bundles the full legitimate app it trojanized alongside
+            # the injected malicious file(s); EvilQuest: 624 files for one
+            # Mach-O of actual interest) but can happen pointed straight at a
+            # folder too. Hand off to File Miner's own interactive per-file
+            # table (real per-row "run this tool" buttons) instead of either
+            # erroring out or building a static, non-interactive summary here.
+            return jsonify({
+                "success": True,
+                "redirect_to_fileminer": True,
+                "target": str(target),
+                "file_count": len(scan_results),
+                "extraction_note": extraction_note,
             })
 
-        per_file_results.append({
-            "filename": res.get("filename", ""),
-            "filepath": filepath,
-            "filetype": res.get("filetype", ""),
-            "sha256":   sha256,
-            "md5":      md5,
-            "tool_runs": tool_runs,
-        })
+        _analyze_progress["total"] = len(scan_results)
 
-    rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note)
-    return _save_analyze_rollup(target, case_name, per_file_results, rollup_md, extraction_note)
+        per_file_results = []
+        for file_idx, res in enumerate(scan_results):
+            filepath  = res.get("filepath", "")
+            filename  = res.get("filename", "")
+            sha256    = res.get("sha256", "")
+            md5       = res.get("md5", "")
+            suggested = res.get("suggested_tools", [])  # [[label, slug], ...]
+
+            tool_runs = []
+            for pair in suggested:
+                if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                    continue
+                label, slug = pair
+
+                if slug == "tiquery":
+                    args = [sha256] if sha256 else None
+                elif slug == "nsrlquery":
+                    args = [md5] if md5 else None
+                else:
+                    args = [filepath]
+
+                if args is None:
+                    tool_runs.append({
+                        "label": label, "tool": slug, "success": False,
+                        "output": "", "error": "Missing hash required for this tool.",
+                    })
+                    continue
+
+                _analyze_progress.update({
+                    "phase": f"Running {label} on {filename}",
+                    "detail": filename,
+                    "done": file_idx,
+                })
+
+                # Always save a markdown report — case or not — so the rollup can
+                # embed each tool's actual formatted output (headers, tables)
+                # instead of raw CLI stdout. Independent of any case's own
+                # save-format preference; -m is genuinely the richer artifact,
+                # and this is Analyze's own internal read-back, not the user's
+                # saved case file (that's still whatever -m/-t/-j produces).
+                args = args + ["-o", "-m"]
+                if case_name:
+                    args = args + ["--case", case_name]
+
+                result = run_binary(slug, args, timeout=90)
+                markdown = _read_tool_markdown(slug, case_name) if result.get("success") else ""
+
+                if case_name and result.get("success"):
+                    reg_target = sha256 if slug == "tiquery" else (md5 if slug == "nsrlquery" else filepath)
+                    _register_cli_case_output(slug, case_name, reg_target, "md")
+
+                tool_runs.append({
+                    "label":    label,
+                    "tool":     slug,
+                    "success":  result.get("success", False),
+                    "output":   result.get("output", ""),
+                    "error":    result.get("error", ""),
+                    "markdown": markdown,
+                })
+
+            per_file_results.append({
+                "filename": filename,
+                "filepath": filepath,
+                "filetype": res.get("filetype", ""),
+                "sha256":   sha256,
+                "md5":      md5,
+                "tool_runs": tool_runs,
+            })
+            _analyze_progress["done"] = file_idx + 1
+
+        _analyze_progress.update({"phase": "Building rollup report", "detail": ""})
+        rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note)
+        return _save_analyze_rollup(target, case_name, per_file_results, rollup_md, extraction_note)
+    finally:
+        _analyze_progress["running"] = False
 
 
 def _save_analyze_rollup(target: Path, case_name: str, per_file_results: list,
@@ -2893,4 +2923,10 @@ if __name__ == "__main__":
     import logging
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)  # Suppress the dev server warning
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+    # threaded=True is required for progress polling (Analyze, bulk tiquery)
+    # to work at all: those routes hold one request open for the whole run
+    # while the frontend polls a separate GET endpoint for status. Without
+    # this the dev server handles one request at a time and the poll just
+    # queues up behind the long-running POST, making the progress bar a
+    # silent no-op that only ever reports the final state.
+    app.run(host="0.0.0.0", port=PORT, debug=False, threaded=True)

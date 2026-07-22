@@ -58,6 +58,11 @@ struct Match {
     // "Matched Strings" column look identical across different detections.
     // Defaults to matched_str for untagged matches, where it's unused.
     display_str: String,
+    // How many base64 layers were peeled to reach this match (0 for
+    // non-decoded matches). A rule firing only after several layers of
+    // decoding is itself a signal — routine base64 use is one layer;
+    // repeated re-encoding is a deliberate evasion tell.
+    decode_layers: u8,
     rule_name: Option<String>,
     tactic: Option<String>,
     technique: Option<String>,
@@ -159,6 +164,7 @@ impl Mstrings {
                 encoding: encoding_type,
                 display_str: trimmed.clone(),
                 matched_str: trimmed,
+                decode_layers: 0,
                 rule_name: None,
                 tactic: None,
                 technique: None,
@@ -226,12 +232,14 @@ impl Mstrings {
         for (offset, candidate) in candidates {
             let mut current = candidate;
             let mut terminal: Option<Vec<u8>> = None;
+            let mut layers: u8 = 0;
 
             for _ in 0..MAX_LAYERS {
                 let decoded = match BASE64_STANDARD.decode(current.trim()) {
                     Ok(d) if d.len() >= MIN_DECODED_LEN => d,
                     _ => break, // invalid/too-short at this layer — abandon this candidate
                 };
+                layers += 1;
                 match std::str::from_utf8(&decoded) {
                     Ok(s) if is_base64_shaped(s.trim()) => {
                         current = s.trim().to_string();
@@ -258,6 +266,7 @@ impl Mstrings {
                 encoding: Encoding::Base64,
                 display_str: decoded_str.clone(),
                 matched_str: decoded_str,
+                decode_layers: layers,
                 rule_name: None,
                 tactic: None,
                 technique: None,
@@ -300,6 +309,7 @@ impl Mstrings {
                             encoding: m.encoding.clone(),
                             matched_str: m.matched_str.clone(),
                             display_str: found.as_str().to_string(),
+                            decode_layers: m.decode_layers,
                             rule_name: Some(rule_name.clone()),
                             tactic: Some(tactic.clone()),
                             technique: Some(technique.clone()),
@@ -315,6 +325,7 @@ impl Mstrings {
                     encoding: m.encoding.clone(),
                     matched_str: m.matched_str.clone(),
                     display_str: m.matched_str.clone(),
+                    decode_layers: m.decode_layers,
                     rule_name: None,
                     tactic: None,
                     technique: None,
@@ -441,7 +452,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
     let mut rule_groups: std::collections::HashMap<
         String,
-        (String, String, String, std::collections::BTreeSet<String>),
+        (String, String, String, std::collections::BTreeSet<String>, u8),
     > = std::collections::HashMap::new();
 
     for m in mstrings.matches.iter().filter(|m| m.rule_name.is_some()) {
@@ -451,15 +462,17 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
             m.technique.clone().unwrap_or_default(),
             m.technique_id.clone().unwrap_or_default(),
             std::collections::BTreeSet::new(),
+            0u8,
         ));
         entry.3.insert(m.display_str.clone());
+        entry.4 = entry.4.max(m.decode_layers);
     }
 
     // Sort groups: primary = tactic priority, secondary = rule name
-    let mut sorted_groups: Vec<(String, String, String, String, Vec<String>)> = rule_groups
+    let mut sorted_groups: Vec<(String, String, String, String, Vec<String>, u8)> = rule_groups
         .into_iter()
-        .map(|(rule, (tactic, technique, id, strings))| {
-            (rule, tactic, technique, id, strings.into_iter().collect())
+        .map(|(rule, (tactic, technique, id, strings, max_layers))| {
+            (rule, tactic, technique, id, strings.into_iter().collect(), max_layers)
         })
         .collect();
     sorted_groups.sort_by(|a, b| {
@@ -468,9 +481,9 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
     let display_matches: Vec<DisplayMatch> = sorted_groups
         .iter()
-        .map(|(rule, tactic, technique, id, strings)| {
+        .map(|(rule, tactic, technique, id, strings, max_layers)| {
             let count = strings.len();
-            let matched_strings = {
+            let mut matched_strings = {
                 let cap = 8;
                 let shown: Vec<String> = strings
                     .iter()
@@ -483,6 +496,12 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                     shown.join(", ")
                 }
             };
+            // Only a rule firing after MULTIPLE re-encoding layers is a
+            // meaningful evasion tell — a single base64 decode is routine
+            // (e.g. `echo <blob> | base64 -d`) and not worth flagging.
+            if *max_layers > 1 {
+                matched_strings = format!("{matched_strings}  [\u{26A0} found after {max_layers} layers of base64 decoding]");
+            }
             DisplayMatch {
                 count: count.to_string(),
                 rule_name: rule.clone(),
@@ -598,6 +617,31 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                     }
                 }
             }
+
+            // Bare-domain C2 indicators (e.g. "cdntor.ru", "usb.mine.nu") —
+            // caught by a rule's own regex but with no "http://" scheme and
+            // not a 4-part IPv4 shape, so neither branch above picks them up
+            // (both require a scheme or an IPv4 shape). Use display_str, the
+            // rule's own precise match, rather than re-deriving domain shape
+            // from scratch — and gate on the Command and Control tactic so
+            // dotted-but-not-network strings a C2-tactic rule might still
+            // incidentally match (e.g. a version string) stay out, while
+            // filesystem-flavored dotted strings (bundle IDs, LaunchDaemon
+            // labels) picked up by non-C2 rules are never considered here.
+            if let Some(tactic) = &m.tactic {
+                if tactic.contains("Command and Control") {
+                    let d = m.display_str.trim();
+                    if d.contains('.')
+                        && !d.contains(' ')
+                        && !d.contains('/')
+                        && !d.contains('_')
+                        && !d.contains('\\')
+                        && d.len() < 100
+                    {
+                        net_iocs.insert(d.to_string());
+                    }
+                }
+            }
         }
     }
 
@@ -606,7 +650,11 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         .filter(|m| m.rule_name.is_some())
         .map(|m| FlatMatch {
             offset:       format!("0x{:08X}", m.offset),
-            encoding:     format!("{:?}", m.encoding),
+            encoding:     if m.decode_layers > 1 {
+                format!("Base64\u{d7}{}", m.decode_layers)
+            } else {
+                format!("{:?}", m.encoding)
+            },
             matched_str:  truncate_string(&m.display_str, 60),
             rule_name:    m.rule_name.clone().unwrap_or_default(),
             tactic:       m.tactic.clone().unwrap_or_default(),

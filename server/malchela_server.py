@@ -1448,6 +1448,20 @@ def _extract_mstrings_iocs(markdown: str) -> tuple:
     return _bullets(_MSTRINGS_FS_IOC_BLOCK), _bullets(_MSTRINGS_NET_IOC_BLOCK)
 
 
+_MD_OBFUSCATION_LAYERS = re.compile(r"found after (\d+) layers of base64 decoding")
+
+
+def _extract_max_obfuscation_layers(markdown: str) -> int:
+    """Highest base64 re-encoding depth mstrings had to peel through to
+    reach any detection in this file (0 if none). mstrings only annotates a
+    row this way at >1 layer — a single decode is routine and not itself a
+    tell — so any nonzero result here is already meaningful: the malware
+    deliberately re-encoded its payload multiple times, not just used
+    base64 for convenience."""
+    layers = [int(n) for n in _MD_OBFUSCATION_LAYERS.findall(markdown)]
+    return max(layers) if layers else 0
+
+
 def _flag_verdict(tool_runs: list) -> tuple:
     """Best-effort malicious flag for the triage banner — not a full
     multi-source verdict, just enough signal without parsing every tool's
@@ -1499,6 +1513,7 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     fs_iocs_seen: set = set()
     net_iocs: list = []
     net_iocs_seen: set = set()
+    obfuscation_findings: list = []  # (filename, max_layers)
     for key in order:
         members = groups[key]
         is_flagged, reason = _flag_verdict(members[0]["tool_runs"])
@@ -1521,6 +1536,9 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
                     if ioc not in net_iocs_seen:
                         net_iocs_seen.add(ioc)
                         net_iocs.append(ioc)
+                max_layers = _extract_max_obfuscation_layers(run["markdown"])
+                if max_layers > 1:
+                    obfuscation_findings.append((members[0]["filename"], max_layers))
             if is_flagged and run.get("tool") == "tiquery" and run.get("success") and run.get("markdown"):
                 for tag in _extract_tiquery_tags(run["markdown"]):
                     if tag not in malware_tags_seen:
@@ -1564,6 +1582,9 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
         lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in fs_iocs))
     if net_iocs:
         lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in net_iocs))
+    if obfuscation_findings:
+        detail = ", ".join(f"`{n}` ({layers} layers)" for n, layers in obfuscation_findings)
+        lines.append(f"- **⚠ Multi-layer obfuscation detected** (mstrings): {detail}")
     if flag_findings:
         flagged_files = len({f[0] for f in flag_findings})
         lines.append(f"- **{len(flag_findings)} flag(s)/indicator(s)** across {flagged_files} file(s):")

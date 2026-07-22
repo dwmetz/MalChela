@@ -794,6 +794,24 @@ function extractMstringsIocs(markdown) {
   return { fs: bullets(MSTRINGS_FS_IOC_BLOCK), net: bullets(MSTRINGS_NET_IOC_BLOCK) };
 }
 
+// Highest base64 re-encoding depth mstrings had to peel through to reach any
+// detection in this file (0 if none). mstrings only annotates a row this way
+// at >1 layer — a single decode is routine and not itself a tell — so any
+// nonzero result here is already meaningful: the malware deliberately
+// re-encoded its payload multiple times, not just used base64 for convenience.
+const MD_OBFUSCATION_LAYERS = /found after (\d+) layers of base64 decoding/g;
+
+function extractMaxObfuscationLayers(markdown) {
+  MD_OBFUSCATION_LAYERS.lastIndex = 0;
+  let max = 0;
+  let m;
+  while ((m = MD_OBFUSCATION_LAYERS.exec(markdown)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n > max) max = n;
+  }
+  return max;
+}
+
 // Files are grouped by SHA256 for display: duplicate content saved under
 // different names (common with carved/exported network artifacts) gets one
 // write-up instead of the same tool output repeated verbatim per filename.
@@ -819,6 +837,7 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   const fsIocsSeen = new Set();
   const netIocs = [];
   const netIocsSeen = new Set();
+  const obfuscationFindings = []; // { filename, maxLayers }
   for (const key of order) {
     const members = groups.get(key);
     const isFlagged = flagVerdict(members[0].tool_runs).flagged;
@@ -834,6 +853,8 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
         const { fs, net } = extractMstringsIocs(run.markdown);
         for (const ioc of fs) { if (!fsIocsSeen.has(ioc)) { fsIocsSeen.add(ioc); fsIocs.push(ioc); } }
         for (const ioc of net) { if (!netIocsSeen.has(ioc)) { netIocsSeen.add(ioc); netIocs.push(ioc); } }
+        const maxLayers = extractMaxObfuscationLayers(run.markdown);
+        if (maxLayers > 1) obfuscationFindings.push({ filename: members[0].filename, maxLayers });
       }
       if (isFlagged && run.tool === 'tiquery' && run.success && run.markdown) {
         for (const tag of extractTiqueryTags(run.markdown)) {
@@ -886,6 +907,10 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   }
   if (netIocs.length) {
     lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(i => `\`${i}\``).join(', '));
+  }
+  if (obfuscationFindings.length) {
+    const detail = obfuscationFindings.map(({ filename, maxLayers }) => `\`${filename}\` (${maxLayers} layers)`).join(', ');
+    lines.push(`- **⚠ Multi-layer obfuscation detected** (mstrings): ${detail}`);
   }
   if (flagFindings.length) {
     const flaggedFiles = new Set(flagFindings.map(f => f.filename)).size;

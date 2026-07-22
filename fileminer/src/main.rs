@@ -369,7 +369,7 @@ fn analyze_directory(
 
             let ext_mismatch = match extension.as_str() {
                 "exe" | "dll" => !file_type.contains("portable-executable"),
-                "txt" | "log" => !file_type.starts_with("text/"),
+                "txt" | "log" => !file_type.starts_with("text/") && !looks_like_text(&path),
                 "zip" => !file_type.contains("zip"),
                 "jpg" | "jpeg" => !file_type.contains("jpeg"),
                 "png" => !file_type.contains("png"),
@@ -448,6 +448,33 @@ fn analyze_directory(
     }
 
     Ok(results)
+}
+
+// infer only recognizes binary format magic-byte signatures — there's no
+// signature for plain text, so identify_magic() returns "Unknown" for
+// every genuine plaintext file (a readme, a log, a config), not just
+// disguised binaries. The txt/log mismatch check used to take that
+// "Unknown" at face value, which meant every legitimate .txt file got
+// flagged as a mismatch. This is the standard binary-vs-text heuristic
+// (the same one git and the `file` command use as a first pass): no
+// embedded NUL byte and a high ratio of printable/whitespace bytes in a
+// sample of the content.
+fn looks_like_text(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else { return false };
+    let mut buffer = vec![0u8; 8000];
+    let Ok(n) = file.read(&mut buffer) else { return false };
+    let sample = &buffer[..n];
+    if sample.is_empty() {
+        return true; // empty file — nothing to contradict "text"
+    }
+    if sample.contains(&0u8) {
+        return false; // NUL byte — binary, not text
+    }
+    let printable = sample
+        .iter()
+        .filter(|&&b| b == b'\n' || b == b'\r' || b == b'\t' || (0x20..=0x7e).contains(&b) || b >= 0x80)
+        .count();
+    (printable as f64 / sample.len() as f64) >= 0.95
 }
 
 fn identify_magic(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

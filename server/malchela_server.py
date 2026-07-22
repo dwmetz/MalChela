@@ -719,7 +719,7 @@ def home_screen():
     output = (
         f"{ascii_art}\n"
         f"            https://bakerstreetforensics.com\n\n"
-        f"            MalChela Analysis Toolkit v4.2\n\n"
+        f"            MalChela Analysis Toolkit v4.3\n\n"
         f"{koan}"
     )
     return jsonify({"success": True, "output": output})

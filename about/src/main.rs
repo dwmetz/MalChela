@@ -54,7 +54,8 @@ fn main() {
     let description_width = 70;
 
     let table_string = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Analyze", "Point it at a file, folder, or bundle and it auto-runs every tool FileMiner suggests, plus a combined rollup report"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Code Sign Check", "Inspects macOS code signing: signature type, team ID, entitlements, ad-hoc detection"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Combine YARA", "Point it at a directory of YARA files and it will output one combined rule"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Extract Samples", "Point it at a directory of password protected malware files to extract all"),

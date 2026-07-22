@@ -47,7 +47,17 @@ enum Encoding {
 struct Match {
     offset: usize,
     encoding: Encoding,
+    // Full underlying string (can be a multi-hundred-byte decoded base64
+    // blob) — IOC extraction below needs the whole thing, so this is never
+    // truncated to a rule's specific hit. See `display_str` for that.
     matched_str: String,
+    // The actual regex-matched substring for this rule, set in
+    // apply_yara_detections(). Distinct from matched_str because several
+    // unrelated rules can all match somewhere inside the same long decoded
+    // blob — showing the shared blob prefix for every one of them made the
+    // "Matched Strings" column look identical across different detections.
+    // Defaults to matched_str for untagged matches, where it's unused.
+    display_str: String,
     rule_name: Option<String>,
     tactic: Option<String>,
     technique: Option<String>,
@@ -143,10 +153,12 @@ impl Mstrings {
                 Encoding::Ascii
             };
 
+            let trimmed = line.trim_start().to_string();
             self.matches.push(Match {
                 offset,
                 encoding: encoding_type,
-                matched_str: line.trim_start().to_string(),
+                display_str: trimmed.clone(),
+                matched_str: trimmed,
                 rule_name: None,
                 tactic: None,
                 technique: None,
@@ -240,10 +252,12 @@ impl Mstrings {
             if (printable as f64 / decoded.len() as f64) < MIN_PRINTABLE_RATIO {
                 continue;
             }
+            let decoded_str = String::from_utf8_lossy(&decoded).to_string();
             decoded_matches.push(Match {
                 offset,
                 encoding: Encoding::Base64,
-                matched_str: String::from_utf8_lossy(&decoded).to_string(),
+                display_str: decoded_str.clone(),
+                matched_str: decoded_str,
                 rule_name: None,
                 tactic: None,
                 technique: None,
@@ -279,17 +293,20 @@ impl Mstrings {
             let mut any_match = false;
             let mut seen_rules: std::collections::HashSet<String> = std::collections::HashSet::new();
             for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
-                if regex.is_match(&m.matched_str).unwrap_or(false) && seen_rules.insert(rule_name.clone()) {
-                    new_matches.push(Match {
-                        offset: m.offset,
-                        encoding: m.encoding.clone(),
-                        matched_str: m.matched_str.clone(),
-                        rule_name: Some(rule_name.clone()),
-                        tactic: Some(tactic.clone()),
-                        technique: Some(technique.clone()),
-                        technique_id: Some(technique_id.clone()),
-                    });
-                    any_match = true;
+                if let Ok(Some(found)) = regex.find(&m.matched_str) {
+                    if seen_rules.insert(rule_name.clone()) {
+                        new_matches.push(Match {
+                            offset: m.offset,
+                            encoding: m.encoding.clone(),
+                            matched_str: m.matched_str.clone(),
+                            display_str: found.as_str().to_string(),
+                            rule_name: Some(rule_name.clone()),
+                            tactic: Some(tactic.clone()),
+                            technique: Some(technique.clone()),
+                            technique_id: Some(technique_id.clone()),
+                        });
+                        any_match = true;
+                    }
                 }
             }
             if !any_match {
@@ -297,6 +314,7 @@ impl Mstrings {
                     offset: m.offset,
                     encoding: m.encoding.clone(),
                     matched_str: m.matched_str.clone(),
+                    display_str: m.matched_str.clone(),
                     rule_name: None,
                     tactic: None,
                     technique: None,
@@ -434,7 +452,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
             m.technique_id.clone().unwrap_or_default(),
             std::collections::BTreeSet::new(),
         ));
-        entry.3.insert(m.matched_str.clone());
+        entry.3.insert(m.display_str.clone());
     }
 
     // Sort groups: primary = tactic priority, secondary = rule name
@@ -589,7 +607,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         .map(|m| FlatMatch {
             offset:       format!("0x{:08X}", m.offset),
             encoding:     format!("{:?}", m.encoding),
-            matched_str:  truncate_string(&m.matched_str, 60),
+            matched_str:  truncate_string(&m.display_str, 60),
             rule_name:    m.rule_name.clone().unwrap_or_default(),
             tactic:       m.tactic.clone().unwrap_or_default(),
             technique:    m.technique.clone().unwrap_or_default(),

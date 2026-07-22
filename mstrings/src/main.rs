@@ -82,6 +82,21 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
+// Neutralize characters that corrupt the report tables' structure before a
+// matched string goes into a table cell. Two distinct failure modes, both
+// from the same missing sanitization: an embedded newline (routine for a
+// match pulled from base64-decoded multi-line content, e.g. a decoded
+// script) renders as literal `\n` bytes inside the cell, which — parsed as
+// markdown — starts what looks like a new table row with blank leading
+// columns; an embedded `|` (routine in any matched shell command using a
+// pipe, e.g. `curl ... | grep ...`) IS the markdown table's own column
+// delimiter, so it splits the cell in two and shifts every column after it
+// one to the right — the concrete symptom that surfaced this: a
+// grep pattern showing up as if it were a MITRE tactic name.
+fn sanitize_table_cell(s: &str) -> String {
+    s.replace(['\r', '\n', '\t'], " ").replace('|', "\\|")
+}
+
 // Filter high-volume ObjC/Swift runtime noise that appears in every Mach-O binary.
 // These strings are never meaningful IOCs and would swamp detection output.
 fn is_objc_swift_noise(s: &str) -> bool {
@@ -409,7 +424,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                 let shown: Vec<String> = strings
                     .iter()
                     .take(cap)
-                    .map(|s| truncate_string(s, 50))
+                    .map(|s| truncate_string(&sanitize_table_cell(s), 50))
                     .collect();
                 if count > cap {
                     format!("{} (+{} more)", shown.join(", "), count - cap)

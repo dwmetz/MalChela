@@ -140,34 +140,43 @@ impl Mstrings {
         }
     }
 
-    /// Detect long base64-looking strings, decode them, and add the decoded
-    /// text as new matches (encoding: Base64) so the existing detection and
-    /// IOC-extraction passes run against what's actually inside — not just
-    /// the encoded blob itself. Malware embedding a full script/payload as
-    /// a base64 string (observed: a 2,514-line Python RAT decoded from one
-    /// 149KB base64 string in a Dok/Bella sample) is otherwise invisible to
-    /// every string-matching rule, since none of its real content exists as
-    /// a literal substring anywhere in the binary pre-decode. Candidates are
-    /// filtered by charset/length/padding before attempting to decode, and
-    /// decoded output must be mostly printable before being kept — both to
-    /// avoid wasting time decoding coincidental base64-alphabet runs that
-    /// are really just binary data, and to avoid adding garbage matches.
+    /// Detect long base64-looking substrings anywhere within an extracted
+    /// string, decode them, and add the decoded text as new matches
+    /// (encoding: Base64) so the existing detection and IOC-extraction
+    /// passes run against what's actually inside — not just the encoded
+    /// blob itself. Malware embedding a full script/payload as base64 is
+    /// otherwise invisible to every string-matching rule, since none of its
+    /// real content exists as a literal substring anywhere in the binary
+    /// pre-decode. Two shapes observed in the wild, both handled by
+    /// searching for the base64 run rather than requiring the whole
+    /// extracted string to be one: a blob as its own isolated string
+    /// constant (a 2,514-line Python RAT decoded from one 149KB base64
+    /// string in a Dok/Bella sample), and a blob embedded inline in a
+    /// larger command line (`echo <blob> | base64 -d | python`, an EmPyre-
+    /// style shell stager, where the whole line — not just the blob — is
+    /// what gets extracted as one string). Candidates are filtered by
+    /// length/padding before attempting to decode, and decoded output must
+    /// be mostly printable before being kept — both to avoid wasting time
+    /// decoding coincidental base64-alphabet runs that are really just
+    /// binary data, and to avoid adding garbage matches.
     fn decode_base64_blobs(&mut self) {
         const MIN_LEN: usize = 60;
         const MIN_DECODED_LEN: usize = 20;
         const MIN_PRINTABLE_RATIO: f64 = 0.85;
 
+        let base64_run = Regex::new(&format!(r"[A-Za-z0-9+/]{{{MIN_LEN},}}={{0,2}}")).unwrap();
+
         let candidates: Vec<(usize, String)> = self
             .matches
             .iter()
-            .filter(|m| {
-                let s = m.matched_str.trim();
-                s.len() >= MIN_LEN
-                    && s.len() % 4 == 0
-                    && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
-                    && s.chars().any(|c| c.is_ascii_alphabetic())
+            .flat_map(|m| {
+                base64_run
+                    .find_iter(&m.matched_str)
+                    .flatten()
+                    .filter(|mat| mat.as_str().len() % 4 == 0 && mat.as_str().chars().any(|c| c.is_ascii_alphabetic()))
+                    .map(|mat| (m.offset, mat.as_str().to_string()))
+                    .collect::<Vec<_>>()
             })
-            .map(|m| (m.offset, m.matched_str.trim().to_string()))
             .collect();
 
         let mut decoded_matches = Vec::new();

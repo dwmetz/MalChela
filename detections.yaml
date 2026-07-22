@@ -2326,6 +2326,57 @@ SelfDecodingBase64Cli:
       technique_name: "Deobfuscate/Decode Files or Information"
       tactics: ["Defense Evasion"]
 
+EmPyreStagerSignature:
+  title: "EmPyre-style Python stager signature"
+  id: "mac-empyre-stager-001"
+  status: "experimental"
+  description: "Detects the distinctive stager pattern used by EmPyre (the macOS/Linux port of PowerShell Empire) and its derivatives: a beacon request whose Cookie header carries a base64-encoded JSON config with loader_options/payload_options fields (host, port, launch_agent_name, loader_name), and a second stage smuggled inside an intentional HTTP 404 response body (real server code is expected to 404; the actual payload is appended after a literal 'DEBUG:' marker and executed via exec(b64decode(...))). Observed in a Siggen sample: a hidden LaunchDaemon (label \"com.enzo\", masquerading launch_agent_name \"com.apple.HEYgiNb\") ran a beacon-gate script (checks a status endpoint for the word \"open\" before activating) that fetched and exec'd this stager. Only visible to string matching once mstrings' base64 auto-decode-and-rescan step runs, since this content is typically embedded as an encoded blob rather than literal source."
+  references:
+    - "https://github.com/EmpireProject/EmPyre"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "loader_options"
+      - "payload_options"
+      - "launch_agent_name"
+      - "DEBUG-->"
+      - "exec\\(b64decode\\("
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+DynamicDnsC2Domain:
+  title: "Free dynamic-DNS domain (common C2 hosting choice)"
+  id: "c2-ddns-domain-001"
+  status: "experimental"
+  description: "Detects a hostname under a free dynamic-DNS provider suffix (No-IP, DuckDNS, mine.nu / dynu, afraid.org, and similar). Legitimate software essentially never hardcodes one of these — they're free, require no registration verification, and let an operator repoint the hostname to a new IP at will, which is exactly why they're a recurring, well-documented C2/staging-infrastructure choice for lower-budget campaigns. Observed as both the staging host (serving a persistence plist and beacon script) and the beacon-gate check in a Siggen sample."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "\\b[a-z0-9-]+\\.(mine\\.nu|webhop\\.(net|org|me)|no-ip\\.(org|biz|info)|noip\\.(com|org)|duckdns\\.org|ddns\\.net|hopto\\.org|zapto\\.org|dynu\\.(com|net)|afraid\\.org)\\b"
+  falsepositives:
+    - "A legitimate personal/hobby project or self-hosted service knowingly using a free DDNS hostname"
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
 MacKeyloggerKeyNameTable:
   title: "macOS Keylogger Key-Name Table"
   id: "mac-keylogger-keytable-001"

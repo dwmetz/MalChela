@@ -29,7 +29,7 @@ import {
   existsSync, readdirSync, statSync, mkdirSync, writeFileSync, readFileSync,
   realpathSync, openSync, closeSync, unlinkSync, rmSync,
 } from 'fs';
-import { dirname, basename } from 'path';
+import { dirname, basename, extname } from 'path';
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
 
 // Session-level case state — null until the user selects a case
@@ -1090,6 +1090,71 @@ function maybeExtractContainer(targetPath) {
   return maybeExtractDpp(targetPath);
 }
 
+const NESTED_CONTAINER_EXTS = new Set(['.zip', '.dmg', '.pkg']);
+const MAX_NESTED_EXTRACTIONS = 5; // guard against zip bombs / deeply nested archives
+
+// maybeExtractContainer only ever runs on Analyze's top-level target —
+// FileMiner has no suggested_tools branch for a raw .zip/.dmg/.pkg found
+// mid-scan (by design: containers are meant to be unwrapped once, up front,
+// not per-file), so a container discovered while walking a directory just
+// shows suggested_tools: [] and silently gets skipped. That's routine for a
+// sample shipped as a lone .zip inside its own folder (nothing else to find
+// until it's extracted) — no signal about the sample, just a gap in dispatch.
+//
+// Extracts any such container in place (reusing the same helpers the
+// top-level target uses) and folds a fresh fileminer scan of the extracted
+// directory into scanResults, breadth-first, so a container nested inside an
+// extracted container also gets unwrapped. Capped at MAX_NESTED_EXTRACTIONS
+// total extractions per Analyze run as a guard against zip bombs or
+// pathological nesting; a password not in the common list is left as-is
+// (surfaces as an unanalyzed file, same as today, rather than failing the
+// whole Analyze run). Mutates scanResults in place, returns extraction notes.
+function expandNestedContainers(scanResults) {
+  const notes = [];
+  const queue = [...scanResults];
+  let extractedCount = 0;
+  const seenDirs = new Set();
+
+  while (queue.length && extractedCount < MAX_NESTED_EXTRACTIONS) {
+    const res = queue.shift();
+    if (res.suggested_tools && res.suggested_tools.length) continue;
+    const ext = extname(res.filepath || '').toLowerCase();
+    if (!NESTED_CONTAINER_EXTS.has(ext)) continue;
+
+    let extractedDir, note;
+    try {
+      ({ target: extractedDir, note } = maybeExtractContainer(res.filepath));
+    } catch {
+      continue; // e.g. zip password not in the common list — leave as-is
+    }
+    if (note === null) continue;
+    const resolved = realpathSync(extractedDir);
+    if (seenDirs.has(resolved)) continue;
+    seenDirs.add(resolved);
+    extractedCount++;
+    notes.push(note);
+
+    const fmBinary = `${RELEASE_DIR}/fileminer`;
+    const fmArgs = [extractedDir, '--no-prompt'];
+    if (currentCase) fmArgs.push('--case', currentCase);
+    let fmOutput;
+    try {
+      fmOutput = execFileSync(fmBinary, fmArgs, {
+        cwd: MALCHELA_DIR, encoding: 'utf8', timeout: FILEMINER_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER,
+      });
+    } catch {
+      continue;
+    }
+    let fmData;
+    try { fmData = JSON.parse(fmOutput); } catch { continue; }
+    const newResults = fmData.results || [];
+    scanResults.push(...newResults);
+    queue.push(...newResults);
+  }
+
+  return notes;
+}
+
 function runAnalyze(rawTargetPath) {
   if (!existsSync(rawTargetPath)) {
     throw new Error(`Path does not exist: ${rawTargetPath}`);
@@ -1129,6 +1194,7 @@ function runAnalyze(rawTargetPath) {
 
   let scanResults = fmData.results || [];
 
+  let finalExtractionNote = extractionNote;
   if (singleFileMode) {
     const resolvedTarget = realpathSync(targetPath);
     scanResults = scanResults.filter(r => pathsMatch(r.filepath, resolvedTarget));
@@ -1137,6 +1203,11 @@ function runAnalyze(rawTargetPath) {
         "Selected file was not found in fileminer's scan results " +
         '(it may be a hidden/skipped file type).'
       );
+    }
+  } else {
+    const nestedNotes = expandNestedContainers(scanResults);
+    if (nestedNotes.length) {
+      finalExtractionNote = [extractionNote, ...nestedNotes].filter(Boolean).join(' ');
     }
   }
 
@@ -1151,7 +1222,7 @@ function runAnalyze(rawTargetPath) {
     // files first — so the calling agent can call fileanalyzer/mstrings/
     // macho_info/etc. itself on whichever files matter, or call fileminer
     // directly on targetPath for the complete un-truncated list.
-    return buildOverCapSummary(targetPath, scanResults, extractionNote);
+    return buildOverCapSummary(targetPath, scanResults, finalExtractionNote);
   }
 
   const perFileResults = [];
@@ -1205,7 +1276,7 @@ function runAnalyze(rawTargetPath) {
     });
   }
 
-  const rollup = buildAnalyzeRollup(targetPath, perFileResults, extractionNote);
+  const rollup = buildAnalyzeRollup(targetPath, perFileResults, finalExtractionNote);
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '_');
   // The "analyze" subfolder matters, not just cosmetically: registerCaseOutput
   // below records the entry's path as "analyze/<filename>", so the file has

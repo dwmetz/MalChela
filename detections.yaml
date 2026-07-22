@@ -3055,7 +3055,7 @@ ProtonMacChainbreakerKeychainDump:
   title: "Offline macOS Keychain file parser (chainbreaker-style)"
   id: "proton-chainbreaker-kych-001"
   status: "experimental"
-  description: "Detects the raw Keychain file-format signatures (KEYCHAIN_SIGNATURE 'kych', DBBLOB_SIGNATURE 0xfade0711) used by chainbreaker-style offline keychain parsers to decrypt login.keychain-db directly from disk, bypassing the Keychain API entirely — a different implementation path than SecItemCopyMatching/SecKeychainFindGenericPassword (see MacKeychainAccess). Found as a bundled cb.py resource (paired with pbkdf2.py/pyDes.py for the 3DES key unwrap) in both the Proton.C and Proton.D samples."
+  description: "Detects the raw Keychain file-format signatures (KEYCHAIN_SIGNATURE 'kych', DBBLOB_SIGNATURE 0xfade0711) used by chainbreaker-style offline keychain parsers to decrypt login.keychain-db directly from disk, bypassing the Keychain API entirely — a different implementation path than SecItemCopyMatching/SecKeychainFindGenericPassword (see MacKeychainAccess). Found as a bundled, plaintext cb.py resource (paired with pbkdf2.py/pyDes.py for the 3DES key unwrap) in the Proton.C sample. Proton.D ships a same-named cb.py, but it's wrapped in exec(zlib.decompress(base64.b64decode(...))) — the literal signature strings are compressed inside that blob, not present as static text, so this rule does not fire on Proton.D. That self-decompressing-exec wrapper is itself a distinctive obfuscation pattern, worth a separate rule."
   references:
     - "https://objective-see.org/blog/blog_0x1D.html"
     - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"

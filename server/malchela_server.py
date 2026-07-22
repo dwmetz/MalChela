@@ -1258,6 +1258,73 @@ def _maybe_extract_container(target: Path) -> tuple:
     return target, None
 
 
+_NESTED_CONTAINER_EXTS = {".zip", ".dmg", ".pkg"}
+_MAX_NESTED_EXTRACTIONS = 5  # guard against zip bombs / deeply nested archives
+
+
+def _expand_nested_containers(scan_results: list, case_name: str) -> list:
+    """_maybe_extract_container only ever runs on Analyze's top-level target
+    — FileMiner has no suggested_tools branch for a raw .zip/.dmg/.pkg found
+    mid-scan (by design: containers are meant to be unwrapped once, up front,
+    not per-file), so a container discovered while walking a directory just
+    shows suggested_tools: [] and silently gets skipped. That's routine for
+    a sample shipped as a lone .zip inside its own folder (nothing else to
+    find until it's extracted) — no writeup-worthy TTP hides "no suggested
+    tools", it's a gap in this dispatch, not a signal about the sample.
+
+    Extracts any such container in place (reusing the exact same helpers
+    the top-level target uses) and folds a fresh fileminer scan of the
+    extracted directory into scan_results, breadth-first, so a container
+    nested inside an extracted container also gets unwrapped. Capped at
+    _MAX_NESTED_EXTRACTIONS total extractions per Analyze run as a guard
+    against zip bombs or pathological nesting; a password not in the common
+    list is left as-is (surfaces to the user as an unanalyzed file, same as
+    today, rather than failing the whole Analyze run).
+
+    Mutates scan_results in place and returns the list of extraction notes
+    for the rollup."""
+    notes = []
+    queue = list(scan_results)
+    extracted_count = 0
+    seen_dirs = set()
+
+    while queue and extracted_count < _MAX_NESTED_EXTRACTIONS:
+        res = queue.pop(0)
+        if res.get("suggested_tools"):
+            continue
+        p = Path(res.get("filepath", ""))
+        if p.suffix.lower() not in _NESTED_CONTAINER_EXTS:
+            continue
+        try:
+            extracted_dir, note = _maybe_extract_container(p)
+        except ValueError:
+            continue  # e.g. zip password not in the common list — leave as-is
+        if note is None:
+            continue
+        resolved = str(extracted_dir.resolve())
+        if resolved in seen_dirs:
+            continue
+        seen_dirs.add(resolved)
+        extracted_count += 1
+        notes.append(note)
+
+        fm_args = [str(extracted_dir), "--no-prompt"]
+        if case_name:
+            fm_args += ["--case", case_name]
+        fm_result = run_binary("fileminer", fm_args, timeout=120)
+        if not fm_result.get("success"):
+            continue
+        try:
+            fm_data = json.loads(fm_result["output"])
+        except (ValueError, KeyError):
+            continue
+        new_results = fm_data.get("results", [])
+        scan_results.extend(new_results)
+        queue.extend(new_results)  # one of these could itself be a nested container
+
+    return notes
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     """
@@ -1319,6 +1386,12 @@ def analyze():
                     "success": False,
                     "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
                 })
+        else:
+            _analyze_progress.update({"phase": "Expanding nested containers", "detail": str(scan_dir)})
+            nested_notes = _expand_nested_containers(scan_results, case_name)
+            if nested_notes:
+                combined = ([extraction_note] if extraction_note else []) + nested_notes
+                extraction_note = " ".join(combined)
 
         if len(scan_results) > _ANALYZE_MAX_FILES:
             # Too many files to auto-run every suggested tool on every one —

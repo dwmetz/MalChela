@@ -411,15 +411,23 @@ fn analyze_directory(
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
-            } else if file_type == "Unknown" && file_size > 10_000 && looks_like_text(&path) {
-                // infer has no magic signature for plain text at all, so a large
+            } else if file_type == "Unknown" && file_size > 0 && looks_like_text(&path) {
+                // infer has no magic signature for plain text at all, so any
                 // script (shell/Python/etc.) with no recognizable extension lands
                 // here as "Unknown" just like a packed/unknown binary would. Route
                 // it the same as the text/* branch above instead of the generic
                 // binary fallback below, or mstrings/detections.yaml never runs
-                // against it. Observed: XCSSET's b.sh/jey.sh (47KB/36KB ASCII
-                // shell scripts containing the actual multi-layer base64 C2
-                // payloads) got FileAnalyzer+tiquery+nsrlquery but never mStrings.
+                // against it. Originally gated on file_size > 10_000 (matching the
+                // binary-unknown branch below), which caught XCSSET's b.sh/jey.sh
+                // (47KB/36KB) but silently excluded small-but-critical scripts —
+                // a Proton sample's cb.py (5,992 bytes) and ch.py (1,772 bytes),
+                // the exact files carrying its keychain/Chrome-credential-theft
+                // signatures, got zero suggested tools under the 10KB floor. The
+                // size gate made sense for the binary-unknown branch (small
+                // unknown blobs are usually junk/resource data, not worth
+                // FileAnalyzer/tiquery), but looks_like_text() already does the
+                // real filtering work here — a small legitimate script is just
+                // as analytically important as a large one.
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));

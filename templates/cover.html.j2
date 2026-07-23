@@ -1,0 +1,108 @@
+<article id="doc-cover">
+  <style>
+    /* Document-wide typography for the whole PDF (not just the cover) —
+       lives here because this is the only template WeasyPrint renders
+       through Jinja2, so it's the only place the `to_url` filter (needed
+       to locate the vendored JetBrains Mono file) is available. Overrides
+       the with-pdf plugin's own _fonts.scss, which names boutique fonts
+       (Kelmscott Roman NF, Classico URW T OT, Gentium Book Basic) that
+       aren't installed and silently fall back to generic serif/sans-serif. */
+    @font-face {
+      font-family: 'JetBrains Mono';
+      font-style: normal;
+      font-weight: 300 700;
+      src: url({{ 'fonts/JetBrainsMono-latin.woff2' | to_url }}) format('woff2');
+    }
+    body, article, p, li, td, th {
+      font-family: Georgia, 'Times New Roman', serif;
+    }
+    h1, h2, h3, h4, h5, h6, label {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    pre, code, var, samp, kbd, tt {
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+    }
+    @page :first {
+      background-color: #f2efe9 !important;
+      margin: 0;
+    }
+    body {
+      margin: 0;
+    }
+    #doc-cover {
+      background-color: #f2efe9 !important;
+      height: 100vh;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      text-align: center;
+      padding: 4.5rem 2.5rem 2.5rem;
+    }
+    #doc-cover h1 {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-variant: small-caps;
+      font-weight: bold;
+      font-size: 40pt;
+      color: #d9382b;
+      line-height: 1.3;
+      margin: 0 0 3rem;
+      border: none;
+    }
+    #doc-cover .crab {
+      width: 85%;
+      max-width: 560px;
+      height: auto;
+      margin: 0 auto 5rem;
+    }
+    #doc-cover hr {
+      width: 55%;
+      border: none;
+      border-top: 2px solid #3aa0c8;
+      margin: 0 auto 1.5rem;
+    }
+    #doc-cover .version {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-variant: small-caps;
+      font-size: 14pt;
+      color: #111;
+      margin-bottom: 0.75rem;
+    }
+    #doc-cover .repo-link {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-variant: small-caps;
+      font-size: 12pt;
+      margin-bottom: 2rem;
+    }
+    #doc-cover .repo-link a {
+      color: #1a56d6;
+      text-decoration: underline;
+    }
+    #doc-cover .org {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-variant: small-caps;
+      font-weight: bold;
+      font-size: 11pt;
+      color: #111;
+      margin-bottom: 0.5rem;
+    }
+    #doc-cover .org-link {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 11pt;
+    }
+    #doc-cover .org-link a {
+      color: #1a56d6;
+      text-decoration: underline;
+    }
+  </style>
+  <h1>MalChela User<br/>Guide</h1>
+  {% if cover_logo is defined %}
+  <img class="crab" src="{{ cover_logo | to_url }}" alt="MalChela">
+  {% endif %}
+  <hr class="rule">
+  <div class="version">This Guide covers version {{ cover_subtitle | e }}</div>
+  <div class="repo-link"><a href="{{ repo_url }}">{{ repo_url }}</a></div>
+  <div class="org">Baker Street Forensics</div>
+  <div class="org-link"><a href="https://bakerstreetforensics.com">https://bakerstreetforensics.com</a></div>
+</article>

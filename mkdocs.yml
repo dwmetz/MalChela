@@ -15,9 +15,11 @@ plugins:
   - search
   - with-pdf:
       output_path: "pdf/user-guide.pdf"
+      cover_subtitle: "4.3"
+      cover_logo: "images/malchela_steampunk.png"
       exclude_pages:
-        - home.md
-      
+        - "^$"
+
 extra_css:
   - stylesheets/colors.css
 nav:

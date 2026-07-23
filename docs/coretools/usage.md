@@ -86,10 +86,30 @@ cargo run -p mstrings — path/to/file — -o -j
 
 Layout
 
-- Top Bar: Title and Toolkit Menu
-- Left Panel: Tool categories and selections
+- Top Toolbar: navigation and utility buttons (see below)
+- Left Panel: Tool categories and selections — collapsible via the toolbar's Hide Tools Panel button, so the console can use the full width
 - Center Panel: Dynamic tool input options
 - Console Panel: Output display
+
+### Top Toolbar
+
+Left to right:
+
+| Button | Opens |
+|--------|-------|
+| Home | The landing screen — ASCII art, koan, and an **At a Glance** card (case counts, `detections.yaml` rule count, API key/tool availability, and an update-available check). |
+| Analyze | The [Analyze](analyze.md) target picker — point it at a file, folder, `.app` bundle, `.dmg`, or `.pkg` and it auto-runs every tool File Miner suggests. |
+| Cases | The [case management](../cases.md) browser. |
+| Hide Tools Panel | Collapses/expands the left tool sidebar. Persists across reloads. |
+| About | Version and feature summary. |
+| Configuration ⚙ | Dropdown: **Server Config** (server URL), **API Keys** (see [API Configuration](../configuration/api-configuration.md) — this is also where [Offline Mode](../configuration/offline-mode.md) lives), **tools.yaml** (see [tools.yaml reference](../configuration/tools-yaml.md)). |
+| Upload Files | Upload a local file to the server for analysis (useful when the browser and the MalChela server aren't on the same machine). |
+| MITRE Lookup | The standalone [MITRE ATT&CK lookup panel](mitre_lookup.md) — no internet required. |
+| Notebook | A scratchpad for recording strings/IOCs/notes across a session — see below. |
+| View Reports | Browse and open any previously saved report directly. |
+| User Guide | Opens this documentation site in a new tab. |
+
+On narrow screens, everything past the first divider collapses into a **⋯ More** overflow menu with the same items.
 
 Running Tools
 

@@ -145,6 +145,8 @@ Keys can be managed via the **API Keys** panel in the MalChela web interface (Co
 
 See [API Configuration](https://dwmetz.github.io/MalChela/configuration/api-configuration/) for details.
 
+Note that `os` (Objective-See) has no API-key gate of its own — it queries a locally cached copy of the Objective-See malware catalogue (refreshed every 24h) and always attempts that fetch on a cache miss, regardless of which other keys are configured. In an air-gapped environment, enable [Offline Mode](../configuration/offline-mode.md) to skip every source's network call, keyed or not.
+
 ---
 
 ### Bulk Lookup

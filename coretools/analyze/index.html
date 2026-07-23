@@ -581,6 +581,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/offline-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    offline mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -821,6 +844,29 @@
   
   <span class="md-ellipsis">
     CombineYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dpp_extract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    dppExtract
     
   </span>
   
@@ -1620,16 +1666,22 @@
 
   <h1>Analyze</h1>
 
-<p>Analyze is a one-click auto-triage workflow: point it at a file, folder, or <code>.app</code> bundle, and it classifies everything with <a href="../fileminer/">File Miner</a>, then automatically dispatches every tool File Miner suggests for each file it finds. There's no need to read File Miner's suggestions and run each tool by hand — Analyze closes that loop for you and produces a single combined report at the end.</p>
+<p>Analyze is a one-click auto-triage workflow: point it at a file, folder, <code>.app</code> bundle, <code>.dmg</code>, or <code>.pkg</code>, and it classifies everything with <a href="../fileminer/">File Miner</a>, then automatically dispatches every tool File Miner suggests for each file it finds. There's no need to read File Miner's suggestions and run each tool by hand — Analyze closes that loop for you and produces a single combined report at the end.</p>
 <p>Unlike the other Core Tools, Analyze is not a standalone Rust binary — it's a workflow built on top of the existing tools, available through the <strong>PWA</strong> and the <strong>MCP server</strong>.</p>
 <hr />
 <h3 id="how-it-works">How It Works</h3>
 <ol>
-<li>File Miner scans the target (a single file, every file in a folder, or every file inside an <code>.app</code> bundle) and classifies each one.</li>
+<li>If the target is a <code>.dmg</code> or <code>.pkg</code>, <a href="../dpp_extract/">dpp Extract</a> unwraps it first (UDIF → HFS+/APFS → XAR → PBZX/CPIO) and Analyze continues against the extracted files. A <code>.zip</code> (the only way to get a directory-based sample like an <code>.app</code> bundle through the web interface's file-only upload widget) is auto-extracted the same way.</li>
+<li>File Miner scans the target (a single file, every file in a folder, or every file inside an <code>.app</code> bundle or extracted container) and classifies each one. A <code>.zip</code>/<code>.dmg</code>/<code>.pkg</code> found <strong>mid-scan</strong> — not just as the top-level target, e.g. a sample that's simply a lone archive sitting in its own folder — is extracted the same way and its contents folded into the same run, breadth-first (an archive nested inside an extracted archive also gets unwrapped), capped at 5 nested extractions per run as a guard against zip bombs or pathological nesting.</li>
 <li>For each file, Analyze runs every tool File Miner suggests — the same suggestions you'd see running File Miner manually, just dispatched automatically instead of one at a time.</li>
 <li>Results are combined into a single <strong>MalChela Summary</strong> rollup report (<code>malchela_summary_&lt;timestamp&gt;.md</code>), saved alongside the individual tool reports it summarizes.</li>
 </ol>
-<p>A single sample or small bundle is the intended use case — Analyze caps out at 25 files per run. For corpus-scale scans, use <a href="../mzhash/">MZHash</a>, <a href="../mzcount/">MZCount</a>, or <a href="../xmzhash/">XMZHash</a> instead.</p>
+<p>A single sample or small bundle is the intended use case — Analyze auto-dispatches up to 25 files per run. For corpus-scale scans, use <a href="../mzhash/">MZHash</a>, <a href="../mzcount/">MZCount</a>, or <a href="../xmzhash/">XMZHash</a> instead.</p>
+<p><strong>Over the 25-file cap</strong> (routine for a dpp-extracted <code>.pkg</code> payload — a trojanized installer commonly bundles the full legitimate app it trojanized alongside the injected malicious file(s); EvilQuest's sample is 624 files for one Mach-O of actual interest), Analyze doesn't error out or auto-run everything:</p>
+<ul>
+<li><strong>PWA:</strong> hands off to <a href="../fileminer/">File Miner</a>'s own interactive table, pointed at the extracted target — real per-row "run this tool" buttons instead of a static summary.</li>
+<li><strong>MCP:</strong> returns a file listing directly as text (extension mismatches first, then up to 40 more with a note to call File Miner directly for the rest), since there's no browser to redirect an AI agent to — it can act on the listing immediately.</li>
+</ul>
 <hr />
 <h3 id="the-malchela-summary-rollup-report">The MalChela Summary Rollup Report</h3>
 <p>The rollup leads with a <strong>Triage Summary</strong> banner, built to answer the questions you'd actually ask first when opening a new sample:</p>
@@ -1665,7 +1717,12 @@
 <tr>
 <td>Filesystem / Network IOCs</td>
 <td>mStrings</td>
-<td>Dropped filenames, paths, and network indicators surfaced during string extraction</td>
+<td>Dropped filenames, paths, and network indicators surfaced during string extraction. Network indicators are shown defanged (<code>hxxp://</code>, <code>[.]</code>)</td>
+</tr>
+<tr>
+<td>Multi-layer obfuscation</td>
+<td>mStrings</td>
+<td>Flagged when a detection only fired after peeling multiple layers of base64 re-encoding — a single decode is routine, but repeated re-encoding is itself an evasion tell</td>
 </tr>
 <tr>
 <td>Flags / Indicators</td>
@@ -1674,6 +1731,7 @@
 </tr>
 </tbody>
 </table>
+<p>Every filename and IOC in the Triage Summary is a link that jumps straight to that finding's section further down the same report — not out to the indicator itself, which is exactly why network indicators are defanged: the link target is always an internal anchor, but the <em>displayed text</em> shouldn't read like a live, clickable URL regardless.</p>
 <p>Below the summary, each file gets its own section with every tool's actual formatted report embedded — real tables and headers pulled from each tool's own Markdown output, not raw console text. The rollup reads cleanly whether you're viewing it in the PWA or opening the file directly.</p>
 <hr />
 <h3 id="save-to-case">Save to Case</h3>
@@ -1683,16 +1741,19 @@
 <p>When no case is selected, individual tool reports still land in their normal default locations (e.g. <code>saved_output/mstrings/</code>), and the rollup is saved to:</p>
 <pre><code>saved_output/analyze/
 </code></pre>
+<p>Analyze dispatches nsrlquery, Threat Intel Query, and FileAnalyzer's VirusTotal check automatically along with everything else — with <a href="../../configuration/offline-mode/">Offline Mode</a> enabled, those tools skip their network call cleanly and the rollup still completes normally, just without the results that require connectivity.</p>
 <hr />
 <h3 id="pwa-usage">PWA Usage</h3>
-<p>Select <strong>Select Target</strong> from the Analyze section of the sidebar, choose a file, folder, or <code>.app</code> bundle, then configure the run before clicking <strong>Run</strong>:</p>
+<p>Click the <strong>Analyze</strong> button in the top toolbar, choose a file, folder, <code>.app</code> bundle, <code>.dmg</code>, or <code>.pkg</code>, then configure the run before clicking <strong>Run</strong>:</p>
 <ul>
 <li><strong>Save to Case</strong> — opt-in, same pattern as every other tool panel.</li>
 <li><strong>Concise Output</strong> — on by default. Renders the MalChela Summary rollup inline instead of the full expanded per-tool output. Turn it off to see everything each tool produced without opening the saved report separately.</li>
 </ul>
+<p>There's also a shortcut straight from <a href="../fileminer/">File Miner</a>'s results table: each row's <strong>Analyze</strong> button runs every suggested tool for that one file and produces the same rollup, without going through the toolbar button first.</p>
 <hr />
 <h3 id="mcp-usage">MCP Usage</h3>
 <p>Analyze is available to AI agents as the <code>analyze</code> tool in the MCP server. Like every other MCP tool, it requires an active case first — call <code>set_case</code> before <code>analyze</code>. This keeps the MCP's behavior consistent across all of its tools rather than special-casing this one workflow; there's no "no case" mode on the MCP side the way there is in the PWA.</p>
+<p><code>dpp_extract</code> is also exposed as its own MCP tool, for when an agent needs the extracted files without Analyze's auto-dispatch — <code>analyze</code> calls it automatically when pointed at a <code>.dmg</code>/<code>.pkg</code>, so calling it directly first isn't necessary for the normal triage flow.</p>
 <p>See <a href="https://github.com/dwmetz/MalChela/blob/main/.claude-plugin/mcp/README.md"><code>.claude-plugin/mcp/README.md</code></a> for MCP setup.</p>
 
 

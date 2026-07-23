@@ -581,6 +581,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/offline-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    offline mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -738,6 +761,29 @@
   
   <span class="md-ellipsis">
     CombineYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dpp_extract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    dppExtract
     
   </span>
   
@@ -1648,6 +1694,7 @@
 <li>Automatically launches in the web interface when a folder-based case is created or restored</li>
 <li>Results populate an interactive table in the web interface</li>
 <li>Users can launch suggested tools on a per-file basis directly from the web interface</li>
+<li>Each row also has an <strong>Analyze</strong> button — runs every suggested tool for that one file in a single pass and produces a combined rollup, instead of launching each suggested tool individually (see <a href="../analyze/">Analyze</a>)</li>
 </ul>
 <h2 id="cli-usage">CLI Usage</h2>
 <pre><code class="language-sh">cargo run -p fileminer -- [OPTIONS] [DIR]
@@ -1705,6 +1752,7 @@ cargo run -p fileminer -- /path/to/files --case suspicious_usb -m
 <li>Results are saved under <code>saved_output/cases/&lt;case-name&gt;/fileminer/</code>.</li>
 <li>FileMiner displays an interactive table of results with suggested tools per file.</li>
 <li>Suggested tools can be launched directly from within the web interface results panel.</li>
+<li><a href="../analyze/">Analyze</a> also lands here automatically when its target (including a dpp Extract-unwrapped <code>.dmg</code>/<code>.pkg</code>) has more files than its 25-file auto-run cap — File Miner's interactive table replaces Analyze's own summary for large targets.</li>
 </ul>
 
 

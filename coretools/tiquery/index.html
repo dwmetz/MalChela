@@ -581,6 +581,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/offline-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    offline mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -738,6 +761,29 @@
   
   <span class="md-ellipsis">
     CombineYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dpp_extract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    dppExtract
     
   </span>
   
@@ -1860,6 +1906,7 @@ api/gsb-api.txt       # Google Safe Browsing
 </code></pre>
 <p>Keys can be managed via the <strong>API Keys</strong> panel in the MalChela web interface (Configuration menu → API Keys) or by placing the key directly in the appropriate file.</p>
 <p>See <a href="https://dwmetz.github.io/MalChela/configuration/api-configuration/">API Configuration</a> for details.</p>
+<p>Note that <code>os</code> (Objective-See) has no API-key gate of its own — it queries a locally cached copy of the Objective-See malware catalogue (refreshed every 24h) and always attempts that fetch on a cache miss, regardless of which other keys are configured. In an air-gapped environment, enable <a href="../../configuration/offline-mode/">Offline Mode</a> to skip every source's network call, keyed or not.</p>
 <hr />
 <h3 id="bulk-lookup">Bulk Lookup</h3>
 <p>Bulk lookup processes a <code>.txt</code> or <code>.csv</code> file containing hashes (one per line, or mixed with other content — the tool extracts valid MD5/SHA1/SHA256 values automatically) and runs all lookups in a single operation.</p>

@@ -581,6 +581,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/offline-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    offline mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -738,6 +761,29 @@
   
   <span class="md-ellipsis">
     CombineYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dpp_extract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    dppExtract
     
   </span>
   
@@ -1549,6 +1595,7 @@
   <h1>NSRLQuery</h1>
 
 <p>NSRL Query checks a file hash against the National Software Reference Library (NSRL) by querying the CIRCL hash lookup service. It helps identify known, trusted software — allowing analysts to filter out benign files and focus on unknown or suspicious ones during forensic triage.</p>
+<p>This is a live network lookup with no API key involved — there's no local NSRL database file to fall back on. In an air-gapped environment, enable <a href="../../configuration/offline-mode/">Offline Mode</a> to skip the network call cleanly instead of letting it fail.</p>
 <p><img alt="NSRL Hash Lookup" src="../../images/nsrlquery.png" /></p>
 <p align="center"><strong> NSRL Hash Lookup</p>
 

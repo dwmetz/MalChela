@@ -581,6 +581,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/offline-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    offline mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -850,6 +873,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#top-toolbar" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top Toolbar
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#notebook" class="md-nav__link">
     <span class="md-ellipsis">
       Notebook
@@ -917,6 +949,29 @@
   
   <span class="md-ellipsis">
     CombineYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dpp_extract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    dppExtract
     
   </span>
   
@@ -1769,6 +1824,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#top-toolbar" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top Toolbar
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#notebook" class="md-nav__link">
     <span class="md-ellipsis">
       Notebook
@@ -1870,11 +1934,68 @@
 <h3 id="web-interface-walkthrough">Web Interface Walkthrough</h3>
 <p>Layout</p>
 <ul>
-<li>Top Bar: Title and Toolkit Menu</li>
-<li>Left Panel: Tool categories and selections</li>
+<li>Top Toolbar: navigation and utility buttons (see below)</li>
+<li>Left Panel: Tool categories and selections — collapsible via the toolbar's Hide Tools Panel button, so the console can use the full width</li>
 <li>Center Panel: Dynamic tool input options</li>
 <li>Console Panel: Output display</li>
 </ul>
+<h3 id="top-toolbar">Top Toolbar</h3>
+<p>Left to right:</p>
+<table>
+<thead>
+<tr>
+<th>Button</th>
+<th>Opens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Home</td>
+<td>The landing screen — ASCII art, koan, and an <strong>At a Glance</strong> card (case counts, <code>detections.yaml</code> rule count, API key/tool availability, and an update-available check).</td>
+</tr>
+<tr>
+<td>Analyze</td>
+<td>The <a href="../analyze/">Analyze</a> target picker — point it at a file, folder, <code>.app</code> bundle, <code>.dmg</code>, or <code>.pkg</code> and it auto-runs every tool File Miner suggests.</td>
+</tr>
+<tr>
+<td>Cases</td>
+<td>The <a href="../../cases/">case management</a> browser.</td>
+</tr>
+<tr>
+<td>Hide Tools Panel</td>
+<td>Collapses/expands the left tool sidebar. Persists across reloads.</td>
+</tr>
+<tr>
+<td>About</td>
+<td>Version and feature summary.</td>
+</tr>
+<tr>
+<td>Configuration ⚙</td>
+<td>Dropdown: <strong>Server Config</strong> (server URL), <strong>API Keys</strong> (see <a href="../../configuration/api-configuration/">API Configuration</a> — this is also where <a href="../../configuration/offline-mode/">Offline Mode</a> lives), <strong>tools.yaml</strong> (see <a href="../../configuration/tools-yaml/">tools.yaml reference</a>).</td>
+</tr>
+<tr>
+<td>Upload Files</td>
+<td>Upload a local file to the server for analysis (useful when the browser and the MalChela server aren't on the same machine).</td>
+</tr>
+<tr>
+<td>MITRE Lookup</td>
+<td>The standalone <a href="../mitre_lookup/">MITRE ATT&amp;CK lookup panel</a> — no internet required.</td>
+</tr>
+<tr>
+<td>Notebook</td>
+<td>A scratchpad for recording strings/IOCs/notes across a session — see below.</td>
+</tr>
+<tr>
+<td>View Reports</td>
+<td>Browse and open any previously saved report directly.</td>
+</tr>
+<tr>
+<td>User Guide</td>
+<td>Opens this documentation site in a new tab.</td>
+</tr>
+</tbody>
+</table>
+<p>On narrow screens, everything past the first divider collapses into a <strong>⋯ More</strong> overflow menu with the same items.</p>
 <p>Running Tools</p>
 <ul>
 <li>Select a tool</li>

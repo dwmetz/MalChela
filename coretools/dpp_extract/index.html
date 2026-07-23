@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../dpp_extract/">
+        <link rel="prev" href="../combine_yara/">
       
       
-        <link rel="next" href="../fileanalyzer/">
+        <link rel="next" href="../extract_samples/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>ExtractSamples - MalChela Documentation</title>
+        <title>dppExtract - MalChela Documentation</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cli-syntax" class="md-skip">
+        <a href="#how-it-works" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ExtractSamples
+              dppExtract
             
           </span>
         </div>
@@ -775,29 +775,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../dpp_extract/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    dppExtract
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -813,7 +790,7 @@
   
   
   <span class="md-ellipsis">
-    ExtractSamples
+    dppExtract
     
   </span>
   
@@ -826,7 +803,7 @@
   
   
   <span class="md-ellipsis">
-    ExtractSamples
+    dppExtract
     
   </span>
   
@@ -847,9 +824,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How It Works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
     <span class="md-ellipsis">
-      🔧 CLI Syntax
+      CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analyze-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Analyze Integration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Known Limitations
     </span>
   </a>
   
@@ -859,6 +863,29 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extract_samples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    ExtractSamples
+    
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -1565,9 +1592,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How It Works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
     <span class="md-ellipsis">
-      🔧 CLI Syntax
+      CLI Syntax
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analyze-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Analyze Integration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Known Limitations
     </span>
   </a>
   
@@ -1592,25 +1646,47 @@
   
 
 
-  <h1>ExtractSamples</h1>
+  <h1>dppExtract</h1>
 
-<p>Extract Samples recursively unpacks password-protected archives commonly used in malware sharing (e.g., .zip, .rar, .7z). It uses default malware research passwords like infected and malware to extract samples in bulk for analysis.</p>
-<p><img alt="Extract Samples" src="../../images/extractsamples.png" /></p>
-<p align="center"><strong> Extract Samples</p>
-
+<p>dpp Extract unwraps Apple disk image (<code>.dmg</code>) and installer package (<code>.pkg</code>) containers — formats none of the other Core Tools can see through directly. A raw <code>.dmg</code> reads as <code>Unknown or unrecognized file type</code> to File Analyzer; a <code>.pkg</code> is a XAR archive wrapping a PBZX-compressed CPIO payload, not a Mach-O binary. dpp Extract walks the whole chain — <strong>UDIF → HFS+/APFS → XAR → PBZX/CPIO</strong> — and hands back the real files inside, so the rest of the suite (File Analyzer, mStrings, Mach-O Info, Code Sign Check) can analyze them normally.</p>
+<p>It's built on the <a href="https://github.com/Dil4rd/dpp"><code>dpp</code></a> Rust crate.</p>
 <hr />
-<h3 id="cli-syntax">🔧 CLI Syntax</h3>
-<pre><code class="language-bash"># Example 1: No case name
-cargo run -p extract_samples /path_to_directory/ infected
+<h3 id="how-it-works">How It Works</h3>
+<ol>
+<li>Opens the <code>.dmg</code> (or <code>.pkg</code> directly) and mounts its filesystem — auto-detecting HFS+ vs. APFS, and all four DMG compression schemes Apple uses (Zlib, Bzip2, LZFSE, XZ).</li>
+<li>If the filesystem contains one or more <code>.pkg</code> installers, extracts each component's <strong>Payload</strong> (the actual files the installer drops) and <strong>Scripts</strong> (preinstall/postinstall) archives — both are decoded whether they're the modern PBZX-wrapped format or the classic gzip-compressed CPIO format older installers use.</li>
+<li>If there's no <code>.pkg</code> inside — just a bare app or binary sitting directly on the disk image — extracts the raw filesystem tree instead, since that already <strong>is</strong> the payload.</li>
+<li>Extraction is entry-by-entry rather than all-or-nothing: a single unreadable or malformed entry (a handful of real-world DMGs trip a decoding quirk in the underlying HFS+/APFS crate) is skipped and reported, not treated as a fatal error for the whole volume.</li>
+</ol>
+<p><strong>Why Scripts matters:</strong> some installers (seen in both objective-see's oRAT and Shlayer samples) ship an empty or near-empty Payload and put their actual malicious behavior entirely in the postinstall script instead — a curl-and-execute one-liner, or a fingerprint-and-callback sequence. Extracting Payload alone would silently miss that; dpp Extract always pulls both.</p>
+<hr />
+<h3 id="cli-syntax">CLI Syntax</h3>
+<pre><code class="language-bash"># Extract a DMG or PKG next to itself, in &lt;name&gt;_extracted/
+cargo run -p dpp_extract /path/to/sample.dmg
+
+# Extract to a specific output directory
+cargo run -p dpp_extract /path/to/sample.pkg -o /path/to/output
+
+# Save under a case
+cargo run -p dpp_extract /path/to/sample.dmg --case Case123
+
+# Machine-readable summary (used internally by Analyze and the web interface)
+cargo run -p dpp_extract /path/to/sample.dmg --json
 </code></pre>
-<p>In this mode, extracted files will be placed in the same location as each archive found.</p>
-<pre><code class="language-bash"># Example 2: With case name
-cargo run -p extract_samples /path_to_directory/ infected --case Case123
+<p>When <code>--case</code> is provided without <code>-o</code>, output is saved under:</p>
+<pre><code>saved_output/cases/Case123/dpp_extract/
 </code></pre>
-<p>When <code>--case</code> is provided, all extracted files will be saved under:</p>
-<pre><code>/saved_output/cases/Case123/extract_samples/
-</code></pre>
-<p>If no path or password is provided, the tool will prompt for them interactively.</p>
+<hr />
+<h3 id="analyze-integration">Analyze Integration</h3>
+<p><a href="../analyze/">Analyze</a> auto-detects a <code>.dmg</code>/<code>.pkg</code> target and runs dpp Extract before handing the result to File Miner — there's no need to run dpp Extract by hand first. Because a trojanized installer's payload commonly bundles the full legitimate app it trojanized alongside the injected malicious file(s), the extracted tree is often well over Analyze's 25-file auto-run cap (EvilQuest: 624 files for one Mach-O of actual interest); when that happens, Analyze hands off to File Miner's interactive table instead of erroring out or auto-running everything. See <a href="../analyze/">Analyze</a> and <a href="../fileminer/">File Miner</a> for that flow.</p>
+<hr />
+<h3 id="known-limitations">Known Limitations</h3>
+<p>dpp Extract inherits the maturity of the underlying <code>dpp</code> crate. Two failure modes have been observed against real-world samples and are not currently recoverable:</p>
+<ul>
+<li>A <code>.dmg</code> that isn't a standard UDIF file (missing the expected <code>koly</code> trailer) fails to open at all.</li>
+<li>A small number of DMGs have hit what looks like a broken by-name catalog lookup in the HFS+ decoder — the volume opens and walks fine, but every file read fails, extracting zero files.</li>
+</ul>
+<p>Both fail safely (a clear error, or a zero-file result with every skipped entry listed) rather than crashing or silently corrupting output.</p>
 
 
 

@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../dpp_extract/">
+        <link rel="prev" href="../api-configuration/">
       
       
-        <link rel="next" href="../fileanalyzer/">
+        <link rel="next" href="../../cases/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>ExtractSamples - MalChela Documentation</title>
+        <title>offline mode - MalChela Documentation</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cli-syntax" class="md-skip">
+        <a href="#offline-mode" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ExtractSamples
+              offline mode
             
           </span>
         </div>
@@ -248,11 +248,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../configuration/tools-yaml/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../tools-yaml/" class="md-tabs__link">
           
   
   
@@ -287,13 +289,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../coretools/" class="md-tabs__link">
           
   
   
@@ -313,7 +313,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../codesign_check/" class="md-tabs__link">
+        <a href="../../coretools/codesign_check/" class="md-tabs__link">
           
   
   
@@ -498,24 +498,29 @@
       
   
   
+    
   
   
+  
     
     
     
     
-      
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -528,7 +533,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Configuration
@@ -542,7 +547,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/tools-yaml/" class="md-nav__link">
+      <a href="../tools-yaml/" class="md-nav__link">
         
   
   
@@ -565,7 +570,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/api-configuration/" class="md-nav__link">
+      <a href="../api-configuration/" class="md-nav__link">
         
   
   
@@ -585,10 +590,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../configuration/offline-mode/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    offline mode
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -599,6 +626,62 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-skips" class="md-nav__link">
+    <span class="md-ellipsis">
+      What It Skips
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enabling-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      Enabling It
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-its-stored" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where It's Stored
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reducing-network-dependency-further" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reducing Network Dependency Further
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -637,29 +720,24 @@
       
   
   
-    
   
   
-  
     
     
     
     
       
-        
-        
-      
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -672,7 +750,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Core Tools
@@ -686,7 +764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../coretools/" class="md-nav__link">
         
   
   
@@ -709,7 +787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../usage/" class="md-nav__link">
+      <a href="../../coretools/usage/" class="md-nav__link">
         
   
   
@@ -732,7 +810,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../analyze/" class="md-nav__link">
+      <a href="../../coretools/analyze/" class="md-nav__link">
         
   
   
@@ -755,7 +833,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../combine_yara/" class="md-nav__link">
+      <a href="../../coretools/combine_yara/" class="md-nav__link">
         
   
   
@@ -778,7 +856,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../dpp_extract/" class="md-nav__link">
+      <a href="../../coretools/dpp_extract/" class="md-nav__link">
         
   
   
@@ -798,30 +876,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    ExtractSamples
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../coretools/extract_samples/" class="md-nav__link">
         
   
   
@@ -832,33 +890,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#cli-syntax" class="md-nav__link">
-    <span class="md-ellipsis">
-      🔧 CLI Syntax
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -871,7 +902,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../fileanalyzer/" class="md-nav__link">
+      <a href="../../coretools/fileanalyzer/" class="md-nav__link">
         
   
   
@@ -894,7 +925,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../fileminer/" class="md-nav__link">
+      <a href="../../coretools/fileminer/" class="md-nav__link">
         
   
   
@@ -917,7 +948,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../hashcheck/" class="md-nav__link">
+      <a href="../../coretools/hashcheck/" class="md-nav__link">
         
   
   
@@ -940,7 +971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../hashit/" class="md-nav__link">
+      <a href="../../coretools/hashit/" class="md-nav__link">
         
   
   
@@ -963,7 +994,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tiquery/" class="md-nav__link">
+      <a href="../../coretools/tiquery/" class="md-nav__link">
         
   
   
@@ -986,7 +1017,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mstrings/" class="md-nav__link">
+      <a href="../../coretools/mstrings/" class="md-nav__link">
         
   
   
@@ -1009,7 +1040,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mitre_lookup/" class="md-nav__link">
+      <a href="../../coretools/mitre_lookup/" class="md-nav__link">
         
   
   
@@ -1032,7 +1063,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mzcount/" class="md-nav__link">
+      <a href="../../coretools/mzcount/" class="md-nav__link">
         
   
   
@@ -1055,7 +1086,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mzhash/" class="md-nav__link">
+      <a href="../../coretools/mzhash/" class="md-nav__link">
         
   
   
@@ -1078,7 +1109,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../nsrlquery/" class="md-nav__link">
+      <a href="../../coretools/nsrlquery/" class="md-nav__link">
         
   
   
@@ -1101,7 +1132,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../strings_to_yara/" class="md-nav__link">
+      <a href="../../coretools/strings_to_yara/" class="md-nav__link">
         
   
   
@@ -1124,7 +1155,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../xmzhash/" class="md-nav__link">
+      <a href="../../coretools/xmzhash/" class="md-nav__link">
         
   
   
@@ -1195,7 +1226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../codesign_check/" class="md-nav__link">
+      <a href="../../coretools/codesign_check/" class="md-nav__link">
         
   
   
@@ -1218,7 +1249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../macho_info/" class="md-nav__link">
+      <a href="../../coretools/macho_info/" class="md-nav__link">
         
   
   
@@ -1241,7 +1272,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plist_analyzer/" class="md-nav__link">
+      <a href="../../coretools/plist_analyzer/" class="md-nav__link">
         
   
   
@@ -1557,6 +1588,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1565,9 +1598,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#cli-syntax" class="md-nav__link">
+  <a href="#what-it-skips" class="md-nav__link">
     <span class="md-ellipsis">
-      🔧 CLI Syntax
+      What It Skips
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enabling-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      Enabling It
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-its-stored" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where It's Stored
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reducing-network-dependency-further" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reducing Network Dependency Further
     </span>
   </a>
   
@@ -1592,25 +1652,62 @@
   
 
 
-  <h1>ExtractSamples</h1>
-
-<p>Extract Samples recursively unpacks password-protected archives commonly used in malware sharing (e.g., .zip, .rar, .7z). It uses default malware research passwords like infected and malware to extract samples in bulk for analysis.</p>
-<p><img alt="Extract Samples" src="../../images/extractsamples.png" /></p>
-<p align="center"><strong> Extract Samples</p>
-
+<h1 id="offline-mode">Offline Mode</h1>
+<p>MalChela normally makes a handful of network calls on its own — some obvious (Threat Intel Query's API-key-gated lookups), some less so. Offline Mode is a single switch that skips <strong>every</strong> one of them at the source, before any connection is even attempted. It's built for air-gapped labs and malware analysis scenarios where an unexpected outbound connection attempt — even a harmless, timed-out one — isn't acceptable.</p>
 <hr />
-<h3 id="cli-syntax">🔧 CLI Syntax</h3>
-<pre><code class="language-bash"># Example 1: No case name
-cargo run -p extract_samples /path_to_directory/ infected
+<h2 id="what-it-skips">What It Skips</h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Call</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nsrlquery</code></td>
+<td><code>hashlookup.circl.lu</code></td>
+<td>Despite the name, this is a live lookup against CIRCL's public hash database — not a local NSRL file. No API key involved, so this one is easy to trigger by accident.</td>
+</tr>
+<tr>
+<td><code>tiquery</code></td>
+<td>Every configured source</td>
+<td>Including Objective-See's malware catalogue (<code>os</code>), the one source with no API-key gate of its own — it normally attempts a fetch on any cache miss regardless of which keys you've configured.</td>
+</tr>
+<tr>
+<td><code>fileanalyzer</code></td>
+<td>VirusTotal</td>
+<td>A separate embedded check from Threat Intel Query's own VirusTotal source — gated on a VT key being configured, but if one is, plain FileAnalyzer also phones home.</td>
+</tr>
+<tr>
+<td>Home screen</td>
+<td>Update check (<code>git remote update</code>)</td>
+<td>Runs automatically every time the Home screen loads, since it's the app's default/startup screen.</td>
+</tr>
+</tbody>
+</table>
+<p>Each of these normally fails only after a DNS/connect attempt (and, on a truly air-gapped host, a real timeout). With Offline Mode on, they return a clean "skipped" result immediately instead.</p>
+<p><strong>What it doesn't cover:</strong> anything a <em>sample itself</em> might do if executed. Offline Mode only governs MalChela's own lookups — it's not a sandbox or network isolation layer for the malware you're analyzing. Static analysis is unaffected either way, since nothing in that path ever touches the network.</p>
+<hr />
+<h2 id="enabling-it">Enabling It</h2>
+<p><strong>Web interface:</strong> Configuration menu → <strong>Offline / air-gapped mode</strong> checkbox. Takes effect immediately — no server restart needed, and it stays on across restarts until you turn it off.</p>
+<p><strong>CLI:</strong> set the environment variable before running any tool directly:</p>
+<pre><code class="language-bash">export MALCHELA_OFFLINE=1
+cargo run -p nsrlquery -- d41d8cd98f00b204e9800998ecf8427e
 </code></pre>
-<p>In this mode, extracted files will be placed in the same location as each archive found.</p>
-<pre><code class="language-bash"># Example 2: With case name
-cargo run -p extract_samples /path_to_directory/ infected --case Case123
+<pre><code>Offline mode (MALCHELA_OFFLINE) — skipped CIRCL Hash Lookup network request.
 </code></pre>
-<p>When <code>--case</code> is provided, all extracted files will be saved under:</p>
-<pre><code>/saved_output/cases/Case123/extract_samples/
+<p>The web interface toggle and the environment variable both work through the same mechanism — enabling it in the Configuration panel sets <code>MALCHELA_OFFLINE=1</code> for every tool the server launches on your behalf, so the two are interchangeable depending on how you're driving MalChela.</p>
+<hr />
+<h2 id="where-its-stored">Where It's Stored</h2>
+<p>The toggle persists the same way an API key does — a plain file in the workspace's <code>api/</code> directory:</p>
+<pre><code>api/offline_mode.txt
 </code></pre>
-<p>If no path or password is provided, the tool will prompt for them interactively.</p>
+<p>Containing <code>1</code> (enabled) or <code>0</code> (disabled). This file is read fresh on every check, not cached, which is why the web toggle takes effect without a restart.</p>
+<hr />
+<h2 id="reducing-network-dependency-further">Reducing Network Dependency Further</h2>
+<p>Two page-load resources the PWA previously fetched from the internet on every load — the app icon and its webfonts (JetBrains Mono, Share Tech Mono) — are now vendored locally (<code>server/icons/</code>, <code>server/fonts/</code>) rather than pulled from GitHub/Google Fonts. This isn't gated behind Offline Mode; it's just always local now, which also makes page load faster regardless of connectivity.</p>
 
 
 

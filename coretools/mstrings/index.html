@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cli-syntax" class="md-skip">
+        <a href="#ioc-extraction" class="md-skip">
           Skip to content
         </a>
       
@@ -581,6 +581,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/offline-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    offline mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -738,6 +761,29 @@
   
   <span class="md-ellipsis">
     CombineYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dpp_extract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    dppExtract
     
   </span>
   
@@ -937,6 +983,24 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ioc-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      IOC Extraction
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-layer-obfuscation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-Layer Obfuscation
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
@@ -1519,6 +1583,24 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#ioc-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      IOC Extraction
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-layer-obfuscation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-Layer Obfuscation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
     <span class="md-ellipsis">
       🔧 CLI Syntax
@@ -1551,6 +1633,11 @@
 <p>mStrings extracts strings from files and classifies them using regular expressions, YARA rules, and MITRE ATT&amp;CK mappings. It highlights potential indicators of compromise and suspicious behavior, grouping matches by tactic and technique. Ideal for quickly surfacing malicious capabilities in binaries, scripts, and documents.</p>
 <p>Also accepts macOS Mach-O binaries and <code>.app</code> bundles — when given a bundle, the main executable is auto-resolved via <code>Info.plist</code>'s <code>CFBundleExecutable</code>, falling back to the sole binary in <code>Contents/MacOS/</code> if that lookup fails.</p>
 <p>Note: The MITRE Technique Lookup bar, introduced in v3.0.1 has been removed. It has been replaced with a full <a href="../mitre_lookup/">MITRE lookup utility</a> (no internet required.)</p>
+<h3 id="ioc-extraction">IOC Extraction</h3>
+<p>Alongside the Sigma-style detection matches, mStrings pulls out well-formed <strong>Potential Filesystem IOCs</strong> and <strong>Potential Network IOCs</strong> into their own report sections — paths, URLs, domains, and IPs found either as standalone strings or embedded in a longer one (a command line, a query string). Reserved/documentation IP ranges (loopback, broadcast, RFC 5737 test ranges, and similar) are excluded automatically, since they show up constantly in any binary's networking stack but are never real indicators.</p>
+<p><strong>Network IOCs are shown defanged</strong> (<code>http://</code> → <code>hxxp://</code>, every <code>.</code> → <code>[.]</code>) everywhere mStrings displays them — CLI output, saved reports, and the <a href="../analyze/">Analyze</a> rollup that embeds them. This is deliberate: a raw URL rendered as clickable-looking text is the wrong thing to put in front of an analyst repeatedly. If you need the real string back — to build a YARA rule, for example — <a href="../strings_to_yara/">Strings to YARA</a> automatically refangs any defanged line before it becomes a rule.</p>
+<h3 id="multi-layer-obfuscation">Multi-Layer Obfuscation</h3>
+<p>mStrings recursively decodes base64 content it finds — including base64 nested inside base64, up to 12 layers deep — and re-runs detection against whatever it unwraps to. When a detection only fires after peeling <strong>more than one</strong> layer, that's flagged directly on the finding (<code>⚠ found after N layers of base64 decoding</code> in the summary table, <code>Base64×N</code> in the detail table's encoding column) — a single decode is routine, but deliberate re-encoding multiple times over is itself an evasion signal worth noting.</p>
 <p><img alt="MStrings" src="../../images/mstrings.png" /></p>
 <p align="center"><strong> MStrings</p>
 

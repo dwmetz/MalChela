@@ -169,13 +169,17 @@ def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
         return {"success": False, "error": f"Binary not found: {binary}"}
 
     cmd = [str(binary_path)] + args
+    env = os.environ.copy()
+    if is_offline_mode():
+        env["MALCHELA_OFFLINE"] = "1"
     try:
         result = subprocess.run(
             cmd,  # shell=False (list form) — not vulnerable to shell injection
             cwd=str(MALCHELA_ROOT),  # Required — resolves API keys, YARA rules, Sigma rules
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            env=env,
         )
         stdout = _strip_cli_noise(result.stdout.strip())
         stderr = result.stderr.strip()
@@ -384,6 +388,16 @@ def read_api_key(filename: str) -> Optional[str]:
     if key_path.exists():
         return key_path.read_text().strip()
     return None
+
+# Offline mode toggle — same storage convention as an API key (a plain file
+# in api/), so it's live-toggleable from the Configuration screen with no
+# server restart, consistent with how every other Configuration setting
+# already works. Checked fresh on every run_binary() call rather than cached
+# at startup.
+_OFFLINE_MODE_FILE = API_DIR / "offline_mode.txt"
+
+def is_offline_mode() -> bool:
+    return _OFFLINE_MODE_FILE.exists() and _OFFLINE_MODE_FILE.read_text().strip() == "1"
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
@@ -744,7 +758,12 @@ def update_check():
     or hang on a bad connection, so it must never block the rest of the
     (all-local, instant) stats card. Both git calls are timeout-guarded;
     any failure or timeout just reports "unknown" rather than erroring.
+    Skips entirely in offline mode — a git fetch is exactly the kind of
+    unprompted egress attempt an air-gapped lab shouldn't see, timeout-
+    guarded or not.
     """
+    if is_offline_mode():
+        return jsonify({"success": True, "status": "offline"})
     try:
         remote_update = subprocess.run(
             ["git", "remote", "update"],
@@ -2734,6 +2753,32 @@ def set_api_key(key_id):
     path.write_text(value + "\n" if value else "")
 
     return jsonify({"success": True, "configured": bool(value)})
+
+
+@app.route("/offline_mode", methods=["GET"])
+def get_offline_mode():
+    """Report whether offline/air-gapped mode is currently enabled."""
+    return jsonify({"success": True, "enabled": is_offline_mode()})
+
+
+@app.route("/offline_mode", methods=["POST"])
+def set_offline_mode():
+    """Toggle offline/air-gapped mode. Takes effect immediately — no server
+    restart needed. Also sets it on this process's own environment (not
+    just injected per-subprocess in run_binary()) so any other subprocess
+    call site in this file inherits it automatically, present or future."""
+    data = request.json or {}
+    enabled = bool(data.get("enabled"))
+
+    API_DIR.mkdir(parents=True, exist_ok=True)
+    _OFFLINE_MODE_FILE.write_text("1" if enabled else "0")
+
+    if enabled:
+        os.environ["MALCHELA_OFFLINE"] = "1"
+    else:
+        os.environ.pop("MALCHELA_OFFLINE", None)
+
+    return jsonify({"success": True, "enabled": enabled})
 
 
 @app.route("/read_file", methods=["POST"])

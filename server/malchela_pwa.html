@@ -1467,6 +1467,17 @@
           <div>Default: <span style="color:var(--cyan)">http://localhost:8675</span></div>
           <div style="margin-top:8px">Ensure the server is running and reachable from this device.</div>
         </div>
+
+        <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" id="cfg-offline-mode" onchange="toggleOfflineMode(this.checked)">
+            Offline / air-gapped mode
+          </label>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-dim);line-height:1.8">
+            <div>Skips every network call the toolkit makes on its own — NSRL/CIRCL lookups, tiquery's threat-intel sources, FileAnalyzer's VirusTotal check, and the update check — at the source, before any connection is attempted.</div>
+            <div style="margin-top:4px">Takes effect immediately, no restart needed. Doesn't affect anything a sample itself might do if executed — this only covers MalChela's own lookups.</div>
+          </div>
+        </div>
       </div>
 
       <!-- API Keys Screen -->
@@ -4565,6 +4576,24 @@ function showConfig(e) {
   document.getElementById('apikeys-screen').classList.remove('active');
   document.getElementById('toolsyaml-screen').style.display = 'none';
   document.getElementById('cfg-server-url').value = serverUrl;
+  api('/offline_mode').then(data => {
+    if (data?.success) document.getElementById('cfg-offline-mode').checked = !!data.enabled;
+  }).catch(() => {});
+}
+
+async function toggleOfflineMode(enabled) {
+  try {
+    const data = await api('/offline_mode', { method: 'POST', body: JSON.stringify({ enabled }) });
+    if (data.success) {
+      showToast(enabled ? 'Offline mode enabled' : 'Offline mode disabled', 'success');
+    } else {
+      showToast('Could not update offline mode', 'error');
+      document.getElementById('cfg-offline-mode').checked = !enabled;
+    }
+  } catch (e) {
+    showToast('Could not update offline mode: ' + e.message, 'error');
+    document.getElementById('cfg-offline-mode').checked = !enabled;
+  }
 }
 
 function saveConfig() {
@@ -5717,6 +5746,9 @@ async function _loadUpdateCheck() {
     } else if (data.status === 'up_to_date') {
       valueEl.style.color = 'var(--green)';
       valueEl.textContent = 'Up to date';
+    } else if (data.status === 'offline') {
+      valueEl.style.color = 'var(--text-dim)';
+      valueEl.textContent = 'Offline mode';
     } else {
       valueEl.style.color = 'var(--text-dim)';
       valueEl.textContent = 'Unknown';

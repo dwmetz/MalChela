@@ -152,14 +152,24 @@ async fn main() {
         }
     };
 
-    // NSRL hash lookup using precompiled nsrlquery binary for speed
+    // NSRL hash lookup using precompiled nsrlquery binary for speed.
+    // nsrlquery takes the hash as a positional argument, not a --hash flag —
+    // passing --hash made every single call fail with a clap arg-parsing
+    // error (exit code 2), which fell through to the generic Ok(_) branch
+    // below and printed "NSRL: Not found" unconditionally, regardless of
+    // whether the hash was actually looked up (or even reachable at all).
     let nsrl_result = match std::process::Command::new("target/release/nsrlquery")
-        .args(["--hash", &md5])
+        .arg(&md5)
         .output()
     {
         Ok(output) if output.status.success() => {
             let output_str = String::from_utf8_lossy(&output.stdout).to_lowercase();
-            if output_str.contains("hash not found") || output_str.contains("not found in the database") {
+            if output_str.contains("offline mode") {
+                let line = styled_line("stone", "NSRL: Offline mode — skipped");
+                println!("{}", line);
+                writeln!(temp_file, "{}", plain_text(&line)).ok();
+                None
+            } else if output_str.contains("hash not found") || output_str.contains("not found in the database") {
                 let line = styled_line("stone", "NSRL: Not found");
                 println!("{}", line);
                 writeln!(temp_file, "{}", plain_text(&line)).ok();

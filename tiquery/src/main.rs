@@ -435,7 +435,11 @@ async fn run_bulk(file_path: &str, args: &Args) -> Result<()> {
             let h = hash.clone();
             async move {
                 let name = src.short_name().to_string();
-                let result = src.query(&h).await;
+                let result = if common_config::is_offline_mode() {
+                    SourceResult::skipped(&name, "offline mode (MALCHELA_OFFLINE)")
+                } else {
+                    src.query(&h).await
+                };
                 (name, result)
             }
         }).collect();
@@ -574,7 +578,11 @@ async fn main() -> Result<()> {
             let h = hash.clone();
             async move {
                 let name = src.short_name().to_string();
-                let result = src.query(&h).await;
+                let result = if common_config::is_offline_mode() {
+                    SourceResult::skipped(&name, "offline mode (MALCHELA_OFFLINE)")
+                } else {
+                    src.query(&h).await
+                };
                 (name, result)
             }
         })

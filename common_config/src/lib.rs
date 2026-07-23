@@ -27,6 +27,20 @@ pub fn get_output_dir(tool_name: &str) -> PathBuf {
     dir
 }
 
+/// True when MalChela should make zero outbound network calls — set via the
+/// MALCHELA_OFFLINE env var (checked, not just presence-tested, so
+/// MALCHELA_OFFLINE=0 in an inherited environment doesn't accidentally
+/// enable it). The Python server injects this into every subprocess it
+/// launches based on the persisted Configuration screen toggle; set it
+/// directly for CLI use (`export MALCHELA_OFFLINE=1`). Every call site that
+/// checks this should skip the network attempt entirely — not attempt it
+/// and let it time out — so an air-gapped host never even tries to resolve
+/// a hostname, and a lab exercise never risks a sample's network access
+/// getting confused with MalChela's own lookups.
+pub fn is_offline_mode() -> bool {
+    env::var("MALCHELA_OFFLINE").map(|v| v == "1").unwrap_or(false)
+}
+
 pub fn write_launch_script(script_name: &str, command: &str) -> Result<(), Box<dyn Error>> {
     let mut file = fs::File::create(script_name)?;
     writeln!(file, "#!/bin/bash")?;

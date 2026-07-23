@@ -115,6 +115,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    if common_config::is_offline_mode() {
+        println!("Offline mode (MALCHELA_OFFLINE) — skipped CIRCL Hash Lookup network request.");
+        return Ok(());
+    }
+
     // Construct the URL
     let url = format!("https://hashlookup.circl.lu/lookup/{}/{}", hash_type, hash);
 

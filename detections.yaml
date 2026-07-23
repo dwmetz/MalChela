@@ -3331,3 +3331,103 @@ CreativeUpdateMinerGateInvocation:
       technique_name: "Resource Hijacking"
       tactics: ["Impact"]
 
+IPStormCustomLibp2pProtocolIDs:
+  title: "IPStorm custom libp2p protocol IDs (sbpcp/sbptp)"
+  id: "ipstorm-custom-p2p-protocol-001"
+  status: "experimental"
+  description: "Detects IPStorm's own proprietary libp2p protocol identifiers '/sbpcp/1.0.0' and '/sbptp/1.0.0', registered alongside standard libp2p protocols (kad, secio, yamux, mplex) in the same binary. IPStorm abuses the legitimate IPFS/libp2p peer-to-peer network as C2 transport specifically so its traffic blends in with normal libp2p protocol negotiation — but these two protocol IDs are IPStorm's own namespace, not part of libp2p/IPFS itself, so their presence is a much stronger signal than the generic libp2p package strings (github.com/libp2p/go-libp2p-*) that any legitimate libp2p application would also contain. Confirmed verbatim in IPStorm_unpacked (TAOMM Ch1), the UPX-unpacked macOS Mach-O sample, alongside the storm/p2p/gostream, storm/ddb, and storm/filetransfer Go packages that build on top of them."
+  references:
+    - "https://objective-see.org/blog/blog_0x5F.html"
+    - "https://research.intezer.com/blog/2020/10/a-storm-is-brewing-ipstorm-now-has-linux-malware/"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "/sbpcp/1\\.0\\.0"
+      - "/sbptp/1\\.0\\.0"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1102.002
+  mitre:
+    - technique_id: "T1102.002"
+      technique_name: "Web Service: Bidirectional Communication"
+      tactics: ["Command and Control"]
+
+IPStormSSHBruteForcePropagation:
+  title: "IPStorm SSH brute-force self-propagation module"
+  id: "ipstorm-ssh-bruteforce-001"
+  status: "experimental"
+  description: "Detects IPStorm's brute_ssh Go package (Bruter/NewBruter/BruteTarget/BruteResult/Worker symbols), which attempts SSH credential brute-forcing against internet-facing hosts to spread itself — on a successful connection it downloads and installs the platform-appropriate storm binary on the new victim over the IPFS/libp2p network. Confirmed verbatim in IPStorm_unpacked (TAOMM Ch1)."
+  references:
+    - "https://objective-see.org/blog/blog_0x5F.html"
+    - "https://research.intezer.com/blog/2020/10/a-storm-is-brewing-ipstorm-now-has-linux-malware/"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "brute_ssh\\.(Bruter|NewBruter|BruteTarget|BruteResult|Worker)\\b"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1110.001
+  mitre:
+    - technique_id: "T1110.001"
+      technique_name: "Brute Force: Password Guessing"
+      tactics: ["Lateral Movement", "Initial Access"]
+
+IPStormCowrieHoneypotEvasion:
+  title: "IPStorm Cowrie honeypot hostname check before infecting an SSH brute-force target"
+  id: "ipstorm-cowrie-honeypot-evasion-001"
+  status: "experimental"
+  description: "Detects a case-insensitive check for the hostname 'svr04' — the default hostname Cowrie (the most widely deployed open-source SSH honeypot) presents to a connecting client — embedded as a compiled regex literal '(?i)svr04' in IPStorm's binary. After a successful SSH brute-force, IPStorm checks the victim's hostname against this value before proceeding with infection, skipping the target if it matches, so as not to waste an install (and expose its payload/C2 behavior) on a research honeypot. Confirmed verbatim in IPStorm_unpacked (TAOMM Ch1)."
+  references:
+    - "https://research.intezer.com/blog/2020/10/a-storm-is-brewing-ipstorm-now-has-linux-malware/"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "\\(\\?i\\)svr04"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1622
+  mitre:
+    - technique_id: "T1622"
+      technique_name: "Debugger Evasion"
+      tactics: ["Defense Evasion", "Discovery"]
+
+IPStormPlatformPayloadNamingScheme:
+  title: "IPStorm cross-platform self-propagation payload naming scheme"
+  id: "ipstorm-platform-payload-naming-001"
+  status: "experimental"
+  description: "Detects IPStorm's 'storm_<platform>-<arch>' naming convention for the platform-specific payload it fetches over IPFS/libp2p and installs on a newly compromised host (storm/filetransfer.FullNameForMyPlatform picks the right one for the target's GOOS/GOARCH). Confirmed variants embedded in IPStorm_unpacked (TAOMM Ch1): storm_darwin-amd64, storm_linux-386/amd64/arm64/arm7, and storm_android-386/amd64/arm64/arm7 — the last group backing the malware's documented ADB-based Android-spreading capability (storm_android/storm-install.sh, storm_android/install-recovery.sh, both also present in the same binary)."
+  references:
+    - "https://objective-see.org/blog/blog_0x5F.html"
+    - "https://research.intezer.com/blog/2020/10/a-storm-is-brewing-ipstorm-now-has-linux-malware/"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "storm_(darwin|linux|android)-(amd64|arm64|arm7|386)"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1570
+  mitre:
+    - technique_id: "T1570"
+      technique_name: "Lateral Tool Transfer"
+      tactics: ["Lateral Movement"]
+

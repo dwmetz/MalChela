@@ -27,7 +27,7 @@ HardcodedIPAddress:
   title: "Hardcoded IP address"
   id: "b2e9a3d7-cf18-4b6f-987b-4d90d7a94b88"
   status: "experimental"
-  description: "Detection of hardcoded IP address. Excludes X.0.0.0-shaped matches (assembly/manifest version numbers), 127.0.0.1 (loopback — zero analytical value, matches the same exclusion the internal blob-IOC extractor already applies), and — the fix that matters most — requires the match not be immediately preceded or followed by another digit or dot. Without that, \\b alone lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer dotted-decimal sequence: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth — routine in any binary statically linking OpenSSL/libcrypto) has a valid \\b transition right after its first four segments, so \"1.3.6.1\" matched and the whole 9-segment OID string got listed as a network IOC. Same fix applies to 2.5.29.37.0 (anyExtendedKeyUsage) and similar cert-extension OIDs."
+  description: "Detection of hardcoded IP address. Excludes X.0.0.0- and X.X.0.0-shaped matches (network/supernet addresses, not usable host targets), 127.0.0.1 (loopback), the RFC 5737 documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) and 192.0.0.0/24 (IETF protocol assignments) — all guaranteed by RFC to never be real routable hosts — plus 255.255.255.255 (broadcast) and 239.255.255.250 (SSDP multicast, the one specific address every UPnP/SSDP implementation hardcodes). Boundary requires the match not be immediately preceded or followed by another digit, dot, OR letter/underscore — \\b alone (or a digit/dot-only boundary check) lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer identifier: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth) matched as \"1.3.6.1\", and — the case that motivated tightening the boundary further — a Go compiler closure symbol like crypto/tls.(*clientHelloMsg).marshal.func1.4.10.1 matched \"4.10.1\"-style tails as if they were IPs, since the character right before the digits was a letter ('c' in 'func'), which the original digit/dot-only lookbehind never checked. Observed on IPStorm (TAOMM Ch1): 29 raw matches, nearly all either Go symbol-table tail-numbers or one of these now-excluded reserved ranges (themselves libp2p's own bogon/CIDR-filter constants, not C2 infrastructure)."
   references:
     - "https://oidref.com/1.3.6.1.5.5.7.3.1"
   logsource:
@@ -35,9 +35,9 @@ HardcodedIPAddress:
     product: "windows"
   detection:
     strings:
-      - "(?<![\\d.])(?!127\\.0\\.0\\.1\\b)(?!\\d{1,3}\\.0\\.0\\.0\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\d.])(?![^\\s]*version=)"
+      - "(?<![\\w.])(?!127\\.0\\.0\\.1\\b)(?!\\d{1,3}\\.0\\.0\\.0\\b)(?!\\d{1,3}\\.\\d{1,3}\\.0\\.0\\b)(?!192\\.0\\.0\\.)(?!192\\.0\\.2\\.)(?!198\\.51\\.100\\.)(?!203\\.0\\.113\\.)(?!255\\.255\\.255\\.255\\b)(?!239\\.255\\.255\\.250\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\w.])(?![^\\s]*version=)"
   falsepositives:
-    - "A real hardcoded IP that genuinely ends in .0.0.0 (rare — that's a network/supernet address, not a usable host target)"
+    - "A real hardcoded IP that genuinely ends in .0.0.0 or .0.0 (rare — that's a network/supernet address, not a usable host target)"
   tags:
     - attack.t1071.001
   level: high

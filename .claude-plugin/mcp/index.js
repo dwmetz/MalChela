@@ -841,9 +841,9 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   const malwareTags = [];
   const malwareTagsSeen = new Set();
   const flagFindings = []; // { filename, tool, text, anchor }
-  const fsIocs = [];
+  const fsIocs = []; // { ioc, anchor } — anchor of the first file it was found in
   const fsIocsSeen = new Set();
-  const netIocs = [];
+  const netIocs = []; // { ioc, anchor } — anchor of the first file it was found in
   const netIocsSeen = new Set();
   const obfuscationFindings = []; // { filename, maxLayers }
   for (const key of order) {
@@ -860,8 +860,8 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
           mitreTactics[tactic] = (mitreTactics[tactic] || 0) + count;
         }
         const { fs, net } = extractMstringsIocs(run.markdown);
-        for (const ioc of fs) { if (!fsIocsSeen.has(ioc)) { fsIocsSeen.add(ioc); fsIocs.push(ioc); } }
-        for (const ioc of net) { if (!netIocsSeen.has(ioc)) { netIocsSeen.add(ioc); netIocs.push(ioc); } }
+        for (const ioc of fs) { if (!fsIocsSeen.has(ioc)) { fsIocsSeen.add(ioc); fsIocs.push({ ioc, anchor }); } }
+        for (const ioc of net) { if (!netIocsSeen.has(ioc)) { netIocsSeen.add(ioc); netIocs.push({ ioc, anchor }); } }
         const maxLayers = extractMaxObfuscationLayers(run.markdown);
         if (maxLayers > 1) obfuscationFindings.push({ filename: members[0].filename, maxLayers });
       }
@@ -913,10 +913,10 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     lines.push(`- **${mitreTotal} MITRE ATT&CK finding(s)** (mstrings), by tactic: ${breakdown}`);
   }
   if (fsIocs.length) {
-    lines.push('- **Filesystem IOCs** (mstrings): ' + fsIocs.map(i => `\`${i}\``).join(', '));
+    lines.push('- **Filesystem IOCs** (mstrings): ' + fsIocs.map(({ ioc, anchor }) => `[\`${ioc}\`](#${anchor})`).join(', '));
   }
   if (netIocs.length) {
-    lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(i => `\`${i}\``).join(', '));
+    lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(({ ioc, anchor }) => `[\`${ioc}\`](#${anchor})`).join(', '));
   }
   if (obfuscationFindings.length) {
     const detail = obfuscationFindings.map(({ filename, maxLayers }) => `\`${filename}\` (${maxLayers} layers)`).join(', ');

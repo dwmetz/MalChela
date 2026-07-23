@@ -1707,9 +1707,9 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     malware_tags: list = []
     malware_tags_seen: set = set()
     flag_findings: list = []  # (filename, tool, flag_text, anchor)
-    fs_iocs: list = []
+    fs_iocs: list = []  # (ioc, anchor of the first file it was found in)
     fs_iocs_seen: set = set()
-    net_iocs: list = []
+    net_iocs: list = []  # (ioc, anchor of the first file it was found in)
     net_iocs_seen: set = set()
     obfuscation_findings: list = []  # (filename, max_layers)
     for key in order:
@@ -1730,11 +1730,11 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
                 for ioc in fs:
                     if ioc not in fs_iocs_seen:
                         fs_iocs_seen.add(ioc)
-                        fs_iocs.append(ioc)
+                        fs_iocs.append((ioc, anchor))
                 for ioc in net:
                     if ioc not in net_iocs_seen:
                         net_iocs_seen.add(ioc)
-                        net_iocs.append(ioc)
+                        net_iocs.append((ioc, anchor))
                 max_layers = _extract_max_obfuscation_layers(run["markdown"])
                 if max_layers > 1:
                     obfuscation_findings.append((members[0]["filename"], max_layers))
@@ -1779,9 +1779,9 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
         breakdown = ", ".join(f"{t} ({c})" for t, c in by_tactic)
         lines.append(f"- **{mitre_total} MITRE ATT&CK finding(s)** (mstrings), by tactic: {breakdown}")
     if fs_iocs:
-        lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in fs_iocs))
+        lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"[`{i}`](#{a})" for i, a in fs_iocs))
     if net_iocs:
-        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in net_iocs))
+        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"[`{i}`](#{a})" for i, a in net_iocs))
     if obfuscation_findings:
         detail = ", ".join(f"`{n}` ({layers} layers)" for n, layers in obfuscation_findings)
         lines.append(f"- **⚠ Multi-layer obfuscation detected** (mstrings): {detail}")

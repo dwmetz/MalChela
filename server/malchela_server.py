@@ -1692,13 +1692,21 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
             order.append(key)
         groups[key].append(f)
 
-    flagged = []
+    # Anchor ids keyed by the SHA256/filepath dedup key (not by filename) —
+    # avoids any ambiguity if two different files happen to share a bare
+    # filename in different subfolders. marked.js (the PWA's renderer)
+    # passes raw inline HTML through unsanitized, so an explicit <a id=...>
+    # works without needing a heading-slug algorithm to stay in sync between
+    # this generator and the renderer.
+    anchor_by_key = {key: f"file-{idx}" for idx, key in enumerate(order)}
+
+    flagged = []  # (filename, anchor)
     dup_groups = []
     mitre_tactics: dict = {}
     mitre_total = 0
     malware_tags: list = []
     malware_tags_seen: set = set()
-    flag_findings: list = []  # (filename, tool, flag_text)
+    flag_findings: list = []  # (filename, tool, flag_text, anchor)
     fs_iocs: list = []
     fs_iocs_seen: set = set()
     net_iocs: list = []
@@ -1706,9 +1714,10 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     obfuscation_findings: list = []  # (filename, max_layers)
     for key in order:
         members = groups[key]
+        anchor = anchor_by_key[key]
         is_flagged, reason = _flag_verdict(members[0]["tool_runs"])
         if is_flagged:
-            flagged.append(members[0]["filename"])
+            flagged.append((members[0]["filename"], anchor))
         if len(members) > 1:
             dup_groups.append(members)
         for run in members[0]["tool_runs"]:
@@ -1736,7 +1745,7 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
                         malware_tags.append(tag)
             if run.get("success") and run.get("markdown") and run.get("tool") in ("macho_info", "plist_analyzer", "codesign_check"):
                 for flag_text in _extract_flags(run["tool"], run["markdown"]):
-                    flag_findings.append((members[0]["filename"], run["tool"], flag_text))
+                    flag_findings.append((members[0]["filename"], run["tool"], flag_text, anchor))
 
     lines = [
         f"# MalChela Summary — {target}",
@@ -1759,7 +1768,8 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     else:
         lines.append(f"- **{len(order)} file(s)** analyzed")
     if flagged:
-        lines.append(f"- **⚠ {len(flagged)} flagged malicious** (VirusTotal): " + ", ".join(f"`{n}`" for n in flagged))
+        lines.append(f"- **⚠ {len(flagged)} flagged malicious** (VirusTotal): "
+                      + ", ".join(f"[`{n}`](#{a})" for n, a in flagged))
     else:
         lines.append("- No files flagged malicious by VirusTotal")
     if malware_tags:
@@ -1778,8 +1788,8 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     if flag_findings:
         flagged_files = len({f[0] for f in flag_findings})
         lines.append(f"- **{len(flag_findings)} flag(s)/indicator(s)** across {flagged_files} file(s):")
-        for filename, tool, text in flag_findings:
-            lines.append(f"  - `{filename}` ({tool}): {text}")
+        for filename, tool, text, anchor in flag_findings:
+            lines.append(f"  - [`{filename}`](#{anchor}) ({tool}): {text}")
     for members in dup_groups:
         names = ", ".join(f"`{m['filename']}`" for m in members)
         lines.append(f"- **Duplicate content:** {names} share SHA256 `{members[0]['sha256']}`")
@@ -1788,6 +1798,7 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     for key in order:
         members = groups[key]
         primary = members[0]
+        lines.append(f'<a id="{anchor_by_key[key]}"></a>')
         lines.append(f"## {primary['filename']}")
         lines.append("")
         if len(members) > 1:

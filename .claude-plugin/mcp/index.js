@@ -826,13 +826,21 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     groups.get(key).push(f);
   }
 
-  const flagged = [];
+  // Anchor ids keyed by the SHA256/filepath dedup key (not by filename) —
+  // avoids any ambiguity if two different files happen to share a bare
+  // filename in different subfolders. marked.js (the PWA's renderer) passes
+  // raw inline HTML through unsanitized, so an explicit <a id=...> works
+  // without needing a heading-slug algorithm to stay in sync between this
+  // generator and the renderer.
+  const anchorByKey = new Map(order.map((key, idx) => [key, `file-${idx}`]));
+
+  const flagged = []; // { filename, anchor }
   const dupGroups = [];
   const mitreTactics = {};
   let mitreTotal = 0;
   const malwareTags = [];
   const malwareTagsSeen = new Set();
-  const flagFindings = []; // { filename, tool, text }
+  const flagFindings = []; // { filename, tool, text, anchor }
   const fsIocs = [];
   const fsIocsSeen = new Set();
   const netIocs = [];
@@ -840,8 +848,9 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   const obfuscationFindings = []; // { filename, maxLayers }
   for (const key of order) {
     const members = groups.get(key);
+    const anchor = anchorByKey.get(key);
     const isFlagged = flagVerdict(members[0].tool_runs).flagged;
-    if (isFlagged) flagged.push(members[0].filename);
+    if (isFlagged) flagged.push({ filename: members[0].filename, anchor });
     if (members.length > 1) dupGroups.push(members);
     for (const run of members[0].tool_runs) {
       if (run.tool === 'mstrings' && run.success && run.markdown) {
@@ -863,7 +872,7 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
       }
       if (run.success && run.markdown && ['macho_info', 'plist_analyzer', 'codesign_check'].includes(run.tool)) {
         for (const text of extractFlags(run.tool, run.markdown)) {
-          flagFindings.push({ filename: members[0].filename, tool: run.tool, text });
+          flagFindings.push({ filename: members[0].filename, tool: run.tool, text, anchor });
         }
       }
     }
@@ -890,7 +899,8 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     lines.push(`- **${order.length} file(s)** analyzed`);
   }
   if (flagged.length) {
-    lines.push(`- **⚠ ${flagged.length} flagged malicious** (VirusTotal): ` + flagged.map(n => `\`${n}\``).join(', '));
+    lines.push(`- **⚠ ${flagged.length} flagged malicious** (VirusTotal): `
+      + flagged.map(({ filename, anchor }) => `[\`${filename}\`](#${anchor})`).join(', '));
   } else {
     lines.push('- No files flagged malicious by VirusTotal');
   }
@@ -915,8 +925,8 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   if (flagFindings.length) {
     const flaggedFiles = new Set(flagFindings.map(f => f.filename)).size;
     lines.push(`- **${flagFindings.length} flag(s)/indicator(s)** across ${flaggedFiles} file(s):`);
-    for (const { filename, tool, text } of flagFindings) {
-      lines.push(`  - \`${filename}\` (${tool}): ${text}`);
+    for (const { filename, tool, text, anchor } of flagFindings) {
+      lines.push(`  - [\`${filename}\`](#${anchor}) (${tool}): ${text}`);
     }
   }
   for (const members of dupGroups) {
@@ -928,7 +938,7 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   for (const key of order) {
     const members = groups.get(key);
     const primary = members[0];
-    lines.push(`## ${primary.filename}`, '');
+    lines.push(`<a id="${anchorByKey.get(key)}"></a>`, `## ${primary.filename}`, '');
     if (members.length > 1) {
       const otherNames = members.slice(1).map(m => `\`${m.filename}\``).join(', ');
       lines.push(`- **Also found as:** ${otherNames} — identical content, tool output shown once`);

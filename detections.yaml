@@ -1434,19 +1434,19 @@ BitcoinAddressP2PKH:
   title: "Hardcoded Bitcoin address (P2PKH/P2SH)"
   id: "ransom-btc-address-001"
   status: "experimental"
-  description: "Detects a Base58Check-encoded legacy Bitcoin address (P2PKH, starting '1', or P2SH, starting '3') embedded as a plain string. Ransom notes and extortion payloads commonly hardcode a payment address directly in the binary rather than fetching it from a C2 server, since the demand still needs to display even if C2 is unreachable. Found via a heavily string-obfuscated macOS ransomware/backdoor sample (EvilQuest/ThiefQuest) whose ransom note text itself is encrypted, but the payment address survived in the clear. OS-agnostic — this is not a macOS-specific indicator."
+  description: "Detects a Base58Check-encoded legacy Bitcoin address (P2PKH, starting '1', or P2SH, starting '3') embedded as a plain string. Ransom notes and extortion payloads commonly hardcode a payment address directly in the binary rather than fetching it from a C2 server, since the demand still needs to display even if C2 is unreachable. Found via a heavily string-obfuscated macOS ransomware/backdoor sample (EvilQuest/ThiefQuest) whose ransom note text itself is encrypted, but the payment address survived in the clear. OS-agnostic — this is not a macOS-specific indicator. Requires at least one lowercase letter in the body: a real Base58Check address is a near-uniform random distribution over its 58-symbol alphabet, so the odds of a genuine address containing zero lowercase letters are astronomically small (~1 in a million at the 25-char minimum length), but plenty of legitimate all-uppercase/digit identifiers (API tokens, CDN file IDs, license/serial keys) coincidentally fit the same charset-and-length envelope. Confirmed false positive on OSX.CreativeUpdate (TAOMM Ch1): the dropper script's Adobe CDN file-ID token '1U14RSV3MVAHBMEGVS4LZ42AFNYEFF' (all uppercase+digits, no lowercase) matched before this fix."
   references:
     - "https://en.bitcoin.it/wiki/Address"
   author: Doug Metz
-  date: 2026-07-21
+  date: 2026-07-23
   logsource:
     category: file_event
     product: any
   detection:
     strings:
-      - "\\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b"
+      - "\\b[13](?=[a-km-zA-HJ-NP-Z1-9]{24,33}\\b)(?=[a-km-zA-HJ-NP-Z1-9]*[a-km-z])[a-km-zA-HJ-NP-Z1-9]{25,34}\\b"
   falsepositives:
-    - "Base58 text that happens to fit the length/charset envelope without being a real address (rare given the length/charset constraints, but not cryptographically verified — no checksum validation is performed)"
+    - "Base58 text that happens to fit the length/charset envelope AND contains at least one lowercase letter without being a real address (rare given the length/charset/case constraints, but not cryptographically checksum-validated)"
   level: high
   tags:
     - attack.t1486

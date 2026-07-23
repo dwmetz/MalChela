@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "MITRE_lookup"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "clap",
  "colored 3.1.1",
@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "about"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "colored 2.2.0",
  "common_ui",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "cached"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "codesign_check"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -766,7 +766,7 @@ dependencies = [
 
 [[package]]
 name = "combine_yara"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "common_config"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "serde",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "common_macho"
-version = "0.1.0"
+version = "4.3.0"
 dependencies = [
  "goblin",
  "plist",
@@ -795,14 +795,14 @@ dependencies = [
 
 [[package]]
 name = "common_ui"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "colored 3.1.1",
 ]
 
 [[package]]
 name = "config"
-version = "4.2.0"
+version = "4.3.0"
 
 [[package]]
 name = "console"
@@ -1322,7 +1322,7 @@ dependencies = [
 
 [[package]]
 name = "dpp_extract"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "clap",
  "common_config",
@@ -1498,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "extract_samples"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "common_config",
  "walkdir",
@@ -1555,7 +1555,7 @@ dependencies = [
 
 [[package]]
 name = "fileanalyzer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -1583,7 +1583,7 @@ dependencies = [
 
 [[package]]
 name = "fileminer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "clap",
  "common_config",
@@ -1998,7 +1998,7 @@ checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
 
 [[package]]
 name = "hashcheck"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "common_config",
@@ -2006,7 +2006,7 @@ dependencies = [
 
 [[package]]
 name = "hashit"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2836,7 +2836,7 @@ dependencies = [
 
 [[package]]
 name = "macho_info"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2852,7 +2852,7 @@ dependencies = [
 
 [[package]]
 name = "malchela"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "colored 2.2.0",
  "console",
@@ -2958,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "mismatchminer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2983,7 +2983,7 @@ dependencies = [
 
 [[package]]
 name = "mstrings"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -3010,7 +3010,7 @@ dependencies = [
 
 [[package]]
 name = "mzcount"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "atty",
  "chrono",
@@ -3025,7 +3025,7 @@ dependencies = [
 
 [[package]]
 name = "mzhash"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "clap",
  "common_config",
@@ -3116,7 +3116,7 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
 name = "nsrlquery"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3541,7 +3541,7 @@ dependencies = [
 
 [[package]]
 name = "plist_analyzer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -4733,7 +4733,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "strings_to_yara"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "common_config",
 ]
@@ -5153,7 +5153,7 @@ dependencies = [
 
 [[package]]
 name = "tiquery"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6302,7 +6302,7 @@ checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
 
 [[package]]
 name = "xmzhash"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "common_config",
  "indicatif",

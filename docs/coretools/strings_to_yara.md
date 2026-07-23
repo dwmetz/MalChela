@@ -2,6 +2,8 @@ Strings to YARA helps you rapidly build custom YARA rules by prompting for a rul
 
 Lines beginning with hash: are deliberately ignored during rule generation — this lets you use the scratchpad to track hashes alongside strings without polluting your YARA rule content.
 
+Any **defanged** line (`hxxp://`, `hxxps://`, `fxxp://`, or `[.]` in place of a literal dot — the same defanging [mStrings](mstrings.md) and the Analyze rollup use when displaying network IOCs) is automatically refanged back to the real string before it's written into the rule. YARA matches raw bytes in the target file, which contain the real string, never the defanged display form — so a URL copied straight out of a report generates a rule that actually matches something, without you having to manually fix it up first. Lines that were never defanged pass through unchanged.
+
 ![Strings to YARA](../images/strings_to_yara.png)
 
 <p align="center"><strong> Strings to YARA</p>

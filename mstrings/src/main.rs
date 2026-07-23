@@ -11,8 +11,9 @@ use common_ui::styled_line;
 
 use common_config::get_output_dir;
 
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use clap::{Arg, ArgMatches, Command};
-use regex::Regex;
+use fancy_regex::Regex;
 use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
@@ -25,12 +26,18 @@ use tabled::settings::{Style, Modify, Alignment, Width};
 // Define a Rust Orange color helper for colored crate
 const RUST_ORANGE: (u8, u8, u8) = (215, 100, 40); // Use this constant for color
 
-// Function to handle printing IOCs (unified CLI/GUI logic and formatting)
-fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>) {
+// Function to handle printing IOCs (unified CLI/GUI logic and formatting).
+// is_network gates defanging — filesystem IOCs are never defanged, only URLs/
+// domains/IPs (see defang_network_ioc's doc comment for why).
+fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>, is_network: bool) {
     if !iocs.is_empty() {
         println!("{}", title.truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
         for ioc in iocs {
-            println!("{}", ioc);
+            if is_network {
+                println!("{}", defang_network_ioc(ioc));
+            } else {
+                println!("{}", ioc);
+            }
         }
     }
 }
@@ -39,13 +46,29 @@ fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>) {
 enum Encoding {
     Ascii,
     Utf8,
+    Base64,
 }
 
 #[derive(Debug, serde::Serialize)]
 struct Match {
     offset: usize,
     encoding: Encoding,
+    // Full underlying string (can be a multi-hundred-byte decoded base64
+    // blob) — IOC extraction below needs the whole thing, so this is never
+    // truncated to a rule's specific hit. See `display_str` for that.
     matched_str: String,
+    // The actual regex-matched substring for this rule, set in
+    // apply_yara_detections(). Distinct from matched_str because several
+    // unrelated rules can all match somewhere inside the same long decoded
+    // blob — showing the shared blob prefix for every one of them made the
+    // "Matched Strings" column look identical across different detections.
+    // Defaults to matched_str for untagged matches, where it's unused.
+    display_str: String,
+    // How many base64 layers were peeled to reach this match (0 for
+    // non-decoded matches). A rule firing only after several layers of
+    // decoding is itself a signal — routine base64 use is one layer;
+    // repeated re-encoding is a deliberate evasion tell.
+    decode_layers: u8,
     rule_name: Option<String>,
     tactic: Option<String>,
     technique: Option<String>,
@@ -78,6 +101,66 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     } else {
         s.to_string()
     }
+}
+
+// Neutralize characters that corrupt the report tables' structure before a
+// matched string goes into a table cell. Two distinct failure modes, both
+// from the same missing sanitization: an embedded newline (routine for a
+// match pulled from base64-decoded multi-line content, e.g. a decoded
+// script) renders as literal `\n` bytes inside the cell, which — parsed as
+// markdown — starts what looks like a new table row with blank leading
+// columns; an embedded `|` (routine in any matched shell command using a
+// pipe, e.g. `curl ... | grep ...`) IS the markdown table's own column
+// delimiter, so it splits the cell in two and shifts every column after it
+// one to the right — the concrete symptom that surfaced this: a
+// grep pattern showing up as if it were a MITRE tactic name.
+fn sanitize_table_cell(s: &str) -> String {
+    s.replace(['\r', '\n', '\t'], " ").replace('|', "\\|")
+}
+
+// Reserved/documentation/network-address IPs that are never a real IOC —
+// mirrors the exclusions in detections.yaml's HardcodedIPAddress rule, kept
+// in sync so the blob-path extractor below (which has its own IP regex,
+// since the regex crate used there has no lookaround for the boundary
+// check) doesn't let through what the rule-based path already excludes.
+// Found needed on IPStorm (TAOMM Ch1): 0.0.0.0 and 10.0.0.0 — both from
+// libp2p's own bogon/CIDR-filter constant list — leaked through here even
+// after the rule itself was fixed, since this is a separate code path.
+fn is_boring_ip(ip: &str) -> bool {
+    if ip == "127.0.0.1" || ip == "255.255.255.255" || ip == "239.255.255.250" {
+        return true;
+    }
+    let octets: Vec<&str> = ip.split('.').collect();
+    if octets.len() != 4 {
+        return false;
+    }
+    if octets[1] == "0" && octets[2] == "0" && octets[3] == "0" {
+        return true; // X.0.0.0 — network/supernet address
+    }
+    if octets[2] == "0" && octets[3] == "0" {
+        return true; // X.X.0.0 — network/supernet address
+    }
+    (octets[0] == "192" && octets[1] == "0" && (octets[2] == "0" || octets[2] == "2")) // 192.0.0.0/24, 192.0.2.0/24 (TEST-NET-1)
+        || (octets[0] == "198" && octets[1] == "51" && octets[2] == "100") // TEST-NET-2
+        || (octets[0] == "203" && octets[1] == "0" && octets[2] == "113") // TEST-NET-3
+}
+
+// Defang a network IOC before display — standard analyst practice, and the
+// same reasoning that already applies to the Analyze rollup: a rendered/
+// displayed URL that reads exactly like a live clickable link is the wrong
+// affordance for a malware report to put in front of an analyst. Idempotent
+// (checks for "[.]"/"hxxp" already present) so re-processing already-
+// defanged text — e.g. the Python/MCP rollup re-extracting this same value
+// out of mstrings' own markdown — never double-defangs it into "[[.]]".
+fn defang_network_ioc(ioc: &str) -> String {
+    let lower = ioc.to_lowercase();
+    if ioc.contains("[.]") || lower.contains("hxxp") {
+        return ioc.to_string(); // already defanged
+    }
+    ioc.replace("http://", "hxxp://")
+        .replace("https://", "hxxps://")
+        .replace("ftp://", "fxxp://")
+        .replace('.', "[.]")
 }
 
 // Filter high-volume ObjC/Swift runtime noise that appears in every Mach-O binary.
@@ -126,16 +209,122 @@ impl Mstrings {
                 Encoding::Ascii
             };
 
+            let trimmed = line.trim_start().to_string();
             self.matches.push(Match {
                 offset,
                 encoding: encoding_type,
-                matched_str: line.trim_start().to_string(),
+                display_str: trimmed.clone(),
+                matched_str: trimmed,
+                decode_layers: 0,
                 rule_name: None,
                 tactic: None,
                 technique: None,
                 technique_id: None,
             });
         }
+    }
+
+    /// Detect long base64-looking substrings anywhere within an extracted
+    /// string, decode them, and add the decoded text as new matches
+    /// (encoding: Base64) so the existing detection and IOC-extraction
+    /// passes run against what's actually inside — not just the encoded
+    /// blob itself. Malware embedding a full script/payload as base64 is
+    /// otherwise invisible to every string-matching rule, since none of its
+    /// real content exists as a literal substring anywhere in the binary
+    /// pre-decode. Two shapes observed in the wild, both handled by
+    /// searching for the base64 run rather than requiring the whole
+    /// extracted string to be one: a blob as its own isolated string
+    /// constant (a 2,514-line Python RAT decoded from one 149KB base64
+    /// string in a Dok/Bella sample), and a blob embedded inline in a
+    /// larger command line (`echo <blob> | base64 -d | python`, an EmPyre-
+    /// style shell stager, where the whole line — not just the blob — is
+    /// what gets extracted as one string).
+    ///
+    /// Decoding is recursive, up to MAX_LAYERS: an XCSSET shell-script
+    /// dropper was found nesting the same encoding 8 times — a single
+    /// decode pass just produces another base64-shaped string each time,
+    /// so anything short of peeling every layer never reaches the real
+    /// payload (in that sample: an AppleScript module with a hardcoded C2
+    /// domain, a beacon format, and download-and-osascript-exec logic).
+    /// Each layer is only accepted as the final result once decoding
+    /// stops producing something that itself still looks like base64 —
+    /// hitting MAX_LAYERS while still base64-shaped, or a failed decode
+    /// partway through, discards the candidate rather than emitting a
+    /// still-encoded intermediate layer as if it were the real payload.
+    fn decode_base64_blobs(&mut self) {
+        const MIN_LEN: usize = 60;
+        const MIN_DECODED_LEN: usize = 20;
+        const MIN_PRINTABLE_RATIO: f64 = 0.85;
+        const MAX_LAYERS: usize = 12;
+
+        fn is_base64_shaped(s: &str) -> bool {
+            s.len() >= MIN_LEN
+                && s.len() % 4 == 0
+                && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+                && s.chars().any(|c| c.is_ascii_alphabetic())
+        }
+
+        let base64_run = Regex::new(&format!(r"[A-Za-z0-9+/]{{{MIN_LEN},}}={{0,2}}")).unwrap();
+
+        let candidates: Vec<(usize, String)> = self
+            .matches
+            .iter()
+            .flat_map(|m| {
+                base64_run
+                    .find_iter(&m.matched_str)
+                    .flatten()
+                    .filter(|mat| is_base64_shaped(mat.as_str()))
+                    .map(|mat| (m.offset, mat.as_str().to_string()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        let mut decoded_matches = Vec::new();
+        for (offset, candidate) in candidates {
+            let mut current = candidate;
+            let mut terminal: Option<Vec<u8>> = None;
+            let mut layers: u8 = 0;
+
+            for _ in 0..MAX_LAYERS {
+                let decoded = match BASE64_STANDARD.decode(current.trim()) {
+                    Ok(d) if d.len() >= MIN_DECODED_LEN => d,
+                    _ => break, // invalid/too-short at this layer — abandon this candidate
+                };
+                layers += 1;
+                match std::str::from_utf8(&decoded) {
+                    Ok(s) if is_base64_shaped(s.trim()) => {
+                        current = s.trim().to_string();
+                        continue; // still encoded — peel another layer
+                    }
+                    _ => {
+                        terminal = Some(decoded); // reached the real payload (text or binary)
+                        break;
+                    }
+                }
+            }
+
+            let Some(decoded) = terminal else { continue };
+            let printable = decoded
+                .iter()
+                .filter(|&&b| (0x20..=0x7e).contains(&b) || b == b'\n' || b == b'\r' || b == b'\t')
+                .count();
+            if (printable as f64 / decoded.len() as f64) < MIN_PRINTABLE_RATIO {
+                continue;
+            }
+            let decoded_str = String::from_utf8_lossy(&decoded).to_string();
+            decoded_matches.push(Match {
+                offset,
+                encoding: Encoding::Base64,
+                display_str: decoded_str.clone(),
+                matched_str: decoded_str,
+                decode_layers: layers,
+                rule_name: None,
+                tactic: None,
+                technique: None,
+                technique_id: None,
+            });
+        }
+        self.matches.extend(decoded_matches);
     }
 
     pub fn apply_yara_detections(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -164,17 +353,21 @@ impl Mstrings {
             let mut any_match = false;
             let mut seen_rules: std::collections::HashSet<String> = std::collections::HashSet::new();
             for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
-                if regex.is_match(&m.matched_str) && seen_rules.insert(rule_name.clone()) {
-                    new_matches.push(Match {
-                        offset: m.offset,
-                        encoding: m.encoding.clone(),
-                        matched_str: m.matched_str.clone(),
-                        rule_name: Some(rule_name.clone()),
-                        tactic: Some(tactic.clone()),
-                        technique: Some(technique.clone()),
-                        technique_id: Some(technique_id.clone()),
-                    });
-                    any_match = true;
+                if let Ok(Some(found)) = regex.find(&m.matched_str) {
+                    if seen_rules.insert(rule_name.clone()) {
+                        new_matches.push(Match {
+                            offset: m.offset,
+                            encoding: m.encoding.clone(),
+                            matched_str: m.matched_str.clone(),
+                            display_str: found.as_str().to_string(),
+                            decode_layers: m.decode_layers,
+                            rule_name: Some(rule_name.clone()),
+                            tactic: Some(tactic.clone()),
+                            technique: Some(technique.clone()),
+                            technique_id: Some(technique_id.clone()),
+                        });
+                        any_match = true;
+                    }
                 }
             }
             if !any_match {
@@ -182,6 +375,8 @@ impl Mstrings {
                     offset: m.offset,
                     encoding: m.encoding.clone(),
                     matched_str: m.matched_str.clone(),
+                    display_str: m.matched_str.clone(),
+                    decode_layers: m.decode_layers,
                     rule_name: None,
                     tactic: None,
                     technique: None,
@@ -299,6 +494,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         }
     }
 
+    mstrings.decode_base64_blobs();
     mstrings.apply_yara_detections()?;
 
     // Group matched strings by rule name; track tactic/technique for sort.
@@ -307,7 +503,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
     let mut rule_groups: std::collections::HashMap<
         String,
-        (String, String, String, std::collections::BTreeSet<String>),
+        (String, String, String, std::collections::BTreeSet<String>, u8),
     > = std::collections::HashMap::new();
 
     for m in mstrings.matches.iter().filter(|m| m.rule_name.is_some()) {
@@ -317,15 +513,17 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
             m.technique.clone().unwrap_or_default(),
             m.technique_id.clone().unwrap_or_default(),
             std::collections::BTreeSet::new(),
+            0u8,
         ));
-        entry.3.insert(m.matched_str.clone());
+        entry.3.insert(m.display_str.clone());
+        entry.4 = entry.4.max(m.decode_layers);
     }
 
     // Sort groups: primary = tactic priority, secondary = rule name
-    let mut sorted_groups: Vec<(String, String, String, String, Vec<String>)> = rule_groups
+    let mut sorted_groups: Vec<(String, String, String, String, Vec<String>, u8)> = rule_groups
         .into_iter()
-        .map(|(rule, (tactic, technique, id, strings))| {
-            (rule, tactic, technique, id, strings.into_iter().collect())
+        .map(|(rule, (tactic, technique, id, strings, max_layers))| {
+            (rule, tactic, technique, id, strings.into_iter().collect(), max_layers)
         })
         .collect();
     sorted_groups.sort_by(|a, b| {
@@ -334,14 +532,14 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
     let display_matches: Vec<DisplayMatch> = sorted_groups
         .iter()
-        .map(|(rule, tactic, technique, id, strings)| {
+        .map(|(rule, tactic, technique, id, strings, max_layers)| {
             let count = strings.len();
-            let matched_strings = {
+            let mut matched_strings = {
                 let cap = 8;
                 let shown: Vec<String> = strings
                     .iter()
                     .take(cap)
-                    .map(|s| truncate_string(s, 50))
+                    .map(|s| truncate_string(&sanitize_table_cell(s), 50))
                     .collect();
                 if count > cap {
                     format!("{} (+{} more)", shown.join(", "), count - cap)
@@ -349,6 +547,12 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                     shown.join(", ")
                 }
             };
+            // Only a rule firing after MULTIPLE re-encoding layers is a
+            // meaningful evasion tell — a single base64 decode is routine
+            // (e.g. `echo <blob> | base64 -d`) and not worth flagging.
+            if *max_layers > 1 {
+                matched_strings = format!("{matched_strings}  [\u{26A0} found after {max_layers} layers of base64 decoding]");
+            }
             DisplayMatch {
                 count: count.to_string(),
                 rule_name: rule.clone(),
@@ -370,8 +574,10 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
     // Short strings use the original logic unchanged.
     //
     // \x22 is used in char classes instead of \" to avoid raw-string issues.
-    // The regex crate does not support lookarounds, so IP boundary validation
-    // is done in Rust after matching.
+    // IP boundary validation is done in Rust after matching (kept this way
+    // even after the fancy-regex migration added lookaround support — a
+    // manual byte check is simpler to read here than a lookaround, and
+    // faster since it skips backtracking on every candidate match).
     let re_url      = Regex::new(r"https?://[^\s\x22'<>]{8,}").unwrap();
     let re_ip       = Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap();
     // Windows-style paths
@@ -385,33 +591,40 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
             if m.matched_str.len() > 300 {
                 // Blob path: extract well-formed IOCs via regex
-                for cap in re_url.find_iter(&m.matched_str) {
+                for cap in re_url.find_iter(&m.matched_str).flatten() {
                     net_iocs.insert(cap.as_str().to_string());
                 }
                 // IP boundary check: regex crate has no lookarounds, so verify
-                // surrounding bytes manually.  127.0.0.1 is omitted — it appears
-                // in every Go net-stack binary and has no analytical value.
-                // RFC 1918 ranges are kept: a private IP hardcoded in malware
-                // strings is a meaningful tell (lateral movement target, lab
-                // infrastructure leak, etc.).
+                // surrounding bytes manually. is_boring_ip() filters loopback/
+                // broadcast/reserved/network-address shapes — see its doc
+                // comment. RFC 1918 host addresses are still kept (not boring):
+                // a private IP hardcoded in malware strings is a meaningful
+                // tell (lateral movement target, lab infrastructure leak,
+                // etc.). Boundary excludes ASCII letters and underscore too,
+                // not just digit/dot — a Go compiler closure symbol like
+                // ...marshal.func1.4.10.1 has a letter ('c' in "func")
+                // immediately before "4.10.1", which a digit/dot-only check
+                // never caught, so IPStorm's symbol table produced dozens of
+                // fake "IPs" shaped like func-name tail numbers.
                 let blob = m.matched_str.as_bytes();
-                for mat in re_ip.find_iter(&m.matched_str) {
+                let is_word_byte = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'.';
+                for mat in re_ip.find_iter(&m.matched_str).flatten() {
                     let start = mat.start();
                     let end   = mat.end();
-                    let before_ok = start == 0 || !matches!(blob[start - 1], b'0'..=b'9' | b'.');
-                    let after_ok  = end == blob.len() || !matches!(blob[end], b'0'..=b'9' | b'.');
-                    if before_ok && after_ok && mat.as_str() != "127.0.0.1" {
+                    let before_ok = start == 0 || !is_word_byte(blob[start - 1]);
+                    let after_ok  = end == blob.len() || !is_word_byte(blob[end]);
+                    if before_ok && after_ok && !is_boring_ip(mat.as_str()) {
                         net_iocs.insert(mat.as_str().to_string());
                     }
                 }
-                for cap in re_fspath.find_iter(&m.matched_str) {
+                for cap in re_fspath.find_iter(&m.matched_str).flatten() {
                     let extracted = cap.as_str();
                     // Skip template variables like ${EXTENSION}-FILES.txt
                     if !extracted.starts_with("${") && !extracted.starts_with('%') {
                         fs_iocs.insert(extracted.to_string());
                     }
                 }
-                for cap in re_mac_path.find_iter(&m.matched_str) {
+                for cap in re_mac_path.find_iter(&m.matched_str).flatten() {
                     fs_iocs.insert(cap.as_str().to_string());
                 }
             } else {
@@ -453,12 +666,67 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                         || is_mac_path
                     {
                         fs_iocs.insert(candidate.to_string());
-                    } else if rule_lc.contains("ip address")
-                        || sc.contains("http:")
+                    } else if rule_lc.contains("ip address") {
+                        // Use display_str (the rule's own precise capture) rather
+                        // than the whole candidate/matched_str: a real IP is
+                        // routinely embedded in a longer command line or query
+                        // string (e.g. a Zyxel exploit's
+                        // "wget+http://213.209.129.101/zyxel;chmod+777+..."),
+                        // and inserting the whole thing produces an unreadable
+                        // net_ioc entry when the clean, exact IP is already
+                        // sitting right there in display_str.
+                        net_iocs.insert(m.display_str.trim().to_string());
+                    } else if sc.contains("http:")
                         || sc.contains("https:")
-                        || (sc.contains('.') && sc.split('.').count() == 4)
+                        || (sc.split('.').count() == 4
+                            && sc.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())))
                     {
                         net_iocs.insert(candidate.to_string());
+                    }
+                }
+            }
+
+            // Bare-domain C2 indicators (e.g. "cdntor.ru", "usb.mine.nu") —
+            // caught by a rule's own regex but with no "http://" scheme and
+            // not a 4-part IPv4 shape, so neither branch above picks them up
+            // (both require a scheme or an IPv4 shape). Use display_str, the
+            // rule's own precise match, rather than re-deriving domain shape
+            // from scratch — and gate on the Command and Control tactic so
+            // dotted-but-not-network strings a C2-tactic rule might still
+            // incidentally match (e.g. a version string) stay out, while
+            // filesystem-flavored dotted strings (bundle IDs, LaunchDaemon
+            // labels) picked up by non-C2 rules are never considered here.
+            // Also require all-lowercase: a C2-tactic rule can legitimately
+            // match a dotted Objective-C class/namespace string (e.g.
+            // "com.pusher.libPusher", found by the libPusher C2 rule itself)
+            // which is dotted but NOT a domain — real domains harvested from
+            // binaries are lowercase, camelCase/PascalCase identifiers aren't.
+            if let Some(tactic) = &m.tactic {
+                if tactic.contains("Command and Control") {
+                    let d = m.display_str.trim();
+                    // Numeric dotted-quads (real or Go-symbol-tail-shaped
+                    // fakes like "4.10.1") are deliberately left to the
+                    // dedicated Hardcoded IP address rule/path instead of
+                    // this heuristic — that path has real exclusions
+                    // (reserved/documentation ranges, broadcast, network
+                    // addresses) this generic shape check has no business
+                    // re-deriving, and a second independent path applying
+                    // its own weaker rules was exactly how those reserved
+                    // ranges and Go-symbol tails leaked into net_iocs on
+                    // IPStorm (TAOMM Ch1) despite the dedicated rule already
+                    // excluding most of them.
+                    let is_dotted_quad = d.split('.').count() == 4
+                        && d.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()));
+                    if !is_dotted_quad
+                        && d.contains('.')
+                        && !d.contains(' ')
+                        && !d.contains('/')
+                        && !d.contains('_')
+                        && !d.contains('\\')
+                        && d.len() < 100
+                        && !d.chars().any(|c| c.is_ascii_uppercase())
+                    {
+                        net_iocs.insert(d.to_string());
                     }
                 }
             }
@@ -470,8 +738,12 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         .filter(|m| m.rule_name.is_some())
         .map(|m| FlatMatch {
             offset:       format!("0x{:08X}", m.offset),
-            encoding:     format!("{:?}", m.encoding),
-            matched_str:  truncate_string(&m.matched_str, 60),
+            encoding:     if m.decode_layers > 1 {
+                format!("Base64\u{d7}{}", m.decode_layers)
+            } else {
+                format!("{:?}", m.encoding)
+            },
+            matched_str:  truncate_string(&m.display_str, 60),
             rule_name:    m.rule_name.clone().unwrap_or_default(),
             tactic:       m.tactic.clone().unwrap_or_default(),
             technique:    m.technique.clone().unwrap_or_default(),
@@ -721,12 +993,12 @@ fn append_ioc_sections(
         if format == "md" {
             report_buffer.push_str("## Potential Network IOCs\n\n");
             for ioc in net_iocs {
-                report_buffer.push_str(&format!("- `{}`\n", ioc));
+                report_buffer.push_str(&format!("- `{}`\n", defang_network_ioc(ioc)));
             }
         } else {
             report_buffer.push_str("POTENTIAL NETWORK IOCs:\n");
             for ioc in net_iocs {
-                report_buffer.push_str(&format!("{}\n", ioc));
+                report_buffer.push_str(&format!("{}\n", defang_network_ioc(ioc)));
             }
         }
         report_buffer.push('\n');
@@ -749,11 +1021,11 @@ fn run_single(
 
     // Use the print_iocs function for both headers, with color and proper handling for CLI/GUI
     println!("\n");
-    print_iocs("POTENTIAL FILESYSTEM IOCs:", &result.fs_iocs);
+    print_iocs("POTENTIAL FILESYSTEM IOCs:", &result.fs_iocs, false);
 
     if !result.net_iocs.is_empty() {
         println!("\n");
-        print_iocs("POTENTIAL NETWORK IOCs:", &result.net_iocs);
+        print_iocs("POTENTIAL NETWORK IOCs:", &result.net_iocs, true);
     }
 
     print_detail(&result.flat_matches);
@@ -859,11 +1131,11 @@ fn run_bundle(
 
     // Combined IOC section across all binaries in the bundle
     println!("\n");
-    print_iocs("POTENTIAL FILESYSTEM IOCs:", &merged_fs_iocs);
+    print_iocs("POTENTIAL FILESYSTEM IOCs:", &merged_fs_iocs, false);
 
     if !merged_net_iocs.is_empty() {
         println!("\n");
-        print_iocs("POTENTIAL NETWORK IOCs:", &merged_net_iocs);
+        print_iocs("POTENTIAL NETWORK IOCs:", &merged_net_iocs, true);
     }
 
     println!();

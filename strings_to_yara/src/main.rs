@@ -13,6 +13,20 @@ where
     Ok(BufReader::new(file).lines())
 }
 
+/// Undo IOC defanging (hxxp(s):// -> http(s)://, [.] -> .) before a line
+/// becomes a YARA string literal. YARA matches raw bytes in the target
+/// file, which contain the real string ("http://evil.com"), never the
+/// defanged display form ("hxxp://evil[.]com") — a defanged line copied
+/// straight out of an mstrings report or the Analyze rollup (both defang
+/// network IOCs on display now) would silently generate a rule that can
+/// never match anything. A no-op on lines that were never defanged.
+fn refang(s: &str) -> String {
+    s.replace("hxxps://", "https://")
+        .replace("hxxp://", "http://")
+        .replace("fxxp://", "ftp://")
+        .replace("[.]", ".")
+}
+
 /// Reads strings from a file and generates a YARA rule as a string.
 fn create_yara_rule(
     rule_name: &str,
@@ -45,7 +59,8 @@ fn create_yara_rule(
                 continue;
             }
             if !trimmed.is_empty() {
-                let escaped = line_owned.replace('\\', "\\\\").replace('"', "\\\"");
+                let refanged = refang(&line_owned);
+                let escaped = refanged.replace('\\', "\\\\").replace('"', "\\\"");
                 yara_rule.push_str(&format!("\t\t$s{} = \"{}\"\n", id, escaped));
                 id += 1;
             }

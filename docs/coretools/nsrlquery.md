@@ -1,5 +1,7 @@
 NSRL Query checks a file hash against the National Software Reference Library (NSRL) by querying the CIRCL hash lookup service. It helps identify known, trusted software — allowing analysts to filter out benign files and focus on unknown or suspicious ones during forensic triage.
 
+This is a live network lookup with no API key involved — there's no local NSRL database file to fall back on. In an air-gapped environment, enable [Offline Mode](../configuration/offline-mode.md) to skip the network call cleanly instead of letting it fail.
+
 ![NSRL Hash Lookup](../images/nsrlquery.png)
 
 <p align="center"><strong> NSRL Hash Lookup</p>

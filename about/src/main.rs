@@ -38,7 +38,7 @@ fn main() {
     println!("{}", styled_line("gray", "            https://bakerstreetforensics.com"));
     println!();
     println!("{}", styled_line("rust", "MalChela - A YARA & Malware Analysis Toolkit written in Rust"));
-    println!("{}", styled_line("gray", "Version: 4.2.0"));
+    println!("{}", styled_line("gray", "Version: 4.3.0"));
     println!();
     println!("{}", styled_line("ABOUT", "ABOUT:"));
     println!("{}", styled_line("yellow", "   mal — malware"));
@@ -54,7 +54,8 @@ fn main() {
     let description_width = 70;
 
     let table_string = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        format!("  {:<feature_width$}|  {:<description_width$}\n", "Analyze", "Point it at a file, folder, or bundle and it auto-runs every tool FileMiner suggests, plus a combined rollup report"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Code Sign Check", "Inspects macOS code signing: signature type, team ID, entitlements, ad-hoc detection"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Combine YARA", "Point it at a directory of YARA files and it will output one combined rule"),
         format!("  {:<feature_width$}|  {:<description_width$}\n", "Extract Samples", "Point it at a directory of password protected malware files to extract all"),

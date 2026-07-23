@@ -148,6 +148,15 @@ def serve_icon(filename):
     icons_dir = str((_SCRIPT_DIR / 'icons').resolve())
     return send_from_directory(icons_dir, filename)
 
+@app.route('/fonts/<path:filename>')
+def serve_font(filename):
+    """Serve vendored webfonts from server/fonts/ — SIL OFL licensed
+    (JetBrains Mono, Share Tech Mono), bundled locally instead of loading
+    from fonts.googleapis.com so the PWA has no font-related network
+    dependency at all, air-gapped or not."""
+    fonts_dir = str((_SCRIPT_DIR / 'fonts').resolve())
+    return send_from_directory(fonts_dir, filename)
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
@@ -160,13 +169,17 @@ def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
         return {"success": False, "error": f"Binary not found: {binary}"}
 
     cmd = [str(binary_path)] + args
+    env = os.environ.copy()
+    if is_offline_mode():
+        env["MALCHELA_OFFLINE"] = "1"
     try:
         result = subprocess.run(
             cmd,  # shell=False (list form) — not vulnerable to shell injection
             cwd=str(MALCHELA_ROOT),  # Required — resolves API keys, YARA rules, Sigma rules
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            env=env,
         )
         stdout = _strip_cli_noise(result.stdout.strip())
         stderr = result.stderr.strip()
@@ -271,6 +284,72 @@ def _register_cli_case_output(tool: str, case_name: str, target: str,
             yaml.dump(meta, fh, default_flow_style=False)
 
 
+_FILENAME_SANITIZE_RE = re.compile(r"[^\w.\-]+")
+
+
+def _rename_case_report(tool: str, case_name: str, display_name: str, window_secs: int = 30) -> None:
+    """Rename the report a tool just wrote inside a case from its default
+    report_<timestamp>.<ext> to <display_name>_<timestamp>.<ext>, so browsing
+    saved_output/cases/<case>/<tool>/ directly shows which source file each
+    report is about instead of an opaque timestamp. Called right after a
+    tool run succeeds, before _read_tool_markdown/_register_cli_case_output
+    — both just find "the most recently modified file in this dir", so
+    renaming first means neither needs to know or care that this happened.
+    Only for Analyze's case-saving path; a report saved outside a case, or
+    saved directly (not via Analyze), keeps its default name.
+
+    Several tools (fileanalyzer, mstrings, tiquery, codesign_check,
+    macho_info, plist_analyzer) self-register into case.yaml from their own
+    Rust code the instant they write the file — before this function ever
+    runs. Renaming out from under that would leave a stale entry pointing at
+    a path that no longer exists (the case browser's "View" link 404ing),
+    on top of _register_cli_case_output adding a second, correct entry right
+    after. So this also drops any existing case.yaml entry for the old path
+    before renaming — the fresh, correct one gets added straight after by
+    the caller, same as it always has."""
+    case_name = _sanitize_case_name(case_name) or case_name
+    case_dir = CASES_DIR / case_name
+    tool_dir = case_dir / tool
+    if not tool_dir.exists():
+        return
+
+    cutoff = datetime.now().timestamp() - window_secs
+    candidates = sorted(
+        [f for f in tool_dir.iterdir() if f.is_file() and f.stat().st_mtime >= cutoff],
+        key=lambda f: f.stat().st_mtime,
+    )
+    if not candidates:
+        return
+    latest = candidates[-1]
+    old_rel_path = f"{tool}/{latest.name}"
+
+    stem = _FILENAME_SANITIZE_RE.sub("_", Path(display_name).stem).strip("_")[:80] or "file"
+    # Reuse the tool's own report_<timestamp> suffix rather than generating a
+    # fresh one — keeps this a pure rename, so calling it twice for the same
+    # file (shouldn't happen, but) can't produce two different names for it.
+    ts_match = re.search(r"report_(\d{8}_\d{6})", latest.stem)
+    ts = ts_match.group(1) if ts_match else datetime.now().strftime("%Y%m%d_%H%M%S")
+    new_path = latest.parent / f"{stem}_{ts}{latest.suffix}"
+    if new_path == latest or new_path.exists():
+        return
+    latest.rename(new_path)
+
+    yaml_file = case_dir / "case.yaml"
+    if not yaml_file.exists():
+        return
+    try:
+        with open(yaml_file) as fh:
+            meta = yaml.safe_load(fh) or {}
+        files = meta.get("files", [])
+        pruned = [f for f in files if f.get("path") != old_rel_path]
+        if len(pruned) != len(files):
+            meta["files"] = pruned
+            with open(yaml_file, "w") as fh:
+                yaml.dump(meta, fh, default_flow_style=False)
+    except Exception:
+        pass  # best-effort cleanup — a stale entry here is a cosmetic issue, not worth failing the run over
+
+
 def safe_path(raw: str) -> Optional[Path]:
     """
     Resolve and jail-check a path against BROWSER_ROOT.
@@ -309,6 +388,16 @@ def read_api_key(filename: str) -> Optional[str]:
     if key_path.exists():
         return key_path.read_text().strip()
     return None
+
+# Offline mode toggle — same storage convention as an API key (a plain file
+# in api/), so it's live-toggleable from the Configuration screen with no
+# server restart, consistent with how every other Configuration setting
+# already works. Checked fresh on every run_binary() call rather than cached
+# at startup.
+_OFFLINE_MODE_FILE = API_DIR / "offline_mode.txt"
+
+def is_offline_mode() -> bool:
+    return _OFFLINE_MODE_FILE.exists() and _OFFLINE_MODE_FILE.read_text().strip() == "1"
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
@@ -653,10 +742,132 @@ def home_screen():
     output = (
         f"{ascii_art}\n"
         f"            https://bakerstreetforensics.com\n\n"
-        f"            MalChela Analysis Toolkit v4.2\n\n"
+        f"            MalChela Analysis Toolkit v4.3\n\n"
         f"{koan}"
     )
     return jsonify({"success": True, "output": output})
+
+
+@app.route("/update_check", methods=["GET"])
+def update_check():
+    """
+    Check whether the local git checkout is behind its remote — the same
+    check malchela/src/main.rs::check_for_updates() used to run in the old
+    TUI. Deliberately its own endpoint, fetched lazily/separately from
+    /home_stats: `git remote update` touches the network and can be slow
+    or hang on a bad connection, so it must never block the rest of the
+    (all-local, instant) stats card. Both git calls are timeout-guarded;
+    any failure or timeout just reports "unknown" rather than erroring.
+    Skips entirely in offline mode — a git fetch is exactly the kind of
+    unprompted egress attempt an air-gapped lab shouldn't see, timeout-
+    guarded or not.
+    """
+    if is_offline_mode():
+        return jsonify({"success": True, "status": "offline"})
+    try:
+        remote_update = subprocess.run(
+            ["git", "remote", "update"],
+            cwd=str(MALCHELA_ROOT),
+            capture_output=True, text=True, timeout=8,
+        )
+        if remote_update.returncode != 0:
+            return jsonify({"success": True, "status": "unknown"})
+
+        status = subprocess.run(
+            ["git", "status", "-uno"],
+            cwd=str(MALCHELA_ROOT),
+            capture_output=True, text=True, timeout=5,
+        )
+        if "branch is behind" in status.stdout:
+            return jsonify({"success": True, "status": "behind"})
+        return jsonify({"success": True, "status": "up_to_date"})
+    except Exception:
+        return jsonify({"success": True, "status": "unknown"})
+
+
+@app.route("/home_stats", methods=["GET"])
+def home_stats():
+    """
+    At-a-glance stats for the Home screen's stats card:
+    case counts, detections.yaml rule count, API key configuration,
+    and MalChela-native-tool vs. third-party-integration availability
+    (reusing the same tools.yaml exec_type/available logic as the
+    sidebar and /tools_yaml).
+    """
+    # Cases: open vs. closed, same status field/default as /cases
+    cases_open = 0
+    cases_closed = 0
+    if CASES_DIR.exists():
+        for case_dir in CASES_DIR.iterdir():
+            if not case_dir.is_dir():
+                continue
+            status = "open"
+            yaml_file = case_dir / "case.yaml"
+            if yaml_file.exists():
+                try:
+                    with open(yaml_file) as f:
+                        meta = yaml.safe_load(f) or {}
+                    status = meta.get("status", "open")
+                except Exception:
+                    pass
+            if status == "closed":
+                cases_closed += 1
+            else:
+                cases_open += 1
+
+    # detections.yaml — count of top-level Sigma-lite rules
+    detections_count = 0
+    detections_path = MALCHELA_ROOT / "detections.yaml"
+    if detections_path.exists():
+        try:
+            with open(detections_path) as f:
+                detections_count = len(yaml.safe_load(f) or {})
+        except Exception:
+            pass
+
+    # API keys — same 12-source list as /api_keys, just a configured/total count
+    api_key_files = [
+        "vt-api.txt", "mb-api.txt", "otx-api.txt", "md-api.txt", "mp-api.txt",
+        "ha-api.txt", "mw-api.txt", "tr-api.txt", "fs-api.txt", "ms-api.txt",
+        "url-api.txt", "gsb-api.txt",
+    ]
+    api_keys_configured = sum(
+        1 for fname in api_key_files
+        if (API_DIR / fname).exists() and (API_DIR / fname).read_text().strip() != ""
+    )
+
+    # Tools: same availability check as /tools_yaml, split into MalChela-native
+    # (exec_type: cargo, checked against our own compiled release binaries) vs.
+    # integrations (anything else in tools.yaml, checked against PATH).
+    malchela_available = malchela_total = 0
+    integrations_available = integrations_total = 0
+    if TOOLS_YAML_PATH.exists():
+        try:
+            with open(TOOLS_YAML_PATH) as f:
+                tools_data = yaml.safe_load(f) or {}
+            for tool in tools_data.get("tools", []):
+                cmd = tool.get("command", [])
+                binary = cmd[0] if cmd else ""
+                exec_type = tool.get("exec_type", "cargo")
+                if exec_type == "cargo":
+                    malchela_total += 1
+                    if (BINARY_DIR / binary).exists():
+                        malchela_available += 1
+                else:
+                    integrations_total += 1
+                    if find_tool(binary) is not None:
+                        integrations_available += 1
+        except Exception:
+            pass
+
+    return jsonify({
+        "success": True,
+        "cases": {"open": cases_open, "closed": cases_closed},
+        "detections": detections_count,
+        "api_keys": {"configured": api_keys_configured, "total": len(api_key_files)},
+        "malchela_tools": {"available": malchela_available, "total": malchela_total},
+        "integrations": {"available": integrations_available, "total": integrations_total},
+    })
 
 
 @app.route("/about", methods=["GET"])
@@ -858,196 +1069,105 @@ def fileanalyzer():
 @app.route("/tools/fileminer", methods=["POST"])
 def fileminer():
     """
-    Scan a folder for file type mismatches and metadata.
-    FileMiner outputs a table then prompts interactively.
-    We capture stdout until the prompt appears, then terminate.
+    Scan a folder for file type mismatches and metadata via FileMiner's
+    --no-prompt JSON mode.
+
+    Previously this spawned fileminer interactively and scraped its
+    pretty-printed box-drawing table, reconstructing cells from fixed
+    column positions derived from the header separator. That broke on long
+    paths: the `tabled` crate word-wraps a cell that doesn't fit its
+    column, and continuation lines get rejoined with no separator (on the
+    assumption a wrap only ever splits mid-word) — when a wrap happens to
+    land on a path's own space character, that space silently vanishes or
+    moves, corrupting the reconstructed full_path (surfaced by dpp_extract's
+    long nested paths: a File Miner suggested-tool button would launch with
+    a mangled path and fail with "no such file", while the identical path
+    typed by hand via Browse worked fine). JSON has no column-width
+    constraint, so this sidesteps the whole bug class rather than patching
+    the reconstruction logic.
     """
     data = request.json or {}
     path = safe_path(data.get("path", ""))
     if not path:
         return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    case_name = _sanitize_case_name(data.get("case_name", "").strip()) or ""
 
-    binary_path = BINARY_DIR / "fileminer"
-    if not binary_path.exists():
-        return jsonify({"success": False, "error": "Binary not found: fileminer"})
+    fm_args = [str(path), "--no-prompt"]
+    if case_name:
+        fm_args += ["--case", case_name]
 
-    import threading
+    result = run_binary("fileminer", fm_args, timeout=120)
+    if not result.get("success"):
+        return jsonify(result)
 
     try:
-        proc = subprocess.Popen(
-            [str(binary_path), str(path)],
-            cwd=str(MALCHELA_ROOT),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        fm_data = json.loads(result["output"])
+    except (ValueError, KeyError) as e:
+        return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
 
-        output_lines = []
-        done = threading.Event()
+    rows = [_scan_result_to_row(r) for r in fm_data.get("results", [])]
 
-        def read_output():
-            for line in proc.stdout:
-                output_lines.append(line)
-                # Stop reading once we hit the interactive prompt
-                if "Select a file" in line or "press 'x'" in line.lower():
-                    break
-            done.set()
-
-        reader = threading.Thread(target=read_output, daemon=True)
-        reader.start()
-
-        # Wait up to 60s for the table to be fully output
-        done.wait(timeout=60)
-
-        # Terminate cleanly
-        try:
-            proc.stdin.write("x\n")
-            proc.stdin.flush()
-        except Exception:
-            pass
-        try:
-            proc.terminate()
-            proc.wait(timeout=3)
-        except Exception:
-            proc.kill()
-
-        output = "".join(output_lines).strip()
-        stderr_out = proc.stderr.read().strip() if proc.stderr else ""
-        if stderr_out:
-            output += f"\n[stderr]\n{stderr_out}"
-
-        rows = _parse_fileminer_output(output)
-
-        import sys
-        if rows:
-            print(f"DEBUG fileminer rows[0]: {rows[0]}", file=sys.stderr)
-
-        return jsonify({
-            "success": True,
-            "output": output,
-            "returncode": 0,
-            "rows": rows,
-        })
-
-    except Exception as e:
-        return jsonify({"success": False, "error": _safe_error(e)})
+    return jsonify({
+        "success": True,
+        "output": result["output"],
+        "returncode": result.get("returncode", 0),
+        "rows": rows,
+    })
 
 
-def _parse_fileminer_output(output: str) -> list:
-    """
-    Parse FileMiner table output using fixed column positions derived from the header row.
-    The table uses fixed-width columns — we find │ positions from the header separator
-    and slice each line accordingly, rather than splitting on │ (which fails on continuation lines).
-    """
-    lines = output.split('\n')
-
-    # Find the header separator line (┌...┐ or ├...┤) to derive column boundary positions
-    col_positions = []
-    for line in lines:
-        if line.startswith('┌') or line.startswith('├'):
-            # Find all │ equivalent positions — in separator lines these are ┬ or ┼
-            positions = [i for i, ch in enumerate(line) if ch in ('┬', '┼', '┐', '┤')]
-            if len(positions) >= 8:
-                col_positions = positions
-                break
-
-    if not col_positions:
-        return []
-
-    # Column slices: from position after previous │ to position of next │
-    # Table structure: │ # │ Filename │ Path │ Type │ Size │ SHA256 │ Ext │ Inferred │ Mismatch │ Suggested │
-    # col_positions gives us the right-edge of each column
-
-    rows = []
-    current_cells = [''] * 9  # 9 data columns (skip row number)
-    in_data = False
-
-    for line in lines:
-        if not line.startswith('│'):
-            if line.startswith('├') or line.startswith('┌'):
-                in_data = True
-            if line.startswith('└') or line.startswith('├'):
-                # Row boundary — save current if populated
-                if any(c.strip() for c in current_cells):
-                    row = _cells_to_row(current_cells)
-                    if row:
-                        rows.append(row)
-                    current_cells = [''] * 9
-            continue
-
-        if not in_data:
-            continue
-
-        # Skip header row
-        if '# ' in line[:6] or 'Filename' in line:
-            continue
-
-        # Use col_positions to slice the line into cells
-        # First cell (index 0) is the row number — skip it
-        # Remaining cells map to our 9 data columns
-        try:
-            prev = 0
-            all_cells = []
-            for pos in col_positions:
-                cell = line[prev+1:pos].strip() if pos <= len(line) else ''
-                all_cells.append(cell)
-                prev = pos
-            # all_cells[0] = row number, [1..9] = data columns
-            if len(all_cells) >= 10:
-                is_new_row = all_cells[0].isdigit()
-                if is_new_row:
-                    if any(c.strip() for c in current_cells):
-                        row = _cells_to_row(current_cells)
-                        if row:
-                            rows.append(row)
-                    current_cells = [all_cells[i] for i in range(1, 10)]
-                else:
-                    # Continuation — append non-empty cells without separator
-                    for i in range(9):
-                        part = all_cells[i+1] if i+1 < len(all_cells) else ''
-                        if part:
-                            # Path-like cells (0=filename, 1=path, 4=sha256): no space
-                            sep = '' if i in (0, 1, 4) else ' '
-                            current_cells[i] = current_cells[i] + sep + part
-        except Exception:
-            continue
-
-    # Don't forget the last row
-    if any(c.strip() for c in current_cells):
-        row = _cells_to_row(current_cells)
-        if row:
-            rows.append(row)
-
-    return rows
+# Mirrors fileminer/src/main.rs's simplify_mime() exactly, for the web UI's
+# "Type" column — that shortening only happens in fileminer's own table
+# renderer, not as a JSON field, so it's replicated here rather than shipped
+# as raw MIME strings.
+_MIME_SIMPLIFY = {
+    "application/vnd.microsoft.portable-executable": "PE-EXE",
+    "application/zip": "ZIP",
+    "application/pdf": "PDF",
+    "image/jpeg": "JPG",
+    "image/png": "PNG",
+    "text/plain": "TXT",
+    "Unknown": "Unknown",
+}
 
 
-def _cells_to_row(cells: list) -> Optional[dict]:
-    """Convert fixed-width sliced cells into a structured dict."""
-    if len(cells) < 4:
-        return None
+def _simplify_mime(mime: str) -> str:
+    return _MIME_SIMPLIFY.get(mime, "Other")
+
+
+def _format_size(n) -> str:
+    """Mirrors fileminer/src/main.rs's format_size() exactly."""
     try:
-        filename = cells[0].strip()
-        path     = cells[1].strip()
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n)
+    if n >= 1_048_576:
+        return f"{n / 1_048_576:.1f} MB"
+    if n >= 1024:
+        return f"{n / 1024:.1f} KB"
+    return f"{n} B"
 
-        # Path cell contains the full path including filename — use directly
-        # Strip any whitespace artifacts from fixed-width slicing
-        full_path = path if path else filename
 
-        return {
-            "filename":  filename,
-            "path":      path,
-            "full_path": full_path,
-            "type":      cells[2].strip() if len(cells) > 2 else "",
-            "size":      cells[3].strip() if len(cells) > 3 else "",
-            "sha256":    cells[4].strip() if len(cells) > 4 else "",
-            "ext":       cells[5].strip() if len(cells) > 5 else "",
-            "inferred":  cells[6].strip() if len(cells) > 6 else "",
-            "mismatch":  cells[7].strip() if len(cells) > 7 else "",
-            "suggested": cells[8].strip() if len(cells) > 8 else "",
-        }
-    except Exception:
-        return None
+def _scan_result_to_row(r: dict) -> dict:
+    """Map a fileminer ScanResult (--no-prompt JSON mode) to the row shape
+    the web UI's File Miner table expects — same field names the old
+    table-scraping code produced, just sourced reliably."""
+    filepath = r.get("filepath", "")
+    suggested = ", ".join(
+        pair[0] for pair in r.get("suggested_tools", [])
+        if isinstance(pair, (list, tuple)) and len(pair) == 2 and isinstance(pair[0], str)
+    )
+    return {
+        "filename":  r.get("filename", ""),
+        "path":      filepath,
+        "full_path": filepath,
+        "type":      _simplify_mime(r.get("actual_type", "")),
+        "size":      _format_size(r.get("size", 0)),
+        "sha256":    r.get("sha256", ""),
+        "ext":       r.get("extension_label", ""),
+        "inferred":  r.get("extension_inferred", ""),
+        "mismatch":  str(bool(r.get("extension_mismatch", False))).lower(),
+        "suggested": suggested,
+    }
 
 
 # ── Analyze (auto-mode) ─────────────────────────────────────────────────────
@@ -1066,6 +1186,19 @@ def _cells_to_row(cells: list) -> Optional[dict]:
 
 _ANALYZE_MAX_FILES = 25  # keep this a synchronous, single-sample/bundle operation;
                          # corpus-scale scans belong to MZHash/MZCount/XMZHash.
+
+# Shared progress state for a running Analyze request, mirroring the
+# _tiquery_progress pattern below. Unlike bulk tiquery, this doesn't need a
+# manual background thread — app.run(threaded=True) already gives the
+# /analyze POST its own thread, so a concurrent GET to /analyze/progress
+# just reads whatever this dict currently holds while that thread runs.
+_analyze_progress = {"running": False, "phase": "", "detail": "", "done": 0, "total": 0}
+
+
+@app.route("/analyze/progress", methods=["GET"])
+def analyze_progress():
+    """Poll progress for a running Analyze request."""
+    return jsonify(_analyze_progress)
 
 
 _ZIP_PASSWORDS = ["", "infected", "malware", "virus"]  # "" tried first = no password
@@ -1105,6 +1238,121 @@ def _maybe_extract_zip(target: Path) -> tuple:
     )
 
 
+def _maybe_extract_dpp(target: Path) -> tuple:
+    """If target is a .dmg or .pkg, shell out to dpp_extract to walk
+    UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO and return the extracted directory
+    as the new analyze target, plus a note for the rollup. Returns
+    (target, None) unchanged if target isn't a .dmg/.pkg."""
+    if target.suffix.lower() not in (".dmg", ".pkg"):
+        return target, None
+
+    extract_dir = target.parent / f"{target.stem}_extracted"
+    shutil.rmtree(extract_dir, ignore_errors=True)
+
+    result = run_binary(
+        "dpp_extract", [str(target), "-o", str(extract_dir), "--json"], timeout=180
+    )
+    if not result.get("success"):
+        raise ValueError(result.get("error", "dpp_extract failed to run"))
+
+    try:
+        summary = json.loads(result["output"])
+    except (ValueError, KeyError) as e:
+        raise ValueError(f"Could not parse dpp_extract output: {e}")
+
+    if not summary.get("success"):
+        raise ValueError(summary.get("error", f"dpp_extract could not unpack {target.name}"))
+
+    note = f"Auto-extracted `{target.name}` via dpp_extract — {summary.get('note', '')}".strip()
+    skipped = summary.get("skipped") or []
+    if skipped:
+        note += f" ({len(skipped)} entries skipped — see dpp_extract output for detail)"
+    return Path(summary["extracted_dir"]), note
+
+
+def _maybe_extract_container(target: Path) -> tuple:
+    """Dispatch to the right auto-extraction step for Analyze's target based
+    on file type: .zip (a directory-based sample uploaded through the PWA's
+    file-only widget) or .dmg/.pkg (an Apple disk image / installer). Returns
+    (target, None) unchanged if target is neither."""
+    zip_target, zip_note = _maybe_extract_zip(target)
+    if zip_note is not None:
+        return zip_target, zip_note
+
+    dpp_target, dpp_note = _maybe_extract_dpp(target)
+    if dpp_note is not None:
+        return dpp_target, dpp_note
+
+    return target, None
+
+
+_NESTED_CONTAINER_EXTS = {".zip", ".dmg", ".pkg"}
+_MAX_NESTED_EXTRACTIONS = 5  # guard against zip bombs / deeply nested archives
+
+
+def _expand_nested_containers(scan_results: list, case_name: str) -> list:
+    """_maybe_extract_container only ever runs on Analyze's top-level target
+    — FileMiner has no suggested_tools branch for a raw .zip/.dmg/.pkg found
+    mid-scan (by design: containers are meant to be unwrapped once, up front,
+    not per-file), so a container discovered while walking a directory just
+    shows suggested_tools: [] and silently gets skipped. That's routine for
+    a sample shipped as a lone .zip inside its own folder (nothing else to
+    find until it's extracted) — no writeup-worthy TTP hides "no suggested
+    tools", it's a gap in this dispatch, not a signal about the sample.
+
+    Extracts any such container in place (reusing the exact same helpers
+    the top-level target uses) and folds a fresh fileminer scan of the
+    extracted directory into scan_results, breadth-first, so a container
+    nested inside an extracted container also gets unwrapped. Capped at
+    _MAX_NESTED_EXTRACTIONS total extractions per Analyze run as a guard
+    against zip bombs or pathological nesting; a password not in the common
+    list is left as-is (surfaces to the user as an unanalyzed file, same as
+    today, rather than failing the whole Analyze run).
+
+    Mutates scan_results in place and returns the list of extraction notes
+    for the rollup."""
+    notes = []
+    queue = list(scan_results)
+    extracted_count = 0
+    seen_dirs = set()
+
+    while queue and extracted_count < _MAX_NESTED_EXTRACTIONS:
+        res = queue.pop(0)
+        if res.get("suggested_tools"):
+            continue
+        p = Path(res.get("filepath", ""))
+        if p.suffix.lower() not in _NESTED_CONTAINER_EXTS:
+            continue
+        try:
+            extracted_dir, note = _maybe_extract_container(p)
+        except ValueError:
+            continue  # e.g. zip password not in the common list — leave as-is
+        if note is None:
+            continue
+        resolved = str(extracted_dir.resolve())
+        if resolved in seen_dirs:
+            continue
+        seen_dirs.add(resolved)
+        extracted_count += 1
+        notes.append(note)
+
+        fm_args = [str(extracted_dir), "--no-prompt"]
+        if case_name:
+            fm_args += ["--case", case_name]
+        fm_result = run_binary("fileminer", fm_args, timeout=120)
+        if not fm_result.get("success"):
+            continue
+        try:
+            fm_data = json.loads(fm_result["output"])
+        except (ValueError, KeyError):
+            continue
+        new_results = fm_data.get("results", [])
+        scan_results.extend(new_results)
+        queue.extend(new_results)  # one of these could itself be a nested container
+
+    return notes
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     """
@@ -1122,120 +1370,162 @@ def analyze():
     if not target.exists():
         return jsonify({"success": False, "error": "Path does not exist"}), 404
 
-    extraction_note = None
+    _analyze_progress.update({"running": True, "phase": "Starting", "detail": target.name, "done": 0, "total": 0})
     try:
-        target, extraction_note = _maybe_extract_zip(target)
-    except ValueError as e:
-        return jsonify({"success": False, "error": str(e)})
-
-    # A .app bundle is a directory on disk, so it's already handled the same
-    # way as any other folder — FileMiner's WalkDir walks into it naturally.
-    single_file_mode = target.is_file()
-    scan_dir = target.parent if single_file_mode else target
-
-    fm_args = [str(scan_dir), "--no-prompt"]
-    if case_name:
-        fm_args += ["--case", case_name]
-
-    fm_result = run_binary("fileminer", fm_args, timeout=120)
-    if not fm_result.get("success"):
-        return jsonify({"success": False, "error": fm_result.get("error", "fileminer failed to run")})
-
-    try:
-        fm_data = json.loads(fm_result["output"])
-    except (ValueError, KeyError) as e:
-        return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
-
-    scan_results = fm_data.get("results", [])
-
-    if single_file_mode:
+        extraction_note = None
         try:
-            target_resolved = target.resolve()
-        except Exception:
-            target_resolved = target
-        scan_results = [
-            r for r in scan_results
-            if _paths_match(r.get("filepath", ""), target_resolved)
-        ]
-        if not scan_results:
-            return jsonify({
-                "success": False,
-                "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
-            })
+            _analyze_progress.update({"phase": "Checking container", "detail": target.name})
+            target, extraction_note = _maybe_extract_container(target)
+        except ValueError as e:
+            return jsonify({"success": False, "error": str(e)})
 
-    if len(scan_results) > _ANALYZE_MAX_FILES:
-        return jsonify({
-            "success": False,
-            "error": (
-                f"{len(scan_results)} files found — Analyze is meant for a single sample or small bundle "
-                f"(limit {_ANALYZE_MAX_FILES} files). For corpus-scale scans, use MZHash/MZCount/XMZHash instead."
-            ),
-        })
+        # A .app bundle is a directory on disk, so it's already handled the same
+        # way as any other folder — FileMiner's WalkDir walks into it naturally.
+        single_file_mode = target.is_file()
+        scan_dir = target.parent if single_file_mode else target
 
-    per_file_results = []
-    for res in scan_results:
-        filepath  = res.get("filepath", "")
-        sha256    = res.get("sha256", "")
-        md5       = res.get("md5", "")
-        suggested = res.get("suggested_tools", [])  # [[label, slug], ...]
+        fm_args = [str(scan_dir), "--no-prompt"]
+        if case_name:
+            fm_args += ["--case", case_name]
 
-        tool_runs = []
-        for pair in suggested:
-            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
-                continue
-            label, slug = pair
+        _analyze_progress.update({"phase": "Scanning with File Miner", "detail": str(scan_dir)})
+        fm_result = run_binary("fileminer", fm_args, timeout=120)
+        if not fm_result.get("success"):
+            return jsonify({"success": False, "error": fm_result.get("error", "fileminer failed to run")})
 
-            if slug == "tiquery":
-                args = [sha256] if sha256 else None
-            elif slug == "nsrlquery":
-                args = [md5] if md5 else None
-            else:
-                args = [filepath]
+        try:
+            fm_data = json.loads(fm_result["output"])
+        except (ValueError, KeyError) as e:
+            return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
 
-            if args is None:
-                tool_runs.append({
-                    "label": label, "tool": slug, "success": False,
-                    "output": "", "error": "Missing hash required for this tool.",
+        scan_results = fm_data.get("results", [])
+
+        if single_file_mode:
+            try:
+                target_resolved = target.resolve()
+            except Exception:
+                target_resolved = target
+            scan_results = [
+                r for r in scan_results
+                if _paths_match(r.get("filepath", ""), target_resolved)
+            ]
+            if not scan_results:
+                return jsonify({
+                    "success": False,
+                    "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
                 })
-                continue
+        else:
+            _analyze_progress.update({"phase": "Expanding nested containers", "detail": str(scan_dir)})
+            nested_notes = _expand_nested_containers(scan_results, case_name)
+            if nested_notes:
+                combined = ([extraction_note] if extraction_note else []) + nested_notes
+                extraction_note = " ".join(combined)
 
-            # Always save a markdown report — case or not — so the rollup can
-            # embed each tool's actual formatted output (headers, tables)
-            # instead of raw CLI stdout. Independent of any case's own
-            # save-format preference; -m is genuinely the richer artifact,
-            # and this is Analyze's own internal read-back, not the user's
-            # saved case file (that's still whatever -m/-t/-j produces).
-            args = args + ["-o", "-m"]
-            if case_name:
-                args = args + ["--case", case_name]
-
-            result = run_binary(slug, args, timeout=90)
-            markdown = _read_tool_markdown(slug, case_name) if result.get("success") else ""
-
-            if case_name and result.get("success"):
-                reg_target = sha256 if slug == "tiquery" else (md5 if slug == "nsrlquery" else filepath)
-                _register_cli_case_output(slug, case_name, reg_target, "md")
-
-            tool_runs.append({
-                "label":    label,
-                "tool":     slug,
-                "success":  result.get("success", False),
-                "output":   result.get("output", ""),
-                "error":    result.get("error", ""),
-                "markdown": markdown,
+        if len(scan_results) > _ANALYZE_MAX_FILES:
+            # Too many files to auto-run every suggested tool on every one —
+            # routine for a dpp-extracted PKG payload (a trojanized installer
+            # commonly bundles the full legitimate app it trojanized alongside
+            # the injected malicious file(s); EvilQuest: 624 files for one
+            # Mach-O of actual interest) but can happen pointed straight at a
+            # folder too. Hand off to File Miner's own interactive per-file
+            # table (real per-row "run this tool" buttons) instead of either
+            # erroring out or building a static, non-interactive summary here.
+            return jsonify({
+                "success": True,
+                "redirect_to_fileminer": True,
+                "target": str(target),
+                "file_count": len(scan_results),
+                "extraction_note": extraction_note,
             })
 
-        per_file_results.append({
-            "filename": res.get("filename", ""),
-            "filepath": filepath,
-            "filetype": res.get("filetype", ""),
-            "sha256":   sha256,
-            "md5":      md5,
-            "tool_runs": tool_runs,
-        })
+        _analyze_progress["total"] = len(scan_results)
 
-    rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note)
+        per_file_results = []
+        for file_idx, res in enumerate(scan_results):
+            filepath  = res.get("filepath", "")
+            filename  = res.get("filename", "")
+            sha256    = res.get("sha256", "")
+            md5       = res.get("md5", "")
+            suggested = res.get("suggested_tools", [])  # [[label, slug], ...]
 
+            tool_runs = []
+            for pair in suggested:
+                if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                    continue
+                label, slug = pair
+
+                if slug == "tiquery":
+                    args = [sha256] if sha256 else None
+                elif slug == "nsrlquery":
+                    args = [md5] if md5 else None
+                else:
+                    args = [filepath]
+
+                if args is None:
+                    tool_runs.append({
+                        "label": label, "tool": slug, "success": False,
+                        "output": "", "error": "Missing hash required for this tool.",
+                    })
+                    continue
+
+                _analyze_progress.update({
+                    "phase": f"Running {label} on {filename}",
+                    "detail": filename,
+                    "done": file_idx,
+                })
+
+                # Always save a markdown report — case or not — so the rollup can
+                # embed each tool's actual formatted output (headers, tables)
+                # instead of raw CLI stdout. Independent of any case's own
+                # save-format preference; -m is genuinely the richer artifact,
+                # and this is Analyze's own internal read-back, not the user's
+                # saved case file (that's still whatever -m/-t/-j produces).
+                args = args + ["-o", "-m"]
+                if case_name:
+                    args = args + ["--case", case_name]
+
+                result = run_binary(slug, args, timeout=90)
+
+                if case_name and result.get("success"):
+                    _rename_case_report(slug, case_name, filename)
+
+                markdown = _read_tool_markdown(slug, case_name) if result.get("success") else ""
+
+                if case_name and result.get("success"):
+                    reg_target = sha256 if slug == "tiquery" else (md5 if slug == "nsrlquery" else filepath)
+                    _register_cli_case_output(slug, case_name, reg_target, "md")
+
+                tool_runs.append({
+                    "label":    label,
+                    "tool":     slug,
+                    "success":  result.get("success", False),
+                    "output":   result.get("output", ""),
+                    "error":    result.get("error", ""),
+                    "markdown": markdown,
+                })
+
+            per_file_results.append({
+                "filename": filename,
+                "filepath": filepath,
+                "filetype": res.get("filetype", ""),
+                "sha256":   sha256,
+                "md5":      md5,
+                "tool_runs": tool_runs,
+            })
+            _analyze_progress["done"] = file_idx + 1
+
+        _analyze_progress.update({"phase": "Building rollup report", "detail": ""})
+        rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note)
+        return _save_analyze_rollup(target, case_name, per_file_results, rollup_md, extraction_note)
+    finally:
+        _analyze_progress["running"] = False
+
+
+def _save_analyze_rollup(target: Path, case_name: str, per_file_results: list,
+                          rollup_md: str, extraction_note: Optional[str]):
+    """Shared tail for both analyze() paths (full per-file tool run, and the
+    over-cap FileMiner-only fallback): save the rollup, register it with the
+    case if there is one, and build the JSON response."""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     # The "analyze" subfolder matters here, not just cosmetically: it's what
     # lets _register_cli_case_output("analyze", ...) below find the file it
@@ -1279,13 +1569,15 @@ def _read_tool_markdown(tool: str, case_name: str) -> str:
     """Read back the .md report a tool just wrote (Analyze always requests
     -o -m, case or not — see the dispatch loop below) so the rollup can embed
     genuinely formatted content instead of raw CLI stdout. Picks the
-    most-recently-modified report_*.md in the tool's output dir; safe because
+    most-recently-modified .md in the tool's output dir; safe because
     dispatch is fully sequential — nothing else writes there between this
-    tool's run and this read."""
+    tool's run and this read. Not anchored to the report_*.md default name:
+    for a case run, _rename_case_report() has already renamed it to
+    <source-filename>_<timestamp>.md by the time this runs."""
     tool_dir = (CASES_DIR / case_name / tool) if case_name else (OUTPUT_DIR / tool)
     if not tool_dir.exists():
         return ""
-    md_files = sorted(tool_dir.glob("report_*.md"), key=lambda p: p.stat().st_mtime)
+    md_files = sorted(tool_dir.glob("*.md"), key=lambda p: p.stat().st_mtime)
     return md_files[-1].read_text() if md_files else ""
 
 
@@ -1363,6 +1655,23 @@ _MSTRINGS_NET_IOC_BLOCK = re.compile(r"## Potential Network IOCs\n\n((?:- `.+`\n
 _MD_BACKTICK_BULLET = re.compile(r"- `(.+)`")
 
 
+def _defang(ioc: str) -> str:
+    """Defang a network IOC before it's ever displayed — standard analyst
+    practice (hxxp(s):// keeps the scheme unresolvable, [.] stops chat/
+    email clients and copy-paste from treating it as a live link/domain).
+    Applied only where net_iocs get formatted for display; the underlying
+    value stored in net_iocs stays intact for anything that needs the real
+    string. Filesystem IOCs and filenames elsewhere in the rollup are never
+    touched — this is deliberately scoped to network indicators only.
+    Idempotent: mstrings now defangs its own "Potential Network IOCs"
+    section, so this rollup re-extracts already-defanged text out of that
+    markdown — bail out early rather than double-defang "[.]" into "[[.]]"."""
+    if "[.]" in ioc or "hxxp" in ioc.lower():
+        return ioc
+    s = ioc.replace("http://", "hxxp://").replace("https://", "hxxps://").replace("ftp://", "fxxp://")
+    return s.replace(".", "[.]")
+
+
 def _extract_mstrings_iocs(markdown: str) -> tuple:
     """Pull filesystem/network IOC bullets out of mstrings' own markdown
     sections ('## Potential Filesystem IOCs' / '## Potential Network IOCs',
@@ -1372,6 +1681,20 @@ def _extract_mstrings_iocs(markdown: str) -> tuple:
         m = block_pattern.search(markdown)
         return _MD_BACKTICK_BULLET.findall(m.group(1)) if m else []
     return _bullets(_MSTRINGS_FS_IOC_BLOCK), _bullets(_MSTRINGS_NET_IOC_BLOCK)
+
+
+_MD_OBFUSCATION_LAYERS = re.compile(r"found after (\d+) layers of base64 decoding")
+
+
+def _extract_max_obfuscation_layers(markdown: str) -> int:
+    """Highest base64 re-encoding depth mstrings had to peel through to
+    reach any detection in this file (0 if none). mstrings only annotates a
+    row this way at >1 layer — a single decode is routine and not itself a
+    tell — so any nonzero result here is already meaningful: the malware
+    deliberately re-encoded its payload multiple times, not just used
+    base64 for convenience."""
+    layers = [int(n) for n in _MD_OBFUSCATION_LAYERS.findall(markdown)]
+    return max(layers) if layers else 0
 
 
 def _flag_verdict(tool_runs: list) -> tuple:
@@ -1414,22 +1737,32 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
             order.append(key)
         groups[key].append(f)
 
-    flagged = []
+    # Anchor ids keyed by the SHA256/filepath dedup key (not by filename) —
+    # avoids any ambiguity if two different files happen to share a bare
+    # filename in different subfolders. marked.js (the PWA's renderer)
+    # passes raw inline HTML through unsanitized, so an explicit <a id=...>
+    # works without needing a heading-slug algorithm to stay in sync between
+    # this generator and the renderer.
+    anchor_by_key = {key: f"file-{idx}" for idx, key in enumerate(order)}
+
+    flagged = []  # (filename, anchor)
     dup_groups = []
     mitre_tactics: dict = {}
     mitre_total = 0
     malware_tags: list = []
     malware_tags_seen: set = set()
-    flag_findings: list = []  # (filename, tool, flag_text)
-    fs_iocs: list = []
+    flag_findings: list = []  # (filename, tool, flag_text, anchor)
+    fs_iocs: list = []  # (ioc, anchor of the first file it was found in)
     fs_iocs_seen: set = set()
-    net_iocs: list = []
+    net_iocs: list = []  # (ioc, anchor of the first file it was found in)
     net_iocs_seen: set = set()
+    obfuscation_findings: list = []  # (filename, max_layers)
     for key in order:
         members = groups[key]
+        anchor = anchor_by_key[key]
         is_flagged, reason = _flag_verdict(members[0]["tool_runs"])
         if is_flagged:
-            flagged.append(members[0]["filename"])
+            flagged.append((members[0]["filename"], anchor))
         if len(members) > 1:
             dup_groups.append(members)
         for run in members[0]["tool_runs"]:
@@ -1442,11 +1775,14 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
                 for ioc in fs:
                     if ioc not in fs_iocs_seen:
                         fs_iocs_seen.add(ioc)
-                        fs_iocs.append(ioc)
+                        fs_iocs.append((ioc, anchor))
                 for ioc in net:
                     if ioc not in net_iocs_seen:
                         net_iocs_seen.add(ioc)
-                        net_iocs.append(ioc)
+                        net_iocs.append((ioc, anchor))
+                max_layers = _extract_max_obfuscation_layers(run["markdown"])
+                if max_layers > 1:
+                    obfuscation_findings.append((members[0]["filename"], max_layers))
             if is_flagged and run.get("tool") == "tiquery" and run.get("success") and run.get("markdown"):
                 for tag in _extract_tiquery_tags(run["markdown"]):
                     if tag not in malware_tags_seen:
@@ -1454,7 +1790,7 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
                         malware_tags.append(tag)
             if run.get("success") and run.get("markdown") and run.get("tool") in ("macho_info", "plist_analyzer", "codesign_check"):
                 for flag_text in _extract_flags(run["tool"], run["markdown"]):
-                    flag_findings.append((members[0]["filename"], run["tool"], flag_text))
+                    flag_findings.append((members[0]["filename"], run["tool"], flag_text, anchor))
 
     lines = [
         f"# MalChela Summary — {target}",
@@ -1469,6 +1805,13 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
         "## Triage Summary",
         "",
     ]
+    if order:
+        lines.append(
+            "_Links below jump to that finding's section further down this report — "
+            "they do not open the indicator itself. Network indicators are defanged "
+            "(hxxp, `[.]`)._"
+        )
+        lines.append("")
     if len(order) != len(per_file_results):
         lines.append(
             f"- **{len(order)} unique file(s)** across {len(per_file_results)} path(s) "
@@ -1477,7 +1820,8 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     else:
         lines.append(f"- **{len(order)} file(s)** analyzed")
     if flagged:
-        lines.append(f"- **⚠ {len(flagged)} flagged malicious** (VirusTotal): " + ", ".join(f"`{n}`" for n in flagged))
+        lines.append(f"- **⚠ {len(flagged)} flagged malicious** (VirusTotal): "
+                      + ", ".join(f"[`{n}`](#{a})" for n, a in flagged))
     else:
         lines.append("- No files flagged malicious by VirusTotal")
     if malware_tags:
@@ -1487,14 +1831,17 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
         breakdown = ", ".join(f"{t} ({c})" for t, c in by_tactic)
         lines.append(f"- **{mitre_total} MITRE ATT&CK finding(s)** (mstrings), by tactic: {breakdown}")
     if fs_iocs:
-        lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in fs_iocs))
+        lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"[`{i}`](#{a})" for i, a in fs_iocs))
     if net_iocs:
-        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"`{i}`" for i in net_iocs))
+        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"[`{_defang(i)}`](#{a})" for i, a in net_iocs))
+    if obfuscation_findings:
+        detail = ", ".join(f"`{n}` ({layers} layers)" for n, layers in obfuscation_findings)
+        lines.append(f"- **⚠ Multi-layer obfuscation detected** (mstrings): {detail}")
     if flag_findings:
         flagged_files = len({f[0] for f in flag_findings})
         lines.append(f"- **{len(flag_findings)} flag(s)/indicator(s)** across {flagged_files} file(s):")
-        for filename, tool, text in flag_findings:
-            lines.append(f"  - `{filename}` ({tool}): {text}")
+        for filename, tool, text, anchor in flag_findings:
+            lines.append(f"  - [`{filename}`](#{anchor}) ({tool}): {text}")
     for members in dup_groups:
         names = ", ".join(f"`{m['filename']}`" for m in members)
         lines.append(f"- **Duplicate content:** {names} share SHA256 `{members[0]['sha256']}`")
@@ -1503,6 +1850,7 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     for key in order:
         members = groups[key]
         primary = members[0]
+        lines.append(f'<a id="{anchor_by_key[key]}"></a>')
         lines.append(f"## {primary['filename']}")
         lines.append("")
         if len(members) > 1:
@@ -1836,6 +2184,21 @@ def extract_samples():
     if password:
         args.append(password)
     return jsonify(run_binary("extract_samples", args))
+
+
+@app.route("/tools/dpp_extract", methods=["POST"])
+def dpp_extract():
+    """Unwrap a .dmg/.pkg container (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO)
+    to reach the real payload files inside. Args: path [case_name]"""
+    data = request.json or {}
+    path = safe_path(data.get("path", ""))
+    if not path:
+        return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    case_name = _sanitize_case_name(data.get("case_name", "").strip()) or ""
+    args = [str(path)]
+    if case_name:
+        args += ["--case", case_name]
+    return jsonify(run_binary("dpp_extract", args, timeout=180))
 
 
 @app.route("/tools/strings_to_yara", methods=["POST"])
@@ -2395,6 +2758,35 @@ def set_api_key(key_id):
     path.write_text(value + "\n" if value else "")
 
     return jsonify({"success": True, "configured": bool(value)})
+
+
+@app.route("/offline_mode", methods=["GET"])
+def get_offline_mode():
+    """Report whether offline/air-gapped mode is currently enabled."""
+    return jsonify({"success": True, "enabled": is_offline_mode()})
+
+
+@app.route("/offline_mode", methods=["POST"])
+def set_offline_mode():
+    """Toggle offline/air-gapped mode. Takes effect immediately — no server
+    restart needed. Also sets it on this process's own environment (not
+    just injected per-subprocess in run_binary()) so any other subprocess
+    call site in this file inherits it automatically, present or future."""
+    data = request.json or {}
+    enabled = bool(data.get("enabled"))
+
+    API_DIR.mkdir(parents=True, exist_ok=True)
+    _OFFLINE_MODE_FILE.write_text("1" if enabled else "0")
+
+    if enabled:
+        os.environ["MALCHELA_OFFLINE"] = "1"
+    else:
+        os.environ.pop("MALCHELA_OFFLINE", None)
+
+    return jsonify({"success": True, "enabled": enabled})
+
+
+@app.route("/read_file", methods=["POST"])
 def read_file():
     """Read any file within the browser jail — used by View Reports."""
     data = request.json or {}
@@ -2906,4 +3298,10 @@ if __name__ == "__main__":
     import logging
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)  # Suppress the dev server warning
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+    # threaded=True is required for progress polling (Analyze, bulk tiquery)
+    # to work at all: those routes hold one request open for the whole run
+    # while the frontend polls a separate GET endpoint for status. Without
+    # this the dev server handles one request at a time and the poll just
+    # queues up behind the long-running POST, making the progress bar a
+    # silent no-op that only ever reports the final state.
+    app.run(host="0.0.0.0", port=PORT, debug=False, threaded=True)

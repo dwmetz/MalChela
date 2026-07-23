@@ -7,22 +7,40 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MalChela">
 <meta name="theme-color" content="#1a1a1a">
-<title>MalChela Analysis Toolkit v4.2</title>
+<title>MalChela Analysis Toolkit v4.3</title>
 <link rel="manifest" href="manifest.json">
 <script src="marked.min.js"></script>
-<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/dwmetz/MalChela/main/assets/malchela_icon.png">
-<link rel="apple-touch-icon" href="https://raw.githubusercontent.com/dwmetz/MalChela/main/assets/malchela_icon.png">
+<link rel="icon" type="image/png" href="/icons/malchela_icon.png">
+<link rel="apple-touch-icon" href="/icons/malchela_icon.png">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+  /* Vendored locally (SIL OFL licensed) instead of loading from
+     fonts.googleapis.com — both are variable fonts, so the "latin" subset
+     file covers weights 300-700 via a single @font-face with a weight
+     range; the browser selects the right instance from the variable axis. */
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: url('/fonts/JetBrainsMono-latin.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Share Tech Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/ShareTechMono-latin.woff2') format('woff2');
+  }
 
   :root {
-    --bg-primary:    #1a1a1a;
-    --bg-secondary:  #232323;
-    --bg-panel:      #1e1e1e;
-    --bg-input:      #2a2a2a;
-    --bg-hover:      #2e2e2e;
-    --border:        #333;
-    --border-light:  #3a3a3a;
+    --bg-primary:    #15161d;
+    --bg-secondary:  #1e1f26;
+    --bg-panel:      #191a21;
+    --bg-console:    #16171d;
+    --bg-input:      #25262d;
+    --bg-hover:      #292a31;
+    --border:        #2e2f36;
+    --border-light:  #35363d;
     --cyan:          #00bcd4;
     --cyan-dim:      #007a8a;
     --orange:        #e87c3e;
@@ -62,8 +80,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: var(--header-height);
-    padding: 0 16px;
+    min-height: var(--header-height);
+    padding: env(safe-area-inset-top) 16px 0;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -231,6 +249,13 @@
     flex-direction: column;
     overflow-y: auto;
     flex-shrink: 0;
+    transition: width 0.15s ease;
+  }
+  #sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-right: none;
   }
   #sidebar::-webkit-scrollbar { width: 4px; }
   #sidebar::-webkit-scrollbar-track { background: transparent; }
@@ -445,6 +470,7 @@
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-all;
+    background: var(--bg-console);
   }
   #output-content::-webkit-scrollbar { width: 6px; }
   #output-content::-webkit-scrollbar-track { background: transparent; }
@@ -743,11 +769,12 @@
 
   /* ── Footer ── */
   #footer {
-    height: 24px;
+    min-height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
+    padding-bottom: env(safe-area-inset-bottom);
     font-size: 10px;
     color: var(--text-dim);
     border-top: 1px solid var(--border);
@@ -1273,6 +1300,8 @@
   .fm-tool-btn:hover { border-color: var(--cyan); color: var(--cyan); }
   .fm-tool-done { border-color: var(--green); color: var(--green); }
   .fm-tool-done:hover { border-color: var(--green); color: var(--green); opacity: 0.75; }
+  .fm-tool-analyze { color: var(--orange); border-color: var(--orange-dim); }
+  .fm-tool-analyze:hover { border-color: var(--orange); color: var(--orange); }
 
   /* ── TI Query tabs ── */
   .ti-tab {
@@ -1301,10 +1330,13 @@
 
   <!-- Header -->
   <div id="header">
-    <h1>MalChela <span>Analysis Toolkit</span> <span style="color:var(--text-dim);font-weight:300">v4.2</span></h1>
+    <h1>MalChela <span>Analysis Toolkit</span> <span style="color:var(--text-dim);font-weight:300">v4.3</span></h1>
 
     <div id="header-toolbar">
       <button class="tb-btn" onclick="showHome(event)" title="Home"><img src="/icons/home.svg"></button>
+      <button class="tb-btn" onclick="openAnalyzeBrowser()" title="Analyze"><img src="/icons/analyze.png"></button>
+      <button class="tb-btn" onclick="showCases(event)" title="Cases"><img src="/icons/cases.png"></button>
+      <button class="tb-btn" id="tb-sidebar-toggle" onclick="toggleSidebar(event)" title="Hide Tools Panel"><img src="/icons/hide.png"></button>
       <button class="tb-btn" onclick="showAbout(event)" title="About"><img src="/icons/about.svg"></button>
       <div class="tb-divider"></div>
       <div style="position:relative">
@@ -1327,6 +1359,9 @@
         <button class="tb-btn" id="tb-overflow-btn" onclick="toggleTbOverflow(event)" title="More">⋯</button>
         <div id="tb-overflow-dropdown">
           <button class="tb-dropdown-item" onclick="showHome(event);closeTbDropdowns()">⌂ Home</button>
+          <button class="tb-dropdown-item" onclick="openAnalyzeBrowser();closeTbDropdowns()">▶ Analyze</button>
+          <button class="tb-dropdown-item" onclick="showCases(event);closeTbDropdowns()">⊞ Cases</button>
+          <button class="tb-dropdown-item" onclick="toggleSidebar();closeTbDropdowns()">☰ Toggle Tools Panel</button>
           <button class="tb-dropdown-item" onclick="showAbout(event);closeTbDropdowns()">◉ About</button>
           <button class="tb-dropdown-item" onclick="showConfig(event);closeTbDropdowns()">⚙ Server Config</button>
           <button class="tb-dropdown-item" onclick="showApiKeys(event);closeTbDropdowns()">🔑 API Keys</button>
@@ -1353,26 +1388,12 @@
     <div id="sidebar">
 
       <div class="sidebar-section">
-        <div class="sidebar-section-label">Analyze</div>
-        <button class="sidebar-btn" onclick="openAnalyzeBrowser()" title="Auto-run every tool FileMiner suggests for a file, folder, or bundle, plus a combined rollup report">
-          <span class="icon">▶</span> Select Target
-        </button>
-      </div>
-
-      <div class="sidebar-section">
-        <div class="sidebar-section-label">Case Management</div>
-        <button class="sidebar-btn" onclick="showCases(event)">
-          <span class="icon">⊞</span> Cases
-        </button>
-      </div>
-
-      <div class="sidebar-section">
         <div style="display:flex;align-items:center;padding:10px 8px 4px">
           <div class="sidebar-section-label" style="flex:1;padding:0">Tools</div>
           <button onclick="expandAllCategories()" title="Expand all"
-            style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:10px;padding:2px 4px">▼▼</button>
+            style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:10px;padding:2px 4px">▼</button>
           <button onclick="collapseAllCategories()" title="Collapse all"
-            style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:10px;padding:2px 4px">▲▲</button>
+            style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:10px;padding:2px 4px">▲</button>
         </div>
         <div id="dynamic-tools-sidebar">
           <div style="padding:8px 4px;font-size:10px;color:var(--text-dim)">Loading tools…</div>
@@ -1445,6 +1466,17 @@
           <div>Point this at the host running <span style="color:var(--cyan)">malchela_server.py</span>.</div>
           <div>Default: <span style="color:var(--cyan)">http://localhost:8675</span></div>
           <div style="margin-top:8px">Ensure the server is running and reachable from this device.</div>
+        </div>
+
+        <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" id="cfg-offline-mode" onchange="toggleOfflineMode(this.checked)">
+            Offline / air-gapped mode
+          </label>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-dim);line-height:1.8">
+            <div>Skips every network call the toolkit makes on its own — NSRL/CIRCL lookups, tiquery's threat-intel sources, FileAnalyzer's VirusTotal check, and the update check — at the source, before any connection is attempted.</div>
+            <div style="margin-top:4px">Takes effect immediately, no restart needed. Doesn't affect anything a sample itself might do if executed — this only covers MalChela's own lookups.</div>
+          </div>
         </div>
       </div>
 
@@ -1661,7 +1693,8 @@ const CARGO_ENDPOINTS = {
   mzhash: '/tools/mzhash', mzcount: '/tools/mzcount', xmzhash: '/tools/xmzhash',
   mstrings: '/tools/mstrings', nsrlquery: '/tools/nsrlquery',
   tiquery: '/tools/tiquery', malhash: '/tools/malhash',
-  extract_samples: '/tools/extract_samples', combine_yara: '/tools/combine_yara',
+  extract_samples: '/tools/extract_samples', dpp_extract: '/tools/dpp_extract',
+  combine_yara: '/tools/combine_yara',
   strings_to_yara: '/tools/strings_to_yara',
   plist_analyzer: '/tools/plist_analyzer', macho_info: '/tools/macho_info',
   codesign_check: '/tools/codesign_check',
@@ -2419,6 +2452,61 @@ function stopTiqueryProgressPolling() {
   _tiqueryProgressTimer = null;
 }
 
+// ── Analyze Progress ─────────────────────────────────────────────────────────
+// Same shared-dict-plus-polling pattern as bulk TIQuery above, but Analyze
+// doesn't batch a single count — it has named phases (container extraction,
+// FileMiner scan, then one line per tool per file) since a tiquery-heavy
+// target can take minutes with no other feedback otherwise.
+
+let _analyzeProgressTimer = null;
+// clearInterval only stops *future* ticks — a tick already in flight (its
+// await api(...) mid-fetch) keeps running and will still call setOutput()
+// when it resolves, even after the main /analyze request has already
+// rendered the final results. That race is what caused the progress bar to
+// reach 100% and then silently overwrite the just-rendered results a beat
+// later. This flag closes the window: markAnalyzeFinished() is called the
+// instant runAnalyze() has its final response, before any rendering, and
+// every poll tick checks it again right after its own await resolves —
+// not just before starting — so a tick already in flight when the flag
+// flips still bails out instead of overwriting the final output.
+let _analyzeFinished = false;
+
+function startAnalyzeProgressPolling() {
+  clearInterval(_analyzeProgressTimer);
+  _analyzeFinished = false;
+  setOutput('<span class="out-dim">Starting Analyze…</span>');
+  _analyzeProgressTimer = setInterval(async () => {
+    if (_analyzeFinished) { stopAnalyzeProgressPolling(); return; }
+    try {
+      const data = await api('/analyze/progress');
+      if (_analyzeFinished) return; // finished while this poll was in flight — don't stomp the real output
+      if (!data.running && !data.total && !data.phase) return;
+      const lines = [`<span class="out-dim">${escHtml(data.phase || 'Working…')}</span>`];
+      if (data.detail) lines.push(`<span class="out-dim">${escHtml(data.detail)}</span>`);
+      if (data.total) {
+        const pct = Math.round((data.done / data.total) * 100);
+        const filled = Math.floor(pct / 5);
+        const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
+        lines.push('');
+        lines.push(`<span style="color:var(--cyan);font-family:var(--font-mono);font-size:14px">${bar} ${pct}%</span>`);
+        lines.push(`<span class="out-dim">${data.done} of ${data.total} file(s) complete</span>`);
+      }
+      setOutput(lines.join('\n'));
+      if (!data.running) stopAnalyzeProgressPolling();
+    } catch(e) { stopAnalyzeProgressPolling(); }
+  }, 1000);
+}
+
+function stopAnalyzeProgressPolling() {
+  clearInterval(_analyzeProgressTimer);
+  _analyzeProgressTimer = null;
+}
+
+function markAnalyzeFinished() {
+  _analyzeFinished = true;
+  stopAnalyzeProgressPolling();
+}
+
 // ── TI Query Tab Switcher ──────────────────────────────────────────────────
 
 let tiMode = 'hash';
@@ -2752,9 +2840,13 @@ function renderFileminerTable(rows) {
     const tools = row.suggested
       ? row.suggested.split(',').map(t => t.trim()).filter(Boolean)
       : [];
-    const toolBtns = tools.map(t => {
+    const fullPath = row.full_path || (row.path + '/' + row.filename);
+    const analyzeBtn = tools.length ? `<button class="fm-tool-btn fm-tool-analyze"
+        onclick="analyzeFromFileminer('${escHtml(fullPath)}')"
+        title="Open Analyze for this file — runs every suggested tool below in one pass, plus a combined rollup report"
+        >Analyze</button>` : '';
+    const toolBtns = analyzeBtn + tools.map(t => {
       const toolId = TOOL_MAP[t.toLowerCase()] || t.toLowerCase();
-      const fullPath = row.full_path || (row.path + '/' + row.filename);
       const done = fmExecutedTools.has(`${toolId}::${fullPath}`);
       return `<button class="fm-tool-btn${done ? ' fm-tool-done' : ''}"
         onclick="launchFromFileminer('${escHtml(toolId)}','${escHtml(fullPath)}','${escHtml(row.sha256)}')"
@@ -2826,6 +2918,16 @@ function launchFromFileminer(toolId, filePath, sha256) {
       if (pathInput) pathInput.value = filePath;
     }
   }, 50);
+}
+
+function analyzeFromFileminer(filePath) {
+  // Populates the Analyze panel with this file and stops there — same
+  // pattern as launchFromFileminer's per-tool buttons — so the user has a
+  // chance to check Save to Case (and pick which case) before clicking Run.
+  // Auto-running immediately would skip that: Save to Case is opt-in and
+  // read at Run time, so firing the run here would always save nothing on
+  // the first pass, forcing a second run just to get it saved to a case.
+  showAnalyzePanel(filePath);
 }
 
 // ── FileMiner Session Persistence ─────────────────────────────────────────
@@ -3817,7 +3919,7 @@ async function runAnalyze(path) {
   }
 
   if (btn) { btn.textContent = 'Running…'; btn.classList.add('running'); btn.disabled = true; }
-  setOutput('<span class="out-dim">Running FileMiner and dispatching suggested tools — this can take a bit for several files…</span>\n');
+  startAnalyzeProgressPolling();
 
   try {
     // Not using the shared api() helper here on purpose: if the server
@@ -3832,6 +3934,11 @@ async function runAnalyze(path) {
       body: JSON.stringify({ path, case_name: selectedCase }),
     });
     const bodyText = await res.text();
+    // Mark finished the instant we have any response body, before any
+    // rendering below — closes the race where a progress-poll tick already
+    // in flight resolves a moment later and overwrites what we're about to
+    // render. See the comment on _analyzeFinished above.
+    markAnalyzeFinished();
     if (!res.ok) {
       console.error('[Analyze] HTTP', res.status, bodyText);
       setOutput(
@@ -3854,6 +3961,28 @@ async function runAnalyze(path) {
       return;
     }
 
+    if (data.success && data.redirect_to_fileminer) {
+      // Too many files for Analyze's own auto-run (routine for a
+      // dpp-extracted DMG/PKG payload, but can happen for a plain folder
+      // too) — hand off to File Miner's own interactive per-file table
+      // (real per-row "run this tool" buttons) instead of a static summary.
+      showToast(
+        `${data.file_count} file(s) found — over the auto-run cap, opening in File Miner`,
+        'success'
+      );
+      lastRows = [];
+      fmLastPath = '';
+      selectTool('fileminer');
+      // Match launchFromFileminer's handoff pattern: give the freshly
+      // rendered File Miner panel a beat before touching its DOM.
+      setTimeout(() => {
+        const pathInput = document.getElementById('path-input');
+        if (pathInput) pathInput.value = data.target;
+        runTool();
+      }, 50);
+      return;
+    }
+
     if (data.success) {
       if (conciseOutput && data.rollup_content) {
         renderMarkdownOutput(data.rollup_content);
@@ -3869,10 +3998,15 @@ async function runAnalyze(path) {
       showToast(data.error || 'Analyze failed', 'error');
     }
   } catch (e) {
+    // fetch() itself threw (network error, before any response body) — the
+    // early markAnalyzeFinished() below never ran for this path, so set the
+    // flag here too before rendering the error.
+    markAnalyzeFinished();
     console.error('[Analyze] Exception:', e);
     setOutput(`<span class="out-red">Network error: ${escHtml(e.name + ': ' + e.message)}</span>`);
     showToast('Analyze failed: ' + e.message, 'error');
   } finally {
+    markAnalyzeFinished();
     if (btn) { btn.textContent = 'Run'; btn.classList.remove('running'); btn.disabled = false; }
   }
 }
@@ -4442,6 +4576,24 @@ function showConfig(e) {
   document.getElementById('apikeys-screen').classList.remove('active');
   document.getElementById('toolsyaml-screen').style.display = 'none';
   document.getElementById('cfg-server-url').value = serverUrl;
+  api('/offline_mode').then(data => {
+    if (data?.success) document.getElementById('cfg-offline-mode').checked = !!data.enabled;
+  }).catch(() => {});
+}
+
+async function toggleOfflineMode(enabled) {
+  try {
+    const data = await api('/offline_mode', { method: 'POST', body: JSON.stringify({ enabled }) });
+    if (data.success) {
+      showToast(enabled ? 'Offline mode enabled' : 'Offline mode disabled', 'success');
+    } else {
+      showToast('Could not update offline mode', 'error');
+      document.getElementById('cfg-offline-mode').checked = !enabled;
+    }
+  } catch (e) {
+    showToast('Could not update offline mode: ' + e.message, 'error');
+    document.getElementById('cfg-offline-mode').checked = !enabled;
+  }
 }
 
 function saveConfig() {
@@ -5089,6 +5241,15 @@ function closeTbDropdowns() {
   document.getElementById('tb-overflow-dropdown')?.classList.remove('open');
 }
 
+function toggleSidebar(e) {
+  e?.stopPropagation();
+  const sidebar = document.getElementById('sidebar');
+  const collapsed = sidebar.classList.toggle('collapsed');
+  localStorage.setItem('malchela_sidebar_collapsed', collapsed ? '1' : '0');
+  const btn = document.getElementById('tb-sidebar-toggle');
+  if (btn) btn.title = collapsed ? 'Show Tools Panel' : 'Hide Tools Panel';
+}
+
 // Close dropdowns when clicking elsewhere
 document.addEventListener('click', () => closeTbDropdowns());
 
@@ -5501,10 +5662,14 @@ async function showHome(e) {
   setOutput('<span class="out-dim">Loading home screen…</span>');
 
   try {
-    const res = await fetch(serverUrl + '/home', { method: 'GET' });
+    const [res, statsRes] = await Promise.all([
+      fetch(serverUrl + '/home', { method: 'GET' }),
+      fetch(serverUrl + '/home_stats', { method: 'GET' }).catch(() => null),
+    ]);
     const data = await res.json();
+    const stats = statsRes ? await statsRes.json().catch(() => null) : null;
     if (data.success) {
-      renderHomeOutput(data.output);
+      renderHomeOutput(data.output, stats?.success ? stats : null);
     } else {
       setOutput(`<span class="out-red">Error: ${data.error}</span>`);
     }
@@ -5537,7 +5702,65 @@ async function showAbout(e) {
   }
 }
 
-function renderHomeOutput(text) {
+function _homeStatValueColor(avail, total) {
+  if (total === 0) return 'var(--text-dim)';
+  if (avail === total) return 'var(--green)';
+  if (avail === 0) return 'var(--text-dim)';
+  return 'var(--yellow)';
+}
+
+// Single-line — the output panel has white-space:pre-wrap for console text,
+// so a pretty-printed multi-line template literal here would render its own
+// indentation/newlines as visible blank space between rows.
+function _homeStatRow(id, label, value, color) {
+  const idAttr = id ? ` id="${id}"` : '';
+  return `<div${idAttr} style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--text-dim)">${escHtml(label)}</span><span style="font-size:12px;color:${color};font-weight:600">${value}</span></div>`;
+}
+
+function renderHomeStatsCard(stats) {
+  if (!stats) return '';
+  const rows = [
+    _homeStatRow(null, 'Cases', `${stats.cases.open} open &middot; ${stats.cases.closed} closed`, 'var(--text-primary)'),
+    _homeStatRow(null, 'Detections Loaded', `${stats.detections}`, 'var(--cyan)'),
+    _homeStatRow(null, 'API Keys', `${stats.api_keys.configured}/${stats.api_keys.total}`, 'var(--text-primary)'),
+    _homeStatRow(null, 'MalChela Tools', `${stats.malchela_tools.available}/${stats.malchela_tools.total}`,
+      _homeStatValueColor(stats.malchela_tools.available, stats.malchela_tools.total)),
+    _homeStatRow(null, 'Integrations', `${stats.integrations.available}/${stats.integrations.total}`,
+      _homeStatValueColor(stats.integrations.available, stats.integrations.total)),
+    _homeStatRow('home-stat-update', 'Update', 'checking&hellip;', 'var(--text-dim)'),
+  ];
+  return `<div style="white-space:normal;background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:6px;padding:14px 18px;min-width:240px;max-width:300px;height:fit-content"><div style="font-size:11px;font-weight:600;color:var(--cyan);letter-spacing:.08em;margin-bottom:8px">AT A GLANCE</div>${rows.join('')}</div>`;
+}
+
+async function _loadUpdateCheck() {
+  try {
+    const res = await fetch(serverUrl + '/update_check', { method: 'GET' });
+    const data = await res.json();
+    const el = document.getElementById('home-stat-update');
+    if (!el) return; // user navigated away before this resolved
+    const valueEl = el.querySelector('span:last-child');
+    if (!valueEl) return;
+    if (data.status === 'behind') {
+      valueEl.style.color = 'var(--yellow)';
+      valueEl.textContent = 'Update available';
+    } else if (data.status === 'up_to_date') {
+      valueEl.style.color = 'var(--green)';
+      valueEl.textContent = 'Up to date';
+    } else if (data.status === 'offline') {
+      valueEl.style.color = 'var(--text-dim)';
+      valueEl.textContent = 'Offline mode';
+    } else {
+      valueEl.style.color = 'var(--text-dim)';
+      valueEl.textContent = 'Unknown';
+    }
+  } catch (e) {
+    const el = document.getElementById('home-stat-update');
+    const valueEl = el?.querySelector('span:last-child');
+    if (valueEl) { valueEl.style.color = 'var(--text-dim)'; valueEl.textContent = 'Unknown'; }
+  }
+}
+
+function renderHomeOutput(text, stats) {
   const cleaned = text
     .replace(/Press Enter to continue\.\.\./gi, '')
     .trimEnd();
@@ -5667,10 +5890,12 @@ function renderHomeOutput(text) {
     ? `<pre class="ascii-art">${escHtml(artBlock.join('\n'))}</pre>`
     : '';
   const textHtml = `<div style="line-height:1.8">${rendered.join('')}${featureTableHtml}${renderedPost.join('')}</div>`;
+  const statsCardHtml = renderHomeStatsCard(stats);
 
-  html = `<div style="padding:16px 0 0 24px">${artHtml}${textHtml}</div>`;
+  html = `<div style="display:flex;justify-content:space-between;gap:32px;flex-wrap:wrap;padding:16px 24px 0 24px"><div>${artHtml}${textHtml}</div>${statsCardHtml}</div>`;
   document.getElementById('output-content').innerHTML = html;
   document.getElementById('output-content').scrollTop = 0;
+  if (stats) _loadUpdateCheck();
 }
 
 function _activateSidebarBtn(e) {
@@ -5730,6 +5955,12 @@ function showToast(msg, type = '') {
 // Restore active case badge
 if (activeCase) {
   document.getElementById('active-case-badge').textContent = `Active: ${activeCase}`;
+}
+
+// Restore sidebar collapsed state
+if (localStorage.getItem('malchela_sidebar_collapsed') === '1') {
+  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('tb-sidebar-toggle').title = 'Show Tools Panel';
 }
 
 // Check health on load and every 30s

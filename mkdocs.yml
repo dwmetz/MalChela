@@ -15,19 +15,24 @@ plugins:
   - search
   - with-pdf:
       output_path: "pdf/user-guide.pdf"
+      cover_subtitle: "4.3"
+      cover_logo: "images/malchela_steampunk.png"
       exclude_pages:
-        - home.md
-      
+        - "^$"
+
 extra_css:
   - stylesheets/colors.css
 nav:
   - Home: index.md
   - About: about.md
   - Installation: install.md
+  - Navigation: navigation.md
   - Configuration:
       - tools.yaml: configuration/tools-yaml.md
       - api configuration: configuration/api-configuration.md
+      - offline mode: configuration/offline-mode.md
   - Case Management: cases.md
+  - AI Integration & MCP: mcp.md
   - Core Tools:
       - Overview: coretools/index.md
       - Usage: coretools/usage.md
@@ -48,9 +53,13 @@ nav:
       - XMZHash: coretools/xmzhash.md
 
   - Mac Analysis:
-      - Code Sign Check: coretools/codesign_check.md
-      - Mach-O Info: coretools/macho_info.md
-      - Plist Analyzer: coretools/plist_analyzer.md
+      - Overview: mac/index.md
+      - Analyze: coretools/analyze.md
+      - Code Sign Check: mac/codesign_check.md
+      - dppExtract: mac/dpp_extract.md
+      - Mach-O Info: mac/macho_info.md
+      - MStrings: coretools/mstrings.md
+      - Plist Analyzer: mac/plist_analyzer.md
 
   - Third-Party Tools:
       - Integrating Third Party Tools: tools/index.md

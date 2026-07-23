@@ -18,6 +18,7 @@
 - Automatically launches in the web interface when a folder-based case is created or restored
 - Results populate an interactive table in the web interface
 - Users can launch suggested tools on a per-file basis directly from the web interface
+- Each row also has an **Analyze** button — runs every suggested tool for that one file in a single pass and produces a combined rollup, instead of launching each suggested tool individually (see [Analyze](analyze.md))
 
 ## CLI Usage
 
@@ -60,3 +61,4 @@ cargo run -p fileminer -- /path/to/files --case suspicious_usb -m
 - Results are saved under `saved_output/cases/<case-name>/fileminer/`.
 - FileMiner displays an interactive table of results with suggested tools per file.
 - Suggested tools can be launched directly from within the web interface results panel.
+- [Analyze](analyze.md) also lands here automatically when its target (including a dpp Extract-unwrapped `.dmg`/`.pkg`) has more files than its 25-file auto-run cap — File Miner's interactive table replaces Analyze's own summary for large targets.

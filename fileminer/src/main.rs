@@ -369,7 +369,7 @@ fn analyze_directory(
 
             let ext_mismatch = match extension.as_str() {
                 "exe" | "dll" => !file_type.contains("portable-executable"),
-                "txt" | "log" => !file_type.starts_with("text/"),
+                "txt" | "log" => !file_type.starts_with("text/") && !looks_like_text(&path),
                 "zip" => !file_type.contains("zip"),
                 "jpg" | "jpeg" => !file_type.contains("jpeg"),
                 "png" => !file_type.contains("png"),
@@ -389,8 +389,49 @@ fn analyze_directory(
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if file_type.contains("x-executable") {
+                // infer maps ELF (any subtype — exec, shared object, core, relocatable)
+                // to a single "application/x-executable" MIME, with no dedicated
+                // branch here to catch it — it fell through every check below with
+                // an empty suggested_tools list even though mStrings/detections.yaml
+                // works fine against ELF. Observed on a real m68k ELF malware sample.
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type.contains("x-apple-property-list") || file_type.contains("application/xml") {
                 suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
+            } else if file_type.starts_with("text/") {
+                // Shell/Python/plain-text scripts land here — e.g. a dpp_extract'd
+                // PKG's preinstall/postinstall, where the real payload logic often
+                // lives when Payload itself is empty. mStrings runs detections.yaml
+                // against the script's own text, which is exactly the analysis a
+                // script needs.
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if file_type == "Unknown" && file_size > 0 && looks_like_text(&path) {
+                // infer has no magic signature for plain text at all, so any
+                // script (shell/Python/etc.) with no recognizable extension lands
+                // here as "Unknown" just like a packed/unknown binary would. Route
+                // it the same as the text/* branch above instead of the generic
+                // binary fallback below, or mstrings/detections.yaml never runs
+                // against it. Originally gated on file_size > 10_000 (matching the
+                // binary-unknown branch below), which caught XCSSET's b.sh/jey.sh
+                // (47KB/36KB) but silently excluded small-but-critical scripts —
+                // a Proton sample's cb.py (5,992 bytes) and ch.py (1,772 bytes),
+                // the exact files carrying its keychain/Chrome-credential-theft
+                // signatures, got zero suggested tools under the 10KB floor. The
+                // size gate made sense for the binary-unknown branch (small
+                // unknown blobs are usually junk/resource data, not worth
+                // FileAnalyzer/tiquery), but looks_like_text() already does the
+                // real filtering work here — a small legitimate script is just
+                // as analytically important as a large one.
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type == "Unknown" && file_size > 10_000 {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
@@ -401,6 +442,25 @@ fn analyze_directory(
             if path.extension().and_then(|e| e.to_str()) == Some("plist") {
                 if suggested_tools.is_empty() {
                     suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
+                }
+            }
+
+            // Compiled AppleScript (.scpt/.scptd) by extension: infer has no
+            // magic-byte signature for this format at all, so it always
+            // reports Unknown regardless of size — the size>10_000 branch
+            // above never has a chance to catch these, since malicious .scpt
+            // payloads are typically a few KB. Without this, a compiled
+            // AppleScript dropper gets zero suggested tools and Analyze
+            // silently never runs mstrings against it (observed: an XCSSET
+            // sample's two malicious .scpt payloads got scanned by nothing
+            // at all in a directory-wide Analyze run, while every other file
+            // in the same directory got its normal suggestions).
+            if matches!(path.extension().and_then(|e| e.to_str()), Some("scpt") | Some("scptd")) {
+                if suggested_tools.is_empty() {
+                    suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                    suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                    suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                    suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
                 }
             }
 
@@ -438,6 +498,33 @@ fn analyze_directory(
     }
 
     Ok(results)
+}
+
+// infer only recognizes binary format magic-byte signatures — there's no
+// signature for plain text, so identify_magic() returns "Unknown" for
+// every genuine plaintext file (a readme, a log, a config), not just
+// disguised binaries. The txt/log mismatch check used to take that
+// "Unknown" at face value, which meant every legitimate .txt file got
+// flagged as a mismatch. This is the standard binary-vs-text heuristic
+// (the same one git and the `file` command use as a first pass): no
+// embedded NUL byte and a high ratio of printable/whitespace bytes in a
+// sample of the content.
+fn looks_like_text(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else { return false };
+    let mut buffer = vec![0u8; 8000];
+    let Ok(n) = file.read(&mut buffer) else { return false };
+    let sample = &buffer[..n];
+    if sample.is_empty() {
+        return true; // empty file — nothing to contradict "text"
+    }
+    if sample.contains(&0u8) {
+        return false; // NUL byte — binary, not text
+    }
+    let printable = sample
+        .iter()
+        .filter(|&&b| b == b'\n' || b == b'\r' || b == b'\t' || (0x20..=0x7e).contains(&b) || b >= 0x80)
+        .count();
+    (printable as f64 / sample.len() as f64) >= 0.95
 }
 
 fn identify_magic(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

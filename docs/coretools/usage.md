@@ -86,8 +86,8 @@ cargo run -p mstrings — path/to/file — -o -j
 
 Layout
 
-- Top Bar: Title and Toolkit Menu
-- Left Panel: Tool categories and selections
+- Top Toolbar: navigation and utility buttons — see [Navigation](../navigation.md) for a full key with icons
+- Left Panel: Tool categories and selections — collapsible via the toolbar's Hide Tools Panel button, so the console can use the full width
 - Center Panel: Dynamic tool input options
 - Console Panel: Output display
 

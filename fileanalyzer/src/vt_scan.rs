@@ -12,6 +12,13 @@ async fn submit_request(url: &str, api_key: &str) -> Result<Value, Error> {
 }
 
 pub async fn check_virustotal(hash: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    if common_config::is_offline_mode() {
+        return Err(Box::new(io::Error::new(
+            io::ErrorKind::Other,
+            "Offline mode (MALCHELA_OFFLINE) — skipped VirusTotal network request.",
+        )));
+    }
+
     let api_key = common_config::resolve_api_key("vt")
         .ok_or_else(|| io::Error::new(
             io::ErrorKind::NotFound,

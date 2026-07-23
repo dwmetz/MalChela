@@ -29,7 +29,7 @@ import {
   existsSync, readdirSync, statSync, mkdirSync, writeFileSync, readFileSync,
   realpathSync, openSync, closeSync, unlinkSync, rmSync,
 } from 'fs';
-import { dirname, basename } from 'path';
+import { dirname, basename, extname } from 'path';
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
 
 // Session-level case state — null until the user selects a case
@@ -140,12 +140,17 @@ const TOOLS = [
     category: 'File Analysis',
     input_type: 'analyze',
     description:
-      'One-shot auto-triage: runs fileminer against a file, folder, or .app bundle, then ' +
-      'automatically dispatches every tool fileminer suggests for every file found (no need ' +
-      'to call fileminer yourself and manually decide which follow-up tools to run). Writes a ' +
-      'combined rollup report alongside the individual per-tool reports. Best entry point for ' +
-      'a single sample or small bundle (limit 25 files) — use fileminer + MZHash/MZCount/XMZHash ' +
-      'directly for corpus-scale scans. Requires an active case (set_case first).',
+      'One-shot auto-triage: runs fileminer against a file, folder, .app bundle, .dmg, or .pkg, ' +
+      'then automatically dispatches every tool fileminer suggests for every file found (no need ' +
+      'to call fileminer yourself and manually decide which follow-up tools to run). A .dmg/.pkg ' +
+      'target is auto-unwrapped via dpp_extract first (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO). ' +
+      'Writes a combined rollup report alongside the individual per-tool reports. Best entry ' +
+      'point for a single sample or small bundle (limit 25 files) — over that (common for a ' +
+      'dpp-extracted PKG payload, which often bundles the full legitimate app it trojanized ' +
+      'alongside the injected malicious file(s)), returns a file listing (mismatches first) ' +
+      'instead of auto-running everything; call individual tools yourself on files of interest, ' +
+      'or fileminer + MZHash/MZCount/XMZHash directly for corpus-scale scans. Requires an active ' +
+      'case (set_case first).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -402,6 +407,30 @@ const TOOLS = [
       required: ['folderpath'],
     },
   },
+
+  {
+    name: 'dpp_extract',
+    category: 'Utilities',
+    input_type: 'dpp_extract',
+    description:
+      'Unwraps a .dmg or .pkg container (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO) to reach the ' +
+      'real payload files inside — fileanalyzer/mstrings/macho_info can\'t see through either ' +
+      'container format directly. Also pulls each PKG component\'s Scripts (preinstall/' +
+      'postinstall) archive alongside Payload, since some installers ship an empty Payload and ' +
+      'put their actual behavior there instead. A trojanized installer commonly bundles the ' +
+      'full legitimate app it trojanized alongside the injected malicious file(s), so the ' +
+      'extracted directory can be large — follow up with fileminer on the result rather than ' +
+      'fileanalyzer/mstrings directly on the whole tree. analyze() calls this automatically ' +
+      'when pointed at a .dmg/.pkg; call it directly only if you need the extracted files ' +
+      'without Analyze\'s auto-dispatch.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filepath: { type: 'string', description: 'Absolute path to a .dmg or .pkg file' },
+      },
+      required: ['filepath'],
+    },
+  },
 ];
 
 // ── Mac bundle resolution helpers ────────────────────────────────────────────
@@ -495,6 +524,11 @@ function buildCommand(toolName, args) {
         return { bin: binary, args: [args.folderpath, '--', ...flags] };
       }
       return { bin: binary, args: [args.folderpath] };
+    }
+    case 'dpp_extract': {
+      const cmdArgs = [args.filepath];
+      if (currentCase) cmdArgs.push('--case', currentCase);
+      return { bin: binary, args: cmdArgs };
     }
     case 'hash': {
       const caseArgs = currentCase ? ['--case', currentCase, '-o', '-t'] : [];
@@ -608,6 +642,7 @@ function registerCaseOutput(tool, caseName, target, outputPath) {
 const ANALYZE_MAX_FILES = 25; // matches _ANALYZE_MAX_FILES in malchela_server.py
 const ANALYZE_TIMEOUT_MS = 90000;
 const FILEMINER_TIMEOUT_MS = 120000;
+const DPP_EXTRACT_TIMEOUT_MS = 180000;
 const ANALYZE_MAX_BUFFER = 50 * 1024 * 1024; // fileminer's JSON dump easily exceeds execFileSync's 1MB default
 
 function pathsMatch(candidate, resolvedTarget) {
@@ -746,6 +781,23 @@ const MSTRINGS_FS_IOC_BLOCK = /## Potential Filesystem IOCs\n\n((?:- `.+`\n)+)/;
 const MSTRINGS_NET_IOC_BLOCK = /## Potential Network IOCs\n\n((?:- `.+`\n)+)/;
 const MD_BACKTICK_BULLET = /- `(.+)`/g;
 
+// Defang a network IOC before it's ever displayed — standard analyst
+// practice (hxxp(s):// keeps the scheme unresolvable, [.] stops chat/email
+// clients and copy-paste from treating it as a live link/domain). Applied
+// only where net_iocs get formatted for display; filesystem IOCs and
+// filenames elsewhere in the rollup are never touched.
+// Idempotent: mstrings now defangs its own "Potential Network IOCs"
+// section, so this rollup re-extracts already-defanged text out of that
+// markdown — bail out early rather than double-defang "[.]" into "[[.]]".
+function defang(ioc) {
+  if (ioc.includes('[.]') || ioc.toLowerCase().includes('hxxp')) return ioc;
+  return ioc
+    .replace(/http:\/\//g, 'hxxp://')
+    .replace(/https:\/\//g, 'hxxps://')
+    .replace(/ftp:\/\//g, 'fxxp://')
+    .replace(/\./g, '[.]');
+}
+
 function extractMstringsIocs(markdown) {
   const bullets = (blockPattern) => {
     const m = blockPattern.exec(markdown);
@@ -757,6 +809,24 @@ function extractMstringsIocs(markdown) {
     return out;
   };
   return { fs: bullets(MSTRINGS_FS_IOC_BLOCK), net: bullets(MSTRINGS_NET_IOC_BLOCK) };
+}
+
+// Highest base64 re-encoding depth mstrings had to peel through to reach any
+// detection in this file (0 if none). mstrings only annotates a row this way
+// at >1 layer — a single decode is routine and not itself a tell — so any
+// nonzero result here is already meaningful: the malware deliberately
+// re-encoded its payload multiple times, not just used base64 for convenience.
+const MD_OBFUSCATION_LAYERS = /found after (\d+) layers of base64 decoding/g;
+
+function extractMaxObfuscationLayers(markdown) {
+  MD_OBFUSCATION_LAYERS.lastIndex = 0;
+  let max = 0;
+  let m;
+  while ((m = MD_OBFUSCATION_LAYERS.exec(markdown)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n > max) max = n;
+  }
+  return max;
 }
 
 // Files are grouped by SHA256 for display: duplicate content saved under
@@ -773,21 +843,31 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     groups.get(key).push(f);
   }
 
-  const flagged = [];
+  // Anchor ids keyed by the SHA256/filepath dedup key (not by filename) —
+  // avoids any ambiguity if two different files happen to share a bare
+  // filename in different subfolders. marked.js (the PWA's renderer) passes
+  // raw inline HTML through unsanitized, so an explicit <a id=...> works
+  // without needing a heading-slug algorithm to stay in sync between this
+  // generator and the renderer.
+  const anchorByKey = new Map(order.map((key, idx) => [key, `file-${idx}`]));
+
+  const flagged = []; // { filename, anchor }
   const dupGroups = [];
   const mitreTactics = {};
   let mitreTotal = 0;
   const malwareTags = [];
   const malwareTagsSeen = new Set();
-  const flagFindings = []; // { filename, tool, text }
-  const fsIocs = [];
+  const flagFindings = []; // { filename, tool, text, anchor }
+  const fsIocs = []; // { ioc, anchor } — anchor of the first file it was found in
   const fsIocsSeen = new Set();
-  const netIocs = [];
+  const netIocs = []; // { ioc, anchor } — anchor of the first file it was found in
   const netIocsSeen = new Set();
+  const obfuscationFindings = []; // { filename, maxLayers }
   for (const key of order) {
     const members = groups.get(key);
+    const anchor = anchorByKey.get(key);
     const isFlagged = flagVerdict(members[0].tool_runs).flagged;
-    if (isFlagged) flagged.push(members[0].filename);
+    if (isFlagged) flagged.push({ filename: members[0].filename, anchor });
     if (members.length > 1) dupGroups.push(members);
     for (const run of members[0].tool_runs) {
       if (run.tool === 'mstrings' && run.success && run.markdown) {
@@ -797,8 +877,10 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
           mitreTactics[tactic] = (mitreTactics[tactic] || 0) + count;
         }
         const { fs, net } = extractMstringsIocs(run.markdown);
-        for (const ioc of fs) { if (!fsIocsSeen.has(ioc)) { fsIocsSeen.add(ioc); fsIocs.push(ioc); } }
-        for (const ioc of net) { if (!netIocsSeen.has(ioc)) { netIocsSeen.add(ioc); netIocs.push(ioc); } }
+        for (const ioc of fs) { if (!fsIocsSeen.has(ioc)) { fsIocsSeen.add(ioc); fsIocs.push({ ioc, anchor }); } }
+        for (const ioc of net) { if (!netIocsSeen.has(ioc)) { netIocsSeen.add(ioc); netIocs.push({ ioc, anchor }); } }
+        const maxLayers = extractMaxObfuscationLayers(run.markdown);
+        if (maxLayers > 1) obfuscationFindings.push({ filename: members[0].filename, maxLayers });
       }
       if (isFlagged && run.tool === 'tiquery' && run.success && run.markdown) {
         for (const tag of extractTiqueryTags(run.markdown)) {
@@ -807,7 +889,7 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
       }
       if (run.success && run.markdown && ['macho_info', 'plist_analyzer', 'codesign_check'].includes(run.tool)) {
         for (const text of extractFlags(run.tool, run.markdown)) {
-          flagFindings.push({ filename: members[0].filename, tool: run.tool, text });
+          flagFindings.push({ filename: members[0].filename, tool: run.tool, text, anchor });
         }
       }
     }
@@ -825,6 +907,14 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     '## Triage Summary',
     '',
   );
+  if (order.length) {
+    lines.push(
+      "_Links below jump to that finding's section further down this report — " +
+      'they do not open the indicator itself. Network indicators are defanged ' +
+      '(hxxp, `[.]`)._'
+    );
+    lines.push('');
+  }
   if (order.length !== perFileResults.length) {
     lines.push(
       `- **${order.length} unique file(s)** across ${perFileResults.length} path(s) ` +
@@ -834,7 +924,8 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     lines.push(`- **${order.length} file(s)** analyzed`);
   }
   if (flagged.length) {
-    lines.push(`- **⚠ ${flagged.length} flagged malicious** (VirusTotal): ` + flagged.map(n => `\`${n}\``).join(', '));
+    lines.push(`- **⚠ ${flagged.length} flagged malicious** (VirusTotal): `
+      + flagged.map(({ filename, anchor }) => `[\`${filename}\`](#${anchor})`).join(', '));
   } else {
     lines.push('- No files flagged malicious by VirusTotal');
   }
@@ -847,16 +938,20 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     lines.push(`- **${mitreTotal} MITRE ATT&CK finding(s)** (mstrings), by tactic: ${breakdown}`);
   }
   if (fsIocs.length) {
-    lines.push('- **Filesystem IOCs** (mstrings): ' + fsIocs.map(i => `\`${i}\``).join(', '));
+    lines.push('- **Filesystem IOCs** (mstrings): ' + fsIocs.map(({ ioc, anchor }) => `[\`${ioc}\`](#${anchor})`).join(', '));
   }
   if (netIocs.length) {
-    lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(i => `\`${i}\``).join(', '));
+    lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(({ ioc, anchor }) => `[\`${defang(ioc)}\`](#${anchor})`).join(', '));
+  }
+  if (obfuscationFindings.length) {
+    const detail = obfuscationFindings.map(({ filename, maxLayers }) => `\`${filename}\` (${maxLayers} layers)`).join(', ');
+    lines.push(`- **⚠ Multi-layer obfuscation detected** (mstrings): ${detail}`);
   }
   if (flagFindings.length) {
     const flaggedFiles = new Set(flagFindings.map(f => f.filename)).size;
     lines.push(`- **${flagFindings.length} flag(s)/indicator(s)** across ${flaggedFiles} file(s):`);
-    for (const { filename, tool, text } of flagFindings) {
-      lines.push(`  - \`${filename}\` (${tool}): ${text}`);
+    for (const { filename, tool, text, anchor } of flagFindings) {
+      lines.push(`  - [\`${filename}\`](#${anchor}) (${tool}): ${text}`);
     }
   }
   for (const members of dupGroups) {
@@ -868,7 +963,7 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   for (const key of order) {
     const members = groups.get(key);
     const primary = members[0];
-    lines.push(`## ${primary.filename}`, '');
+    lines.push(`<a id="${anchorByKey.get(key)}"></a>`, `## ${primary.filename}`, '');
     if (members.length > 1) {
       const otherNames = members.slice(1).map(m => `\`${m.filename}\``).join(', ');
       lines.push(`- **Also found as:** ${otherNames} — identical content, tool output shown once`);
@@ -895,6 +990,42 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
       }
     }
   }
+  return lines.join('\n');
+}
+
+const OVER_CAP_LIST_LIMIT = 40; // beyond mismatches, cap the plain listing so the
+                                 // response stays a reasonable size for the caller
+
+function buildOverCapSummary(target, scanResults, extractionNote) {
+  const mismatches = scanResults.filter(r => r.extension_mismatch);
+  const rest = scanResults.filter(r => !r.extension_mismatch);
+
+  const describe = r => {
+    const tools = (r.suggested_tools || [])
+      .filter(p => Array.isArray(p) && p.length === 2)
+      .map(p => p[0]);
+    return `- \`${r.filepath}\` (${r.filetype || 'unknown'})` +
+      (tools.length ? ` — suggested: ${tools.join(', ')}` : '');
+  };
+
+  const lines = [
+    `Analyze found ${scanResults.length} file(s) at ${target} — over the auto-run cap ` +
+      `(${ANALYZE_MAX_FILES}), so suggested tools were not auto-run.`,
+  ];
+  if (extractionNote) lines.push(`_${extractionNote}_`);
+  lines.push('', 'Call fileanalyzer/mstrings/macho_info/etc. yourself on whichever files below matter, ' +
+    'or call fileminer directly on the target for the complete list.', '');
+
+  if (mismatches.length) {
+    lines.push(`## Extension mismatches (${mismatches.length}) — start here`, '', ...mismatches.map(describe), '');
+  }
+
+  const shown = rest.slice(0, OVER_CAP_LIST_LIMIT);
+  lines.push(`## Other files (${rest.length})`, '', ...shown.map(describe));
+  if (rest.length > shown.length) {
+    lines.push(`- …and ${rest.length - shown.length} more — call fileminer directly on ${target} for the full list.`);
+  }
+
   return lines.join('\n');
 }
 
@@ -937,12 +1068,134 @@ function maybeExtractZip(targetPath) {
   );
 }
 
+// If target is a .dmg or .pkg, shell out to dpp_extract to walk
+// UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO and return the extracted directory
+// as the new analyze target, plus a note for the rollup. Ports
+// server/malchela_server.py's _maybe_extract_dpp(). Returns
+// { target: targetPath, note: null } unchanged if target isn't a .dmg/.pkg.
+function maybeExtractDpp(targetPath) {
+  const ext = targetPath.toLowerCase().slice(targetPath.lastIndexOf('.'));
+  if (ext !== '.dmg' && ext !== '.pkg') {
+    return { target: targetPath, note: null };
+  }
+
+  const filename = basename(targetPath);
+  const stem = filename.slice(0, filename.length - ext.length);
+  const extractDir = `${dirname(targetPath)}/${stem}_extracted`;
+  try { rmSync(extractDir, { recursive: true, force: true }); } catch { /* didn't exist */ }
+
+  const binary = `${RELEASE_DIR}/dpp_extract`;
+  if (!existsSync(binary)) {
+    throw new Error(`Binary not found: ${binary}\nBuild MalChela first: cd ${MALCHELA_DIR} && ./release.sh`);
+  }
+
+  let output;
+  try {
+    output = execFileSync(binary, [targetPath, '-o', extractDir, '--json'], {
+      cwd: MALCHELA_DIR, encoding: 'utf8', timeout: DPP_EXTRACT_TIMEOUT_MS,
+    });
+  } catch (err) {
+    throw new Error(`dpp_extract failed to run: ${err.message}`);
+  }
+
+  let summary;
+  try {
+    summary = JSON.parse(output);
+  } catch (e) {
+    throw new Error(`Could not parse dpp_extract output: ${e.message}`);
+  }
+  if (!summary.success) {
+    throw new Error(summary.error || `dpp_extract could not unpack ${filename}`);
+  }
+
+  let note = `Auto-extracted \`${filename}\` via dpp_extract — ${summary.note || ''}`.trim();
+  if (summary.skipped?.length) {
+    note += ` (${summary.skipped.length} entries skipped — see dpp_extract output for detail)`;
+  }
+  return { target: summary.extracted_dir, note };
+}
+
+// Dispatch to the right auto-extraction step for Analyze's target based on
+// file type: .zip (a directory-based sample) or .dmg/.pkg (an Apple disk
+// image / installer). Mirrors server/malchela_server.py's
+// _maybe_extract_container().
+function maybeExtractContainer(targetPath) {
+  const zipResult = maybeExtractZip(targetPath);
+  if (zipResult.note !== null) return zipResult;
+  return maybeExtractDpp(targetPath);
+}
+
+const NESTED_CONTAINER_EXTS = new Set(['.zip', '.dmg', '.pkg']);
+const MAX_NESTED_EXTRACTIONS = 5; // guard against zip bombs / deeply nested archives
+
+// maybeExtractContainer only ever runs on Analyze's top-level target —
+// FileMiner has no suggested_tools branch for a raw .zip/.dmg/.pkg found
+// mid-scan (by design: containers are meant to be unwrapped once, up front,
+// not per-file), so a container discovered while walking a directory just
+// shows suggested_tools: [] and silently gets skipped. That's routine for a
+// sample shipped as a lone .zip inside its own folder (nothing else to find
+// until it's extracted) — no signal about the sample, just a gap in dispatch.
+//
+// Extracts any such container in place (reusing the same helpers the
+// top-level target uses) and folds a fresh fileminer scan of the extracted
+// directory into scanResults, breadth-first, so a container nested inside an
+// extracted container also gets unwrapped. Capped at MAX_NESTED_EXTRACTIONS
+// total extractions per Analyze run as a guard against zip bombs or
+// pathological nesting; a password not in the common list is left as-is
+// (surfaces as an unanalyzed file, same as today, rather than failing the
+// whole Analyze run). Mutates scanResults in place, returns extraction notes.
+function expandNestedContainers(scanResults) {
+  const notes = [];
+  const queue = [...scanResults];
+  let extractedCount = 0;
+  const seenDirs = new Set();
+
+  while (queue.length && extractedCount < MAX_NESTED_EXTRACTIONS) {
+    const res = queue.shift();
+    if (res.suggested_tools && res.suggested_tools.length) continue;
+    const ext = extname(res.filepath || '').toLowerCase();
+    if (!NESTED_CONTAINER_EXTS.has(ext)) continue;
+
+    let extractedDir, note;
+    try {
+      ({ target: extractedDir, note } = maybeExtractContainer(res.filepath));
+    } catch {
+      continue; // e.g. zip password not in the common list — leave as-is
+    }
+    if (note === null) continue;
+    const resolved = realpathSync(extractedDir);
+    if (seenDirs.has(resolved)) continue;
+    seenDirs.add(resolved);
+    extractedCount++;
+    notes.push(note);
+
+    const fmBinary = `${RELEASE_DIR}/fileminer`;
+    const fmArgs = [extractedDir, '--no-prompt'];
+    if (currentCase) fmArgs.push('--case', currentCase);
+    let fmOutput;
+    try {
+      fmOutput = execFileSync(fmBinary, fmArgs, {
+        cwd: MALCHELA_DIR, encoding: 'utf8', timeout: FILEMINER_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER,
+      });
+    } catch {
+      continue;
+    }
+    let fmData;
+    try { fmData = JSON.parse(fmOutput); } catch { continue; }
+    const newResults = fmData.results || [];
+    scanResults.push(...newResults);
+    queue.push(...newResults);
+  }
+
+  return notes;
+}
+
 function runAnalyze(rawTargetPath) {
   if (!existsSync(rawTargetPath)) {
     throw new Error(`Path does not exist: ${rawTargetPath}`);
   }
 
-  const { target: targetPath, note: extractionNote } = maybeExtractZip(rawTargetPath);
+  const { target: targetPath, note: extractionNote } = maybeExtractContainer(rawTargetPath);
 
   const fmBinary = `${RELEASE_DIR}/fileminer`;
   if (!existsSync(fmBinary)) {
@@ -976,6 +1229,7 @@ function runAnalyze(rawTargetPath) {
 
   let scanResults = fmData.results || [];
 
+  let finalExtractionNote = extractionNote;
   if (singleFileMode) {
     const resolvedTarget = realpathSync(targetPath);
     scanResults = scanResults.filter(r => pathsMatch(r.filepath, resolvedTarget));
@@ -985,13 +1239,25 @@ function runAnalyze(rawTargetPath) {
         '(it may be a hidden/skipped file type).'
       );
     }
+  } else {
+    const nestedNotes = expandNestedContainers(scanResults);
+    if (nestedNotes.length) {
+      finalExtractionNote = [extractionNote, ...nestedNotes].filter(Boolean).join(' ');
+    }
   }
 
   if (scanResults.length > ANALYZE_MAX_FILES) {
-    throw new Error(
-      `${scanResults.length} files found — Analyze is meant for a single sample or small bundle ` +
-      `(limit ${ANALYZE_MAX_FILES} files). For corpus-scale scans, use MZHash/MZCount/XMZHash instead.`
-    );
+    // Too many files to auto-run every suggested tool on every one — routine
+    // for a dpp-extracted PKG payload (a trojanized installer commonly
+    // bundles the full legitimate app it trojanized alongside the injected
+    // malicious file(s); EvilQuest: 624 files for one Mach-O of actual
+    // interest) but can happen pointed straight at a folder too. The web UI
+    // hands this off to File Miner's interactive table; there's no browser
+    // here, so return the same information directly as text — mismatched
+    // files first — so the calling agent can call fileanalyzer/mstrings/
+    // macho_info/etc. itself on whichever files matter, or call fileminer
+    // directly on targetPath for the complete un-truncated list.
+    return buildOverCapSummary(targetPath, scanResults, finalExtractionNote);
   }
 
   const perFileResults = [];
@@ -1045,7 +1311,7 @@ function runAnalyze(rawTargetPath) {
     });
   }
 
-  const rollup = buildAnalyzeRollup(targetPath, perFileResults, extractionNote);
+  const rollup = buildAnalyzeRollup(targetPath, perFileResults, finalExtractionNote);
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '_');
   // The "analyze" subfolder matters, not just cosmetically: registerCaseOutput
   // below records the entry's path as "analyze/<filename>", so the file has

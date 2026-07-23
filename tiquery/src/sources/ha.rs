@@ -64,6 +64,26 @@ impl ThreatSource for HybridAnalysis {
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return SourceResult::error(self.short_name(), "rate limited");
         }
+
+        // HA's summary endpoint returns HTTP 400 (not 404) with a JSON
+        // {"message": "...does not exist..."} body when it simply has no
+        // report for this hash — a normal "not found" outcome, not a real
+        // API error. Has to be checked before the generic !is_success()
+        // bailout below, or every one of these becomes a raw "HTTP 400 —
+        // ..." error instead of a clean not-found result (the actual
+        // symptom reported: "Error http 400 - Failed to get summary.
+        // Possibly summary does not exist" showing up as an error for
+        // what's just an ordinary cache miss).
+        if status == reqwest::StatusCode::BAD_REQUEST {
+            if let Ok(body) = serde_json::from_str::<Value>(&text) {
+                if let Some(msg) = body.get("message").and_then(|v| v.as_str()) {
+                    if msg.contains("does not exist") || msg.to_lowercase().contains("not found") {
+                        return SourceResult::not_found(self.short_name());
+                    }
+                }
+            }
+        }
+
         if !status.is_success() {
             let snippet = text.chars().take(120).collect::<String>();
             return SourceResult::error(self.short_name(), format!("HTTP {} — {}", status.as_u16(), snippet));

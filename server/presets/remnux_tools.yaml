@@ -62,6 +62,13 @@ tools:
   category: "Utilities"
   exec_type: cargo
 
+- name: dpp Extract
+  description: "Unwraps DMG/PKG containers (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO) to reach payload files"
+  command: ["dpp_extract"]
+  input_type: file
+  category: "Utilities"
+  exec_type: cargo
+
 - name: Hash Check
   description: "Check a hash value against a lookup file"
   command: ["hashcheck"]

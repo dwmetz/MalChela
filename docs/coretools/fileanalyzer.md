@@ -1,5 +1,7 @@
 FileAnalyzer performs deep static analysis on a single file. It extracts hashes, entropy, file type metadata, YARA rule matches, NSRL validation, and — for PE files — rich header details including import/export tables, compile timestamp, and section flags. Ideal for triaging unknown executables or confirming known file traits.
 
+FileAnalyzer makes two network calls of its own as part of a normal run — a VirusTotal hash check (if a VT API key is configured) and an NSRL lookup via [nsrlquery](nsrlquery.md) (no key needed). Both are skipped cleanly with [Offline Mode](../configuration/offline-mode.md) enabled.
+
 ![File Analyzer](../images/fileanalyzer.png)
 
 <p align="center"><strong> File Analyzer</p>

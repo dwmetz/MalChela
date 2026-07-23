@@ -32,6 +32,7 @@ server/server_config.yaml.bak
 
 # MKDocs
 /site
+/build_pdf.sh
 
 # Server
 /server/venv/

@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "MITRE_lookup"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "clap",
  "colored 3.1.1",
@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "about"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "colored 2.2.0",
  "common_ui",
@@ -165,6 +165,16 @@ name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+
+[[package]]
+name = "apfs"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c1b4ecd96379464ea8b4ef2517c8eb674d8658ad364e9176bf5b8c278aa801e"
+dependencies = [
+ "byteorder",
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "arbitrary"
@@ -391,6 +401,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit-set"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
+dependencies = [
+ "bit-vec",
+]
+
+[[package]]
+name = "bit-vec"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
 name = "bit_field"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -498,8 +523,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
+name = "bzip2"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49ecfb22d906f800d4fe833b6282cf4dc1c298f5057ca0b5445e5c209735ca47"
+dependencies = [
+ "bzip2-sys",
+]
+
+[[package]]
+name = "bzip2-sys"
+version = "0.1.13+1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "225bff33b2141874fe80d71e07d6eec4f85c5c216453dd96388240f96e1acc14"
+dependencies = [
+ "cc",
+ "pkg-config",
+]
+
+[[package]]
 name = "cached"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -676,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "codesign_check"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -722,7 +766,7 @@ dependencies = [
 
 [[package]]
 name = "combine_yara"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -733,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "common_config"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "serde",
@@ -742,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "common_macho"
-version = "0.1.0"
+version = "4.3.0"
 dependencies = [
  "goblin",
  "plist",
@@ -751,14 +795,14 @@ dependencies = [
 
 [[package]]
 name = "common_ui"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "colored 3.1.1",
 ]
 
 [[package]]
 name = "config"
-version = "4.2.0"
+version = "4.3.0"
 
 [[package]]
 name = "console"
@@ -1262,6 +1306,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "dpp"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3399ec08ae109d9c17d548bf15b05aecacf16c33f2ec6e0f06a76b62f48bcf3"
+dependencies = [
+ "apfs",
+ "hfsplus",
+ "pbzx",
+ "tempfile",
+ "thiserror 2.0.18",
+ "udif",
+ "xara",
+]
+
+[[package]]
+name = "dpp_extract"
+version = "4.3.0"
+dependencies = [
+ "clap",
+ "common_config",
+ "dpp",
+ "flate2",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dsa"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1427,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "extract_samples"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "common_config",
  "walkdir",
@@ -1439,6 +1510,17 @@ name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fancy-regex"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax",
+]
 
 [[package]]
 name = "fastrand"
@@ -1473,7 +1555,7 @@ dependencies = [
 
 [[package]]
 name = "fileanalyzer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -1501,7 +1583,7 @@ dependencies = [
 
 [[package]]
 name = "fileminer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "clap",
  "common_config",
@@ -1916,7 +1998,7 @@ checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
 
 [[package]]
 name = "hashcheck"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "common_config",
@@ -1924,7 +2006,7 @@ dependencies = [
 
 [[package]]
 name = "hashit"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1968,6 +2050,16 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hfsplus"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1003d8eed80d61e8e8ea6a958bbe1afd3aef060882b9d6134e50500dd307c0dc"
+dependencies = [
+ "byteorder",
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "hkdf"
@@ -2705,6 +2797,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "lzfse"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21b45f9990844d28a06dc7b7a3ffe3657e5379c8e3c0d6ae43a22e98a2256a0b"
+dependencies = [
+ "lzfse-sys",
+]
+
+[[package]]
+name = "lzfse-sys"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23c80418f1cfc4601f8ef2055dcea77eebea47d2edc74ee0dadb005dd3a9f604"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "lzma-sys"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fda04ab3764e6cde78b9974eec4f779acaba7c4e84b36eca3cf77c581b85d27"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "mach2"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2715,7 +2836,7 @@ dependencies = [
 
 [[package]]
 name = "macho_info"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2731,7 +2852,7 @@ dependencies = [
 
 [[package]]
 name = "malchela"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "colored 2.2.0",
  "console",
@@ -2837,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "mismatchminer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -2862,7 +2983,7 @@ dependencies = [
 
 [[package]]
 name = "mstrings"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -2873,11 +2994,11 @@ dependencies = [
  "common_ui",
  "encoding_rs",
  "env_logger",
+ "fancy-regex",
  "log",
  "memchr",
  "prettytable",
  "project-root",
- "regex",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -2889,7 +3010,7 @@ dependencies = [
 
 [[package]]
 name = "mzcount"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "atty",
  "chrono",
@@ -2904,7 +3025,7 @@ dependencies = [
 
 [[package]]
 name = "mzhash"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "clap",
  "common_config",
@@ -2995,7 +3116,7 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
 name = "nsrlquery"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3278,6 +3399,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
+name = "pbzx"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0677fd1b7fa44f524f9ba3a6f4ec7ea10b9370f83e9394bf651f55923462405d"
+dependencies = [
+ "byteorder",
+ "thiserror 2.0.18",
+ "xz2",
+]
+
+[[package]]
 name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3402,14 +3534,14 @@ checksum = "092791278e026273c1b65bbdcfbba3a300f2994c896bd01ab01da613c29c46f1"
 dependencies = [
  "base64 0.22.1",
  "indexmap",
- "quick-xml",
+ "quick-xml 0.39.3",
  "serde",
  "time",
 ]
 
 [[package]]
 name = "plist_analyzer"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -3751,6 +3883,15 @@ name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
+
+[[package]]
+name = "quick-xml"
+version = "0.37.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "331e97a1af0bf59823e6eadffe373d7b27f485be8748f71471c662c1f269b7fb"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "quick-xml"
@@ -4592,7 +4733,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "strings_to_yara"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "common_config",
 ]
@@ -5012,7 +5153,7 @@ dependencies = [
 
 [[package]]
 name = "tiquery"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5179,6 +5320,24 @@ name = "typenum"
 version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
+
+[[package]]
+name = "udif"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e8c125861be904b01e97d4e85c31dd8f9b7578a143ac39d90e03ef130d95834"
+dependencies = [
+ "base64 0.22.1",
+ "byteorder",
+ "bzip2",
+ "crc32fast",
+ "flate2",
+ "lzfse",
+ "plist",
+ "thiserror 2.0.18",
+ "xml-rs",
+ "xz2",
+]
 
 [[package]]
 name = "unicode-ident"
@@ -6124,8 +6283,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "xara"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bef4110b070be271aa876e3e93858a49e8ae332021bd9331b2ceac6c53956a50"
+dependencies = [
+ "byteorder",
+ "flate2",
+ "quick-xml 0.37.5",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "xml-rs"
+version = "0.8.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
 name = "xmzhash"
-version = "4.2.0"
+version = "4.3.0"
 dependencies = [
  "common_config",
  "indicatif",
@@ -6136,6 +6313,15 @@ dependencies = [
  "walkdir",
  "yara",
  "yara-sys",
+]
+
+[[package]]
+name = "xz2"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388c44dc09d76f1536602ead6d325eb532f5c122f17782bd57fb47baeeb767e2"
+dependencies = [
+ "lzma-sys",
 ]
 
 [[package]]

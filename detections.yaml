@@ -27,13 +27,17 @@ HardcodedIPAddress:
   title: "Hardcoded IP address"
   id: "b2e9a3d7-cf18-4b6f-987b-4d90d7a94b88"
   status: "experimental"
-  description: "Detection of hardcoded IP address"
+  description: "Detection of hardcoded IP address. Excludes X.0.0.0- and X.X.0.0-shaped matches (network/supernet addresses, not usable host targets), 127.0.0.1 (loopback), the RFC 5737 documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) and 192.0.0.0/24 (IETF protocol assignments) — all guaranteed by RFC to never be real routable hosts — plus 255.255.255.255 (broadcast) and 239.255.255.250 (SSDP multicast, the one specific address every UPnP/SSDP implementation hardcodes). Boundary requires the match not be immediately preceded or followed by another digit, dot, OR letter/underscore — \\b alone (or a digit/dot-only boundary check) lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer identifier: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth) matched as \"1.3.6.1\", and — the case that motivated tightening the boundary further — a Go compiler closure symbol like crypto/tls.(*clientHelloMsg).marshal.func1.4.10.1 matched \"4.10.1\"-style tails as if they were IPs, since the character right before the digits was a letter ('c' in 'func'), which the original digit/dot-only lookbehind never checked. Observed on IPStorm (TAOMM Ch1): 29 raw matches, nearly all either Go symbol-table tail-numbers or one of these now-excluded reserved ranges (themselves libp2p's own bogon/CIDR-filter constants, not C2 infrastructure)."
+  references:
+    - "https://oidref.com/1.3.6.1.5.5.7.3.1"
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b(?![^\\s]*version=)"
+      - "(?<![\\w.])(?!127\\.0\\.0\\.1\\b)(?!\\d{1,3}\\.0\\.0\\.0\\b)(?!\\d{1,3}\\.\\d{1,3}\\.0\\.0\\b)(?!192\\.0\\.0\\.)(?!192\\.0\\.2\\.)(?!198\\.51\\.100\\.)(?!203\\.0\\.113\\.)(?!255\\.255\\.255\\.255\\b)(?!239\\.255\\.255\\.250\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\w.])(?![^\\s]*version=)"
+  falsepositives:
+    - "A real hardcoded IP that genuinely ends in .0.0.0 or .0.0 (rare — that's a network/supernet address, not a usable host target)"
   tags:
     - attack.t1071.001
   level: high
@@ -60,18 +64,44 @@ SuspiciousC2ApiPhp:
     - technique_id: "T1071.001"
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
+
+HandbuiltHttpRequestTemplate:
+  title: "Hand-built raw HTTP request template"
+  id: "c2-raw-http-template-001"
+  status: "experimental"
+  description: "Detects a printf/sprintf-style HTTP/1.0 request-line format string (e.g. 'GET /%s HTTP/1.0') or an unusual compact query-string template (e.g. 'q?s=%s&h=%s'). Malware that talks HTTP over a raw socket instead of a standard HTTP client library (NSURLSession, WinHTTP, libcurl) has to build the request text itself — this is the format-string skeleton left behind by that approach, and doesn't appear in normal use of a standard HTTP library. Found via a macOS backdoor/ransomware sample (EvilQuest/ThiefQuest) constructing its C2 beacon this way. OS-agnostic — the technique isn't platform-specific."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "GET /%s HTTP/1\\.0"
+      - "POST /%s HTTP/1\\.0"
+      - "q\\?s=%s&h=%s"
+  falsepositives:
+    - "Minimal embedded/IoT HTTP client implementations that legitimately hand-build requests to avoid a full HTTP library dependency"
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
 SuspiciousDomainRandom:
   title: "Suspicious domain with random characters"
   id: "d90e5e77-c876-4d2e-b469-9a6a9bb0f5e7"
   status: "experimental"
-  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names. Scheme prefix required to avoid Go import path false positives. Optional subdomain prefix (e.g. www.) handled via non-capturing group to correctly match cases like the WannaCry kill switch domain (http://www.iuqerfsodp9...). URL must be cleanly delimited (preceded by whitespace, quote, or start-of-string) to avoid matching URLs embedded mid-blob in Go binary data sections or DGA word lists."
+  description: "Domain containing a mix of letters and digits, characteristic of DGA and randomly-generated C2 domains (e.g. yee9mbi69cm7.com, 4usfliof.net). Requires at least one digit in the domain portion to avoid matching legitimate brand names, AND a 5+ character minimum on that portion — DGA domains are long by design (more entropy = harder to preemptively block/collide), whereas a short digit-containing label is far more often a legitimate abbreviated brand (w3.org, mp3.com, id3.org). Without the length floor, the W3C's own w3.org — appearing in essentially every HTML DOCTYPE and XML namespace declaration in existence — matched this rule every time. Scheme prefix required to avoid Go import path false positives. Optional subdomain prefix (e.g. www.) handled via non-capturing group to correctly match cases like the WannaCry kill switch domain (http://www.iuqerfsodp9...). URL must be cleanly delimited (preceded by whitespace, quote, or start-of-string) to avoid matching URLs embedded mid-blob in Go binary data sections or DGA word lists."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(?:^|[\\s\"'`(])https?://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
-      - "(?:^|[\\s\"'`(])ftp://(?:[a-zA-Z0-9-]+\\.)*[a-zA-Z0-9]*[0-9][a-zA-Z0-9]*\\.(com|biz|net|org|info)"
+      - "(?:^|[\\s\"'`(])https?://(?:[a-zA-Z0-9-]+\\.)*(?=[a-zA-Z0-9]*[0-9])[a-zA-Z0-9]{5,}\\.(com|biz|net|org|info)"
+      - "(?:^|[\\s\"'`(])ftp://(?:[a-zA-Z0-9-]+\\.)*(?=[a-zA-Z0-9]*[0-9])[a-zA-Z0-9]{5,}\\.(com|biz|net|org|info)"
   tags:
     - attack.t1071.001
   level: high
@@ -1332,14 +1362,18 @@ PackedOrStubExecutable:
   title: "Packed Executable or Stub Artifact"
   id: "packer-stub-hint"
   status: "experimental"
-  description: "Hints that the binary is packed or a stub loader (e.g., UPX or DOS headers only)."
+  description: "Hints that the binary is packed or a stub loader (e.g., UPX or DOS headers only). The leading-dot .UPX! pattern only matches when some other character happens to immediately precede the marker within the same extracted string — a UPX-packed Mach-O (iWorm/JavaW, from the 2014 Virus Bulletin analysis) extracts \"UPX!\" as its own clean isolated string, which the leading dot then fails to match at all. Added the bare marker plus UPX's own info/copyright strings, which are unambiguous. Cross-platform, not Windows-specific — genuinely more notable on macOS, where packers are uncommon."
+  references:
+    - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
   logsource:
     category: "file_event"
-    product: "windows"
+    product: any
   detection:
     strings:
-      - ".UPX!"
+      - "UPX!"
       - "This program cannot be run in DOS mode"
+      - "packed with the UPX executable packer"
+      - "UPX \\d+\\.\\d+ Copyright"
   tags:
     - attack.T1027
   level: medium
@@ -1391,6 +1425,31 @@ RansomwareCryptoAPIs:
   tags:
     - attack.T1486
   level: high
+  mitre:
+    - technique_id: "T1486"
+      technique_name: "Data Encrypted for Impact"
+      tactics: ["Impact"]
+
+BitcoinAddressP2PKH:
+  title: "Hardcoded Bitcoin address (P2PKH/P2SH)"
+  id: "ransom-btc-address-001"
+  status: "experimental"
+  description: "Detects a Base58Check-encoded legacy Bitcoin address (P2PKH, starting '1', or P2SH, starting '3') embedded as a plain string. Ransom notes and extortion payloads commonly hardcode a payment address directly in the binary rather than fetching it from a C2 server, since the demand still needs to display even if C2 is unreachable. Found via a heavily string-obfuscated macOS ransomware/backdoor sample (EvilQuest/ThiefQuest) whose ransom note text itself is encrypted, but the payment address survived in the clear. OS-agnostic — this is not a macOS-specific indicator."
+  references:
+    - "https://en.bitcoin.it/wiki/Address"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "\\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b"
+  falsepositives:
+    - "Base58 text that happens to fit the length/charset envelope without being a real address (rare given the length/charset constraints, but not cryptographically verified — no checksum validation is performed)"
+  level: high
+  tags:
+    - attack.t1486
   mitre:
     - technique_id: "T1486"
       technique_name: "Data Encrypted for Impact"
@@ -1923,6 +1982,58 @@ MacLaunchAgentDaemonPersistence:
       technique_name: "Create or Modify System Process: Launch Agent"
       tactics: ["Persistence", "Privilege Escalation"]
 
+IWormJavaWPersistence:
+  title: "iWorm/JavaW persistence indicators"
+  id: "mac-iworm-javaw-001"
+  status: "experimental"
+  description: "Detects the exact persistence artifacts of iWorm's second-stage dropper (the '0' binary in TAOMM's Install.app sample): it creates /Library/Application Support/JavaW/, drops the embedded payload there as JavaW, and installs a LaunchDaemon labeled com.JavaW (/Library/LaunchDaemons/com.JavaW.plist) with RunAtLoad set, then loads/starts it via launchctl. These strings are already present in the dropper itself, not just the payload it writes — the generic LaunchDaemon rule catches the launchctl/LaunchDaemons paths already present in this sample, but not the family-specific label/path that identifies it as iWorm specifically."
+  references:
+    - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "com\\.JavaW"
+      - "/Library/Application Support/JavaW"
+  falsepositives:
+    - "A legitimate, unrelated tool that happens to use the literal bundle identifier com.JavaW (effectively unheard of)"
+  level: high
+  tags:
+    - attack.t1543.004
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+RedditDeadDropC2:
+  title: "Reddit used as a C2 dead-drop resolver"
+  id: "c2-reddit-deaddrop-001"
+  status: "experimental"
+  description: "Detects references to the specific Reddit accounts/subreddits iWorm queried to locate its C2 server list: comments posted by the account vtnhiaovyd under the subreddit post minecraftserverlists (since banned), and the subreddit ilikedota2 (still active as of the original analysis). Using a public web service's search/comments as a dead-drop to publish rotating C2 addresses — rather than hardcoding them — is the same technique OS X Flashback used with Twitter. In this sample the strings only exist inside the UPX-packed JavaW payload (not visible until unpacked: upx -d JavaW); dropper/installer components won't match this rule."
+  references:
+    - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "minecraftserverlists"
+      - "vtnhiaovyd"
+      - "ilikedota2"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1102.001
+  mitre:
+    - technique_id: "T1102.001"
+      technique_name: "Web Service: Dead Drop Resolver"
+      tactics: ["Command and Control"]
+
 MacLoginItemPersistence:
   title: "macOS Login Item Persistence"
   id: "mac-loginitem-persist-001"
@@ -2053,6 +2164,81 @@ MacAppleScriptExecution:
       technique_name: "Command and Scripting Interpreter: AppleScript"
       tactics: ["Execution"]
 
+MacCompiledAppleScriptShellExec:
+  title: "Compiled AppleScript with do-shell-script capability"
+  id: "mac-compiled-scpt-shellexec-001"
+  status: "experimental"
+  description: "Detects the .sysoexecTEXT AppleEvent code — the literal bytes a compiled AppleScript (.scpt) contains whenever it uses 'do shell script'. Malware authors routinely compile their .scpt payloads WITHOUT retaining source (osacompile strips it, or Script Editor's 'Run-only' export) specifically to defeat osadecompile and any plaintext-source detection — the existing MacAppleScriptExecution rule's \"do shell script\" string never appears in such a file, since the command is stored as this 4+4+4-byte event code instead of source text. Observed across all three compiled .scpt payloads in an XCSSET sample (all of which failed osadecompile with errOSASourceNotAvailable)."
+  references:
+    - "https://blog.trendmicro.com/trendlabs-security-intelligence/xcsset-mac-malware-infects-xcode-projects-performs-uxss-attack-on-safari-other-browsers-leverages-zero-day-exploits/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "sysoexecTEXT"
+  falsepositives:
+    - "Any legitimate compiled AppleScript (source-retained or not) that uses do shell script for benign automation — this is a strict superset of what the plaintext do-shell-script rule already accepts as a risk tradeoff, just extended to binaries that string-search alone can't see into"
+  level: high
+  tags:
+    - attack.t1059.002
+  mitre:
+    - technique_id: "T1059.002"
+      technique_name: "Command and Scripting Interpreter: AppleScript"
+      tactics: ["Execution"]
+
+MacAppleScriptFilelessRemoteExec:
+  title: "AppleScript fileless remote script execution (curl piped into osascript -e)"
+  id: "mac-scpt-fileless-remote-001"
+  status: "experimental"
+  description: "Detects the pattern osascript -e \"$(curl ...)\" — fetching a remote script and evaluating it inline via osascript's -e flag, so the downloaded payload is never written to disk. Found decoded from an 8-layer-nested base64 blob in an XCSSET dropper (b.sh/jey.sh): a 'boot(moduleName)' function that curls a per-module payload from a C2 staging path and pipes it directly into osascript -e, alongside a separate curl-only path that downloads a module to /tmp/.f, runs it, then deletes it — both avoid a payload with any real dwell time on disk."
+  references:
+    - "https://www.microsoft.com/en-us/security/blog/2025/09/25/xcsset-evolves-again-analyzing-the-latest-updates-to-xcssets-inventory/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "osascript -e \\\\?\\\"\\$\\(curl"
+      - "osascript -e '\\$\\(curl"
+  falsepositives:
+    - "A legitimate admin/automation script that intentionally evaluates a trusted remote script this way (uncommon, but not impossible in CI/deployment tooling)"
+  level: high
+  tags:
+    - attack.t1620
+  mitre:
+    - technique_id: "T1620"
+      technique_name: "Reflective Code Loading"
+      tactics: ["Defense Evasion"]
+
+XcssetCdntorC2:
+  title: "XCSSET cdntor.ru C2 domain (2025 campaign)"
+  id: "c2-xcsset-cdntor-001"
+  status: "experimental"
+  description: "Detects the hardcoded C2 domain cdntor.ru from a 2025 XCSSET variant: telemetry beacons post to https://cdntor.ru/j with a colon-delimited 'b:<user>:<serial>:<module>:<message>' body, and per-module payloads are staged at https://cdntor.ru/s/<moduleName>. A domain-specific IOC — expect this infrastructure to rotate — but concrete and directly tied to a documented, actively analyzed campaign."
+  references:
+    - "https://www.microsoft.com/en-us/security/blog/2025/09/25/xcsset-evolves-again-analyzing-the-latest-updates-to-xcssets-inventory/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "cdntor\\.ru"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
 MacUnixShellExecution:
   title: "macOS Unix Shell Execution via POSIX API"
   id: "mac-posix-exec-001"
@@ -2126,7 +2312,7 @@ MacSandboxVMEvasion:
   title: "macOS Sandbox / VM Detection"
   id: "mac-sandbox-evade-001"
   status: "experimental"
-  description: "Detects strings used to identify virtual machine or analysis environments on macOS. VMware and Parallels leave detectable artifacts in IOKit. sysctl hw.logicalcpu is used to detect low-CPU sandboxes."
+  description: "Detects strings used to identify virtual machine or analysis environments on macOS. VMware and Parallels leave detectable artifacts in IOKit. sysctl hw.logicalcpu is used to detect low-CPU sandboxes. Bare \"QEMU\" was dropped: unlike the product names below, a binary that simply IS QEMU (bundled as the emulation vehicle itself — BirdMiner does exactly this to run a full Linux VM for cryptomining) references its own name hundreds of times throughout its own help text and class names, drowning out everything else — 459 of 802 total matches on one real sample were this single pattern. VMware/Parallels/VirtualBox remain because a binary essentially never legitimately contains its own name matching one of those strings."
   logsource:
     category: "file_event"
     product: "macos"
@@ -2136,7 +2322,6 @@ MacSandboxVMEvasion:
       - "Parallels"
       - "VirtualBox"
       - "hw\\.logicalcpu"
-      - "QEMU"
   tags:
     - attack.T1497.001
   level: high
@@ -2144,6 +2329,56 @@ MacSandboxVMEvasion:
     - technique_id: "T1497.001"
       technique_name: "Virtualization/Sandbox Evasion: System Checks"
       tactics: ["Defense Evasion"]
+
+MacActivityMonitorEvasion:
+  title: "macOS Activity Monitor process-check evasion"
+  id: "mac-actmon-evade-001"
+  status: "experimental"
+  description: "Detects a check for a running 'Activity Monitor' process (macOS's built-in CPU/resource monitor) used to gate malicious activity — pgrep \"Activity Monitor\" combined with launchctl load/unload of the checking script's own LaunchDaemon. Observed in BirdMiner (a disguised cryptominer that emulates Linux via QEMU to run XMRig): a startup script unloads its own daemon if Activity Monitor is open (so the victim's CPU usage looks normal if they go looking), and a companion watchdog re-checks every 15 minutes, unloading again if Activity Monitor is still running or reloading once it's closed. A user opening the exact tool that would reveal high CPU usage from mining is exactly the trigger malware needs to hide from."
+  references:
+    - "https://blog.malwarebytes.com/mac/2019/06/new-mac-cryptominer-malwarebytes-detects-as-bird-miner-runs-by-emulating-linux/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "pgrep\\s+[\"']?Activity Monitor[\"']?"
+  falsepositives:
+    - "A legitimate system health/monitoring script that checks whether Activity Monitor is already open before launching its own copy"
+  level: high
+  tags:
+    - attack.t1497.001
+  mitre:
+    - technique_id: "T1497.001"
+      technique_name: "Virtualization/Sandbox Evasion: System Checks"
+      tactics: ["Defense Evasion"]
+
+MacLaunchDaemonLabelIsFilename:
+  title: "macOS LaunchDaemon/LaunchAgent Label literally ends in .plist"
+  id: "mac-launchd-label-plist-001"
+  status: "experimental"
+  description: "Detects a launchd plist whose Label value (the daemon/agent's own identifier, conventionally reverse-DNS like com.company.product) literally includes the .plist file extension, e.g. <string>com.unshavedly.plist</string>. A real developer never does this — Label is an identifier, not a filename, and Apple's own convention plus every real-world example omits the extension. It's a distinctive tell of a plist churned out by an automated malware-builder script rather than written by hand. Observed in both of BirdMiner's persistence plists (com.unshavedly.plist, com.woolgrowing.plist), neither of which otherwise contains anything a generic rule would flag."
+  references:
+    - "https://blog.malwarebytes.com/mac/2019/06/new-mac-cryptominer-malwarebytes-detects-as-bird-miner-runs-by-emulating-linux/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "<key>Label</key><string>[^<]*\\.plist</string>"
+  falsepositives:
+    - "A hand-authored plist that happens to make this same naming mistake (uncommon, but not impossible)"
+  level: medium
+  tags:
+    - attack.t1543.004
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
 
 MacSensitiveFileAccess:
   title: "macOS Sensitive File and Directory Access"
@@ -2172,6 +2407,207 @@ MacSensitiveFileAccess:
     - technique_id: "T1539"
       technique_name: "Steal Web Session Cookie"
       tactics: ["Credential Access"]
+
+MacInMemoryMachOLoading:
+  title: "macOS In-Memory Mach-O Loading (dyld NSCreateObjectFileImage)"
+  id: "mac-inmem-macho-001"
+  status: "experimental"
+  description: "Detects debug-assertion strings from Apple's NSCreateObjectFileImageFromMemory implementation (the API used to load and execute a Mach-O image entirely from a memory buffer rather than a file on disk). WorkAroundRadarID4189935 is a literal internal Radar bug-ID comment/assertion string from that dyld code path — its presence in a binary is a strong indicator the sample bundles a copy of it for fileless/reflective Mach-O execution, a documented technique used by EvilQuest/ThiefQuest to run a payload without writing it to disk first."
+  references:
+    - "https://opensource.apple.com/source/dyld/"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "WorkAroundRadarID4189935"
+      - "NSCreateObjectFileImageFromMemory"
+  falsepositives:
+    - "A legitimate tool that statically links or vendors Apple's open-source dyld loader code for its own purposes (uncommon outside of loader/injection tooling)"
+  level: high
+  tags:
+    - attack.t1620
+  mitre:
+    - technique_id: "T1620"
+      technique_name: "Reflective Code Loading"
+      tactics: ["Defense Evasion"]
+
+BellaMacRatSignature:
+  title: "Bella macOS RAT signature (Python post-exploitation payload)"
+  id: "mac-bella-rat-001"
+  status: "experimental"
+  description: "Detects internal function/variable names unique to Bella, a publicly available macOS post-exploitation RAT (Python), embedded as a payload. Observed in a Dok/Dokument sample as a ~150KB base64 string decoding to a 2,500+ line Python script with a hardcoded C2 host/port, Chrome saved-password theft, Apple ID phishing, iCloud/Find My iPhone abuse, rogue root CA certificate installation for MITM, and LaunchAgent persistence. These identifiers only exist post-decode — mstrings' base64 auto-decode-and-rescan step (added alongside this rule) is what makes them visible to string matching at all."
+  references:
+    - "https://github.com/topics/bella-rat"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "bella_version"
+      - "create_bella_helpers"
+      - "chrome_safe_storage"
+      - "appleIDPhish"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1059.006
+  mitre:
+    - technique_id: "T1059.006"
+      technique_name: "Command and Scripting Interpreter: Python"
+      tactics: ["Execution"]
+
+EmbeddedBase64Payload:
+  title: "Large embedded base64 blob"
+  id: "obfuscation-b64blob-001"
+  status: "experimental"
+  description: "Detects a single extracted string that is almost entirely a long, unbroken base64-alphabet run (200+ chars) — the shape of an embedded encoded payload (script, executable, config) rather than incidental text. A backstop signal alongside mstrings' base64 auto-decode-and-rescan step: this still fires even when the blob doesn't decode to printable text (e.g. it's encrypted before being base64-encoded) or in any context that only runs detections.yaml pattern matching without the decode step."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "^[A-Za-z0-9+/]{200,}={0,2}$"
+  falsepositives:
+    - "Long non-encoded alphanumeric identifiers (rare at this length), embedded font/resource data that happens to be base64-alphabet-shaped without being a deliberately encoded payload"
+  level: medium
+  tags:
+    - attack.t1027
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+SelfDecodingBase64Cli:
+  title: "Self-decoding via macOS base64 CLI"
+  id: "mac-selfdecode-cli-001"
+  status: "experimental"
+  description: "Detects a format-string invocation of /usr/bin/base64 in decode mode (base64 -i <in> -o <out> -D), shelled out to via NSTask/subprocess rather than decoding natively. A dropper that reveals its real payload this way — instead of a library call like FromBase64String, which would itself be a static string a scanner might flag — is deliberately routing around simpler detection. Observed in a Dok/Dokument sample decoding an embedded Bella RAT payload this way."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "base64 -i %@ -o %@ -D"
+      - "base64\\s+-D\\b"
+  falsepositives:
+    - "Legitimate shell scripts/tools that pipe through base64 -D for benign encoding/decoding needs"
+  level: medium
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
+EmPyreStagerSignature:
+  title: "EmPyre-style Python stager signature"
+  id: "mac-empyre-stager-001"
+  status: "experimental"
+  description: "Detects the distinctive stager pattern used by EmPyre (the macOS/Linux port of PowerShell Empire) and its derivatives: a beacon request whose Cookie header carries a base64-encoded JSON config with loader_options/payload_options fields (host, port, launch_agent_name, loader_name), and a second stage smuggled inside an intentional HTTP 404 response body (real server code is expected to 404; the actual payload is appended after a literal 'DEBUG:' marker and executed via exec(b64decode(...))). Observed in a Siggen sample: a hidden LaunchDaemon (label \"com.enzo\", masquerading launch_agent_name \"com.apple.HEYgiNb\") ran a beacon-gate script (checks a status endpoint for the word \"open\" before activating) that fetched and exec'd this stager. Only visible to string matching once mstrings' base64 auto-decode-and-rescan step runs, since this content is typically embedded as an encoded blob rather than literal source."
+  references:
+    - "https://github.com/EmpireProject/EmPyre"
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "loader_options"
+      - "payload_options"
+      - "launch_agent_name"
+      - "DEBUG-->"
+      - "exec\\(b64decode\\("
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+DynamicDnsC2Domain:
+  title: "Free dynamic-DNS domain (common C2 hosting choice)"
+  id: "c2-ddns-domain-001"
+  status: "experimental"
+  description: "Detects a hostname under a free dynamic-DNS provider suffix (No-IP, DuckDNS, mine.nu / dynu, afraid.org, and similar). Legitimate software essentially never hardcodes one of these — they're free, require no registration verification, and let an operator repoint the hostname to a new IP at will, which is exactly why they're a recurring, well-documented C2/staging-infrastructure choice for lower-budget campaigns. Observed as both the staging host (serving a persistence plist and beacon script) and the beacon-gate check in a Siggen sample."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "\\b[a-z0-9-]+\\.(mine\\.nu|webhop\\.(net|org|me)|no-ip\\.(org|biz|info)|noip\\.(com|org)|duckdns\\.org|ddns\\.net|hopto\\.org|zapto\\.org|dynu\\.(com|net)|afraid\\.org)\\b"
+  falsepositives:
+    - "A legitimate personal/hobby project or self-hosted service knowingly using a free DDNS hostname"
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+MacKeyloggerKeyNameTable:
+  title: "macOS Keylogger Key-Name Table"
+  id: "mac-keylogger-keytable-001"
+  status: "experimental"
+  description: "Detects bracketed human-readable key-name strings ([left-cmd], [caps], [volup], etc.) used to translate captured keycodes/modifier state into readable text before logging or exfiltration — the same table structure documented in EvilQuest/ThiefQuest's keylogging component. Legitimate accessibility/input-remapping software can use similar labels, so this is a heuristic rather than a definitive indicator."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "^\\[(left-cmd|right-cmd|left-shift|right-shift|left-option|right-option|left-ctrl|right-ctrl|caps|volup|voldown|mute|fwddel|pgup|pgdown)\\]$"
+  falsepositives:
+    - "Accessibility tools, keyboard remapping utilities, or input-testing apps that display the same human-readable key names"
+  level: medium
+  tags:
+    - attack.t1056.001
+  mitre:
+    - technique_id: "T1056.001"
+      technique_name: "Input Capture: Keylogging"
+      tactics: ["Collection"]
+
+MacSelfReexecRootEscalation:
+  title: "macOS Self Re-Exec Root/Admin Escalation Flags"
+  id: "mac-selfreexec-root-001"
+  status: "experimental"
+  description: "Detects internal CLI control flags a binary passes to itself when re-invoking as root/admin, paired with explicit privilege-requirement messages. EvilQuest/ThiefQuest re-launches itself with hidden flags (observed: --reroot, --noroot, --ignrp) to control its own re-exec/escalation flow rather than using a standard privileged-helper mechanism. Individually thin signals (root-requirement messages are common in legitimate installers), so this is a medium-confidence heuristic — strongest when multiple patterns match the same sample."
+  author: Doug Metz
+  date: 2026-07-21
+  logsource:
+    category: file_event
+    product: "macos"
+  detection:
+    strings:
+      - "--reroot\\b"
+      - "--noroot\\b"
+      - "--ignrp\\b"
+      - "This application has to be run by root"
+      - "This program is designed to run with admin privileges"
+  falsepositives:
+    - "Legitimate installers/updaters that require root and print a similar message, or CLI tools with coincidentally similar flag names"
+  level: medium
+  tags:
+    - attack.t1548
+  mitre:
+    - technique_id: "T1548"
+      technique_name: "Abuse Elevation Control Mechanism"
+      tactics: ["Privilege Escalation"]
 
 
 # ── Linux / IoT-specific detections ───────────────────────────────────────────
@@ -2271,17 +2707,20 @@ LinuxProcEnumeration:
 
 
 BusyboxIoTIndicator:
-  title: "BusyBox Reference (IoT Malware Indicator)"
+  title: "BusyBox Reference or Embedded BusyBox Shell"
   id: "busybox-iot-001"
   status: "experimental"
-  description: "Detects hardcoded /bin/busybox references. BusyBox is the standard Unix utility suite on embedded Linux devices; its presence as a string in malware indicates targeting of IoT/router/DVR platforms."
+  description: "Detects hardcoded /bin/busybox references, or the ash shell's own distinctive startup error text ('E: neither argv[0] nor $_ works.') for cases where a statically-linked BusyBox is embedded directly rather than just referenced by path. BusyBox is the standard Unix utility suite on embedded Linux devices, so its presence often indicates IoT/router/DVR targeting — but it's also used cross-platform to smuggle a full POSIX toolset inside a single binary. Observed disguised as fake Xcode project artifacts (files named 'Pods' and 'xcassets', both actually Mach-O executables containing this exact error string) in an XCSSET sample."
+  references:
+    - "https://www.microsoft.com/en-us/security/blog/2025/09/25/xcsset-evolves-again-analyzing-the-latest-updates-to-xcssets-inventory/"
   logsource:
     category: "file_event"
-    product: "linux"
+    product: any
   detection:
     strings:
       - "/bin/busybox"
       - "\\bbusybox\\b"
+      - "neither argv\\[0\\] nor \\$_ works"
   tags:
     - attack.T1059.004
   level: medium
@@ -2584,4 +3023,211 @@ CreateProcessExecution:
     - technique_id: "T1106"
       technique_name: "Native API"
       tactics: ["Execution"]
+
+
+ProtonMacXmlExfilBeacon:
+  title: "Proton macOS RAT XML exfiltration beacon"
+  id: "proton-xml-exfil-001"
+  status: "experimental"
+  description: "Detects the hardcoded XML template Proton (OSX/Proton.B-D) uses to phone home stolen data: <client id=\"[dbid]\"><conxdata><ip>[ip]</ip><raddr>...<password>...</password>...</metadata>. Found byte-identical in both the Proton.C (Eltima/Elmedia Updater) and Proton.D (fake Symantec Malware Detector) samples despite different lure apps, confirming a shared C2/exfil framework across variants. Captures admin credentials phished via a fake authorization dialog directly in cleartext inside the beacon."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+    - "https://www.malwarebytes.com/blog/threat-analysis/mac-threat-analysis/2017/11/osx-proton-spreading-through-fake-symantec-blog"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "<conxdata><ip>\\[ip\\]</ip><raddr>"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1041
+  mitre:
+    - technique_id: "T1041"
+      technique_name: "Exfiltration Over C2 Channel"
+      tactics: ["Exfiltration"]
+
+ProtonMacChainbreakerKeychainDump:
+  title: "Offline macOS Keychain file parser (chainbreaker-style)"
+  id: "proton-chainbreaker-kych-001"
+  status: "experimental"
+  description: "Detects the raw Keychain file-format signatures (KEYCHAIN_SIGNATURE 'kych', DBBLOB_SIGNATURE 0xfade0711) used by chainbreaker-style offline keychain parsers to decrypt login.keychain-db directly from disk, bypassing the Keychain API entirely — a different implementation path than SecItemCopyMatching/SecKeychainFindGenericPassword (see MacKeychainAccess). Found as a bundled, plaintext cb.py resource (paired with pbkdf2.py/pyDes.py for the 3DES key unwrap) in the Proton.C sample. Proton.D ships a same-named cb.py, but it's wrapped in exec(zlib.decompress(base64.b64decode(...))) — the literal signature strings are compressed inside that blob, not present as static text, so this rule does not fire on Proton.D. That self-decompressing-exec wrapper is itself a distinctive obfuscation pattern, worth a separate rule."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "unhexlify\\('fade0711'\\)"
+      - "KEYCHAIN_SIGNATURE\\s*=\\s*\"kych\""
+  falsepositives:
+    - "Legitimate forensic/pentest use of chainbreaker or similar offline keychain-parsing tools"
+  level: high
+  tags:
+    - attack.t1555.001
+  mitre:
+    - technique_id: "T1555.001"
+      technique_name: "Credentials from Password Stores: Keychain"
+      tactics: ["Credential Access"]
+
+ProtonMacChromeSafeStorageTheft:
+  title: "Chrome Safe Storage keychain query for Login/Web Data decryption"
+  id: "proton-chrome-safestorage-001"
+  status: "experimental"
+  description: "Detects the keychain generic-record XPath-style query Proton's compiled binary uses to fetch Chrome's 'Chrome Safe Storage' master key from the login keychain, which it then passes as an argument to a bundled ch.py helper (PBKDF2 + AES) to decrypt saved passwords and credit cards straight out of Chrome's Login Data / Web Data SQLite databases. Identical string found in both the Proton.C and Proton.D compiled binaries."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "generic-record\\[name='Chrome Safe Storage'\\]/password"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1555.003
+  mitre:
+    - technique_id: "T1555.003"
+      technique_name: "Credentials from Password Stores: Credentials from Web Browsers"
+      tactics: ["Credential Access"]
+
+ProtonMacPusherC2Channel:
+  title: "libPusher WebSocket channel used as C2 transport"
+  id: "proton-pusher-c2-001"
+  status: "experimental"
+  description: "Detects libPusher (PTPusher/PTPusherChannel) class names and the 'ws-%@.pusher.com' WebSocket endpoint format string. Proton abuses Pusher.com, a legitimate real-time pub/sub service, as its command-and-control transport — blending C2 traffic in with normal HTTPS/WSS connections to a well-known SaaS domain rather than a bespoke C2 server. Found in both the Proton.B (activity_agent) and Proton.C (Updater) binaries alongside an embedded SSH-tunnel implementation."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.hackread.com/hackers-selling-undetectable-proton-mac-malware/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "ws-%@\\.pusher\\.com"
+      - "com\\.pusher\\.libPusher"
+  falsepositives:
+    - "Legitimate macOS/iOS apps that use the libPusher library for real-time notifications"
+  level: high
+  tags:
+    - attack.t1102.002
+  mitre:
+    - technique_id: "T1102.002"
+      technique_name: "Web Service: Bidirectional Communication"
+      tactics: ["Command and Control"]
+
+ProtonMacRemoteAccessEnableChain:
+  title: "Apple Remote Desktop full-access backdoor enablement"
+  id: "proton-ard-backdoor-001"
+  status: "experimental"
+  description: "Detects the exact kickstart flag chain Proton uses to silently turn a victim Mac into a fully remote-controllable host: ARDAgent kickstart activated with -allowAccessFor -allUsers (grants Apple Remote Desktop/VNC access to every account, no per-user opt-in), chained in the same shell command with 'systemsetup -setremotelogin on' (enables SSH) and loading com.apple.smbd (enables file sharing). Legitimate IT/MDM tooling scripts these flags individually far more narrowly; this exact combination in one binary is a backdoor-enablement TTP, not routine admin work."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "kickstart\\s+-activate\\s+-configure\\s+-access\\s+-off\\s+-restart\\s+-agent\\s+-privs\\s+-all\\s+-allowAccessFor\\s+-allUsers"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1021.005
+  mitre:
+    - technique_id: "T1021.005"
+      technique_name: "Remote Services: VNC"
+      tactics: ["Persistence", "Lateral Movement"]
+
+ProtonMacDynamicLaunchAgentPlistTemplate:
+  title: "Self-installing LaunchAgent plist template embedded in binary"
+  id: "proton-dynamic-launchagent-001"
+  status: "experimental"
+  description: "Detects a hardcoded LaunchAgent plist XML template (KeepAlive/Label/ProgramArguments with %@ format-string placeholders) that malware fills in at runtime and writes to /Library/LaunchAgents or ~/Library/LaunchAgents itself, rather than shipping a static .plist resource. A binary that builds its own persistence plist as a string is deliberately avoiding a static file an AV/EDR product could fingerprint ahead of time."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "KeepAlive</key><true/><key>Label</key><string>%@</string><key>ProgramArguments"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1543.001
+  mitre:
+    - technique_id: "T1543.001"
+      technique_name: "Create or Modify System Process: Launch Agent"
+      tactics: ["Persistence"]
+
+ProtonMacFakePasswordPromptPhishing:
+  title: "Proton-style fake authorization dialog for password phishing"
+  id: "proton-fake-auth-prompt-001"
+  status: "experimental"
+  description: "Detects the exact lure sentences Proton uses in fake native authorization dialogs to phish the admin password in cleartext (captured via a plain NSSecureTextField, not the real Security/Authorization framework): 'Network Configuration needs to update DHCP settings.' (Proton.B/HandBrake) and 'Finder wants to make changes.' (Proton.C/Elmedia), both suffixed with the genuine-sounding 'Type your password to allow this.' Scoped to the exact known lure sentences rather than the generic suffix alone, since that suffix closely mimics real macOS SecurityAgent prompt wording by design."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+    - "https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "Network Configuration needs to update DHCP settings\\. Type your password to allow this\\."
+      - "Finder wants to make changes\\. Type your password to allow this\\."
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1056.002
+  mitre:
+    - technique_id: "T1056.002"
+      technique_name: "Input Capture: GUI Input Capture"
+      tactics: ["Credential Access"]
+
+PythonSelfDecompressingExec:
+  title: "Python payload self-decompression via exec(zlib.decompress(base64.b64decode(...)))"
+  id: "python-zlib-b64-exec-001"
+  status: "experimental"
+  description: "Detects the entire real payload of a .py file being hidden as a single compressed+base64-encoded blob, unwrapped and run in one line at import time: exec(zlib.decompress(base64.b64decode('...'))) (or eval(...) in place of exec). Legitimate Python code essentially never does this — it defeats static string/AST analysis of the actual logic, which only exists at runtime after decompression. Found in the Proton.D sample (fake Symantec Malware Detector): its cb.py is a same-named, same-purpose file as Proton.C's cb.py, but where Proton.C ships the chainbreaker keychain-parsing logic in the clear (see ProtonMacChainbreakerKeychainDump), Proton.D's copy is wrapped this way — the underlying logic is presumably similar or identical, but invisible to static string matching until decompressed."
+  references:
+    - "https://objective-see.org/blog/blog_0x1D.html"
+  author: Doug Metz
+  date: 2026-07-22
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "exec\\s*\\(\\s*zlib\\.decompress\\s*\\(\\s*base64\\.b64decode\\s*\\("
+      - "eval\\s*\\(\\s*zlib\\.decompress\\s*\\(\\s*base64\\.b64decode\\s*\\("
+  falsepositives:
+    - "Some legitimate Python packaging/bootstrap tools use this exact pattern to embed a vendored dependency or installer payload — rare, but not unheard of. Worth a quick check of what's actually inside the decompressed blob before treating a hit as malicious on its own."
+  level: high
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
 

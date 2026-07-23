@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
-  MalChela v4.2
+  MalChela v4.3
  </h1>
   <h4>
       A YARA &amp; Malware Analysis Toolkit written in Rust.
@@ -53,7 +53,7 @@
 | strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
 | xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for non-Windows malware corpus |
 
-**Mac Analysis** *(v4.2)*
+**Mac Analysis** *(v4.2+)*
 
 | Program          | Function |
 |------------------|----------|

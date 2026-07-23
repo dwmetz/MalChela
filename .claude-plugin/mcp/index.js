@@ -786,7 +786,11 @@ const MD_BACKTICK_BULLET = /- `(.+)`/g;
 // clients and copy-paste from treating it as a live link/domain). Applied
 // only where net_iocs get formatted for display; filesystem IOCs and
 // filenames elsewhere in the rollup are never touched.
+// Idempotent: mstrings now defangs its own "Potential Network IOCs"
+// section, so this rollup re-extracts already-defanged text out of that
+// markdown — bail out early rather than double-defang "[.]" into "[[.]]".
 function defang(ioc) {
+  if (ioc.includes('[.]') || ioc.toLowerCase().includes('hxxp')) return ioc;
   return ioc
     .replace(/http:\/\//g, 'hxxp://')
     .replace(/https:\/\//g, 'hxxps://')

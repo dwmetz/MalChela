@@ -1662,7 +1662,12 @@ def _defang(ioc: str) -> str:
     Applied only where net_iocs get formatted for display; the underlying
     value stored in net_iocs stays intact for anything that needs the real
     string. Filesystem IOCs and filenames elsewhere in the rollup are never
-    touched — this is deliberately scoped to network indicators only."""
+    touched — this is deliberately scoped to network indicators only.
+    Idempotent: mstrings now defangs its own "Potential Network IOCs"
+    section, so this rollup re-extracts already-defanged text out of that
+    markdown — bail out early rather than double-defang "[.]" into "[[.]]"."""
+    if "[.]" in ioc or "hxxp" in ioc.lower():
+        return ioc
     s = ioc.replace("http://", "hxxp://").replace("https://", "hxxps://").replace("ftp://", "fxxp://")
     return s.replace(".", "[.]")
 

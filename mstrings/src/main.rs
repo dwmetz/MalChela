@@ -26,12 +26,18 @@ use tabled::settings::{Style, Modify, Alignment, Width};
 // Define a Rust Orange color helper for colored crate
 const RUST_ORANGE: (u8, u8, u8) = (215, 100, 40); // Use this constant for color
 
-// Function to handle printing IOCs (unified CLI/GUI logic and formatting)
-fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>) {
+// Function to handle printing IOCs (unified CLI/GUI logic and formatting).
+// is_network gates defanging — filesystem IOCs are never defanged, only URLs/
+// domains/IPs (see defang_network_ioc's doc comment for why).
+fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>, is_network: bool) {
     if !iocs.is_empty() {
         println!("{}", title.truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
         for ioc in iocs {
-            println!("{}", ioc);
+            if is_network {
+                println!("{}", defang_network_ioc(ioc));
+            } else {
+                println!("{}", ioc);
+            }
         }
     }
 }
@@ -137,6 +143,24 @@ fn is_boring_ip(ip: &str) -> bool {
     (octets[0] == "192" && octets[1] == "0" && (octets[2] == "0" || octets[2] == "2")) // 192.0.0.0/24, 192.0.2.0/24 (TEST-NET-1)
         || (octets[0] == "198" && octets[1] == "51" && octets[2] == "100") // TEST-NET-2
         || (octets[0] == "203" && octets[1] == "0" && octets[2] == "113") // TEST-NET-3
+}
+
+// Defang a network IOC before display — standard analyst practice, and the
+// same reasoning that already applies to the Analyze rollup: a rendered/
+// displayed URL that reads exactly like a live clickable link is the wrong
+// affordance for a malware report to put in front of an analyst. Idempotent
+// (checks for "[.]"/"hxxp" already present) so re-processing already-
+// defanged text — e.g. the Python/MCP rollup re-extracting this same value
+// out of mstrings' own markdown — never double-defangs it into "[[.]]".
+fn defang_network_ioc(ioc: &str) -> String {
+    let lower = ioc.to_lowercase();
+    if ioc.contains("[.]") || lower.contains("hxxp") {
+        return ioc.to_string(); // already defanged
+    }
+    ioc.replace("http://", "hxxp://")
+        .replace("https://", "hxxps://")
+        .replace("ftp://", "fxxp://")
+        .replace('.', "[.]")
 }
 
 // Filter high-volume ObjC/Swift runtime noise that appears in every Mach-O binary.
@@ -969,12 +993,12 @@ fn append_ioc_sections(
         if format == "md" {
             report_buffer.push_str("## Potential Network IOCs\n\n");
             for ioc in net_iocs {
-                report_buffer.push_str(&format!("- `{}`\n", ioc));
+                report_buffer.push_str(&format!("- `{}`\n", defang_network_ioc(ioc)));
             }
         } else {
             report_buffer.push_str("POTENTIAL NETWORK IOCs:\n");
             for ioc in net_iocs {
-                report_buffer.push_str(&format!("{}\n", ioc));
+                report_buffer.push_str(&format!("{}\n", defang_network_ioc(ioc)));
             }
         }
         report_buffer.push('\n');
@@ -997,11 +1021,11 @@ fn run_single(
 
     // Use the print_iocs function for both headers, with color and proper handling for CLI/GUI
     println!("\n");
-    print_iocs("POTENTIAL FILESYSTEM IOCs:", &result.fs_iocs);
+    print_iocs("POTENTIAL FILESYSTEM IOCs:", &result.fs_iocs, false);
 
     if !result.net_iocs.is_empty() {
         println!("\n");
-        print_iocs("POTENTIAL NETWORK IOCs:", &result.net_iocs);
+        print_iocs("POTENTIAL NETWORK IOCs:", &result.net_iocs, true);
     }
 
     print_detail(&result.flat_matches);
@@ -1107,11 +1131,11 @@ fn run_bundle(
 
     // Combined IOC section across all binaries in the bundle
     println!("\n");
-    print_iocs("POTENTIAL FILESYSTEM IOCs:", &merged_fs_iocs);
+    print_iocs("POTENTIAL FILESYSTEM IOCs:", &merged_fs_iocs, false);
 
     if !merged_net_iocs.is_empty() {
         println!("\n");
-        print_iocs("POTENTIAL NETWORK IOCs:", &merged_net_iocs);
+        print_iocs("POTENTIAL NETWORK IOCs:", &merged_net_iocs, true);
     }
 
     println!();

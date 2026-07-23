@@ -63,8 +63,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: var(--header-height);
-    padding: 0 16px;
+    min-height: var(--header-height);
+    padding: env(safe-area-inset-top) 16px 0;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -752,11 +752,12 @@
 
   /* ── Footer ── */
   #footer {
-    height: 24px;
+    min-height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
+    padding-bottom: env(safe-area-inset-bottom);
     font-size: 10px;
     color: var(--text-dim);
     border-top: 1px solid var(--border);

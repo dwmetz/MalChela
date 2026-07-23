@@ -781,6 +781,19 @@ const MSTRINGS_FS_IOC_BLOCK = /## Potential Filesystem IOCs\n\n((?:- `.+`\n)+)/;
 const MSTRINGS_NET_IOC_BLOCK = /## Potential Network IOCs\n\n((?:- `.+`\n)+)/;
 const MD_BACKTICK_BULLET = /- `(.+)`/g;
 
+// Defang a network IOC before it's ever displayed — standard analyst
+// practice (hxxp(s):// keeps the scheme unresolvable, [.] stops chat/email
+// clients and copy-paste from treating it as a live link/domain). Applied
+// only where net_iocs get formatted for display; filesystem IOCs and
+// filenames elsewhere in the rollup are never touched.
+function defang(ioc) {
+  return ioc
+    .replace(/http:\/\//g, 'hxxp://')
+    .replace(/https:\/\//g, 'hxxps://')
+    .replace(/ftp:\/\//g, 'fxxp://')
+    .replace(/\./g, '[.]');
+}
+
 function extractMstringsIocs(markdown) {
   const bullets = (blockPattern) => {
     const m = blockPattern.exec(markdown);
@@ -890,6 +903,14 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     '## Triage Summary',
     '',
   );
+  if (order.length) {
+    lines.push(
+      "_Links below jump to that finding's section further down this report — " +
+      'they do not open the indicator itself. Network indicators are defanged ' +
+      '(hxxp, `[.]`)._'
+    );
+    lines.push('');
+  }
   if (order.length !== perFileResults.length) {
     lines.push(
       `- **${order.length} unique file(s)** across ${perFileResults.length} path(s) ` +
@@ -916,7 +937,7 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     lines.push('- **Filesystem IOCs** (mstrings): ' + fsIocs.map(({ ioc, anchor }) => `[\`${ioc}\`](#${anchor})`).join(', '));
   }
   if (netIocs.length) {
-    lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(({ ioc, anchor }) => `[\`${ioc}\`](#${anchor})`).join(', '));
+    lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(({ ioc, anchor }) => `[\`${defang(ioc)}\`](#${anchor})`).join(', '));
   }
   if (obfuscationFindings.length) {
     const detail = obfuscationFindings.map(({ filename, maxLayers }) => `\`${filename}\` (${maxLayers} layers)`).join(', ');

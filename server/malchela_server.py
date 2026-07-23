@@ -148,6 +148,15 @@ def serve_icon(filename):
     icons_dir = str((_SCRIPT_DIR / 'icons').resolve())
     return send_from_directory(icons_dir, filename)
 
+@app.route('/fonts/<path:filename>')
+def serve_font(filename):
+    """Serve vendored webfonts from server/fonts/ — SIL OFL licensed
+    (JetBrains Mono, Share Tech Mono), bundled locally instead of loading
+    from fonts.googleapis.com so the PWA has no font-related network
+    dependency at all, air-gapped or not."""
+    fonts_dir = str((_SCRIPT_DIR / 'fonts').resolve())
+    return send_from_directory(fonts_dir, filename)
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
@@ -1627,6 +1636,18 @@ _MSTRINGS_NET_IOC_BLOCK = re.compile(r"## Potential Network IOCs\n\n((?:- `.+`\n
 _MD_BACKTICK_BULLET = re.compile(r"- `(.+)`")
 
 
+def _defang(ioc: str) -> str:
+    """Defang a network IOC before it's ever displayed — standard analyst
+    practice (hxxp(s):// keeps the scheme unresolvable, [.] stops chat/
+    email clients and copy-paste from treating it as a live link/domain).
+    Applied only where net_iocs get formatted for display; the underlying
+    value stored in net_iocs stays intact for anything that needs the real
+    string. Filesystem IOCs and filenames elsewhere in the rollup are never
+    touched — this is deliberately scoped to network indicators only."""
+    s = ioc.replace("http://", "hxxp://").replace("https://", "hxxps://").replace("ftp://", "fxxp://")
+    return s.replace(".", "[.]")
+
+
 def _extract_mstrings_iocs(markdown: str) -> tuple:
     """Pull filesystem/network IOC bullets out of mstrings' own markdown
     sections ('## Potential Filesystem IOCs' / '## Potential Network IOCs',
@@ -1760,6 +1781,13 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
         "## Triage Summary",
         "",
     ]
+    if order:
+        lines.append(
+            "_Links below jump to that finding's section further down this report — "
+            "they do not open the indicator itself. Network indicators are defanged "
+            "(hxxp, `[.]`)._"
+        )
+        lines.append("")
     if len(order) != len(per_file_results):
         lines.append(
             f"- **{len(order)} unique file(s)** across {len(per_file_results)} path(s) "
@@ -1781,7 +1809,7 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     if fs_iocs:
         lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"[`{i}`](#{a})" for i, a in fs_iocs))
     if net_iocs:
-        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"[`{i}`](#{a})" for i, a in net_iocs))
+        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"[`{_defang(i)}`](#{a})" for i, a in net_iocs))
     if obfuscation_findings:
         detail = ", ".join(f"`{n}` ({layers} layers)" for n, layers in obfuscation_findings)
         lines.append(f"- **⚠ Multi-layer obfuscation detected** (mstrings): {detail}")

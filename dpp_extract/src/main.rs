@@ -141,6 +141,21 @@ fn extract_dmg(input: &Path, dest: &Path) -> Result<ExtractSummary, String> {
         // fix upstream here, but we can keep going around them.
         fs::create_dir_all(dest).map_err(|e| format!("Failed to create output dir: {}", e))?;
         let (files, dirs, skipped) = extract_walk_resilient(&mut fs_handle, &entries, dest);
+        // A total wash (nothing readable, but entries were listed) means the
+        // hfsplus/apfs crate couldn't walk this particular filesystem layout
+        // at all — seen on a legacy DropDMG-style partitioned HFS+ image
+        // (Apple_partition_map + Driver Descriptor Map) where every single
+        // entry hit "HFS+ error: file not found". That's a crate limitation,
+        // not something retryable here, so point at the one thing that does
+        // work on macOS: mounting the image directly and copying files out
+        // by hand. A partial failure (some files did extract) doesn't get
+        // this — it's routine (one bad alias/NUL-byte-name entry) and the
+        // extraction already succeeded well enough to be useful as-is.
+        let hint = if files == 0 && !skipped.is_empty() {
+            " This container's filesystem could not be read by the built-in extractor — on macOS, try mounting it directly instead: `hdiutil attach -readonly -nobrowse <file>`, then copy files out of the mounted volume and `hdiutil detach` when done."
+        } else {
+            ""
+        };
         return Ok(ExtractSummary {
             success: true,
             input: input.display().to_string(),
@@ -150,14 +165,15 @@ fn extract_dmg(input: &Path, dest: &Path) -> Result<ExtractSummary, String> {
             packages: vec![],
             files_extracted: files,
             note: format!(
-                "No .pkg found inside DMG — extracted raw filesystem ({} files, {} dirs{}).",
+                "No .pkg found inside DMG — extracted raw filesystem ({} files, {} dirs{}).{}",
                 files,
                 dirs,
                 if skipped.is_empty() {
                     String::new()
                 } else {
                     format!(", {} entries skipped", skipped.len())
-                }
+                },
+                hint
             ),
             skipped,
         });

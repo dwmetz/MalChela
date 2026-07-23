@@ -10,10 +10,27 @@
 <title>MalChela Analysis Toolkit v4.3</title>
 <link rel="manifest" href="manifest.json">
 <script src="marked.min.js"></script>
-<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/dwmetz/MalChela/main/assets/malchela_icon.png">
-<link rel="apple-touch-icon" href="https://raw.githubusercontent.com/dwmetz/MalChela/main/assets/malchela_icon.png">
+<link rel="icon" type="image/png" href="/icons/malchela_icon.png">
+<link rel="apple-touch-icon" href="/icons/malchela_icon.png">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+  /* Vendored locally (SIL OFL licensed) instead of loading from
+     fonts.googleapis.com — both are variable fonts, so the "latin" subset
+     file covers weights 300-700 via a single @font-face with a weight
+     range; the browser selects the right instance from the variable axis. */
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: url('/fonts/JetBrainsMono-latin.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Share Tech Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/ShareTechMono-latin.woff2') format('woff2');
+  }
 
   :root {
     --bg-primary:    #15161d;

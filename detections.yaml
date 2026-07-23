@@ -1434,7 +1434,7 @@ BitcoinAddressP2PKH:
   title: "Hardcoded Bitcoin address (P2PKH/P2SH)"
   id: "ransom-btc-address-001"
   status: "experimental"
-  description: "Detects a Base58Check-encoded legacy Bitcoin address (P2PKH, starting '1', or P2SH, starting '3') embedded as a plain string. Ransom notes and extortion payloads commonly hardcode a payment address directly in the binary rather than fetching it from a C2 server, since the demand still needs to display even if C2 is unreachable. Found via a heavily string-obfuscated macOS ransomware/backdoor sample (EvilQuest/ThiefQuest) whose ransom note text itself is encrypted, but the payment address survived in the clear. OS-agnostic — this is not a macOS-specific indicator. Requires at least one lowercase letter in the body: a real Base58Check address is a near-uniform random distribution over its 58-symbol alphabet, so the odds of a genuine address containing zero lowercase letters are astronomically small (~1 in a million at the 25-char minimum length), but plenty of legitimate all-uppercase/digit identifiers (API tokens, CDN file IDs, license/serial keys) coincidentally fit the same charset-and-length envelope. Confirmed false positive on OSX.CreativeUpdate (TAOMM Ch1): the dropper script's Adobe CDN file-ID token '1U14RSV3MVAHBMEGVS4LZ42AFNYEFF' (all uppercase+digits, no lowercase) matched before this fix."
+  description: "Detects a Base58Check-encoded legacy Bitcoin address (P2PKH, starting '1', or P2SH, starting '3') embedded as a plain string. Ransom notes and extortion payloads commonly hardcode a payment address directly in the binary rather than fetching it from a C2 server, since the demand still needs to display even if C2 is unreachable. Found via a heavily string-obfuscated macOS ransomware/backdoor sample (EvilQuest/ThiefQuest) whose ransom note text itself is encrypted, but the payment address survived in the clear. OS-agnostic — this is not a macOS-specific indicator. The regex only narrows by charset/length/shape; mstrings itself (see is_valid_base58check_address in mstrings/src/main.rs) decodes any shape match and verifies the real Base58Check double-SHA256 checksum before it's allowed to fire, since regex-only heuristics kept finding new false-positive shapes: first an all-uppercase Adobe CDN file-ID token from OSX.CreativeUpdate's dropper script ('1U14RSV3MVAHBMEGVS4LZ42AFNYEFF'), then a Qt/C++ Itanium-mangled symbol fragment from the same family's minergate-cli binary ('3connectToHostERK7QStringt', arising from linker string-suffix-sharing) — both TAOMM Ch1. Checksum validation makes both classes structurally impossible to false-positive on, rather than adding another shape exclusion the next binary would slip past."
   references:
     - "https://en.bitcoin.it/wiki/Address"
   author: Doug Metz
@@ -1444,9 +1444,9 @@ BitcoinAddressP2PKH:
     product: any
   detection:
     strings:
-      - "\\b[13](?=[a-km-zA-HJ-NP-Z1-9]{24,33}\\b)(?=[a-km-zA-HJ-NP-Z1-9]*[a-km-z])[a-km-zA-HJ-NP-Z1-9]{25,34}\\b"
+      - "\\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b"
   falsepositives:
-    - "Base58 text that happens to fit the length/charset envelope AND contains at least one lowercase letter without being a real address (rare given the length/charset/case constraints, but not cryptographically checksum-validated)"
+    - "None expected — mstrings verifies the Base58Check checksum in code before this rule is allowed to fire, not just the regex shape"
   level: high
   tags:
     - attack.t1486

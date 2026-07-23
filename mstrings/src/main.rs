@@ -145,6 +145,57 @@ fn is_boring_ip(ip: &str) -> bool {
         || (octets[0] == "203" && octets[1] == "0" && octets[2] == "113") // TEST-NET-3
 }
 
+// The Hardcoded Bitcoin address rule's regex only checks charset/length/case
+// shape, which isn't enough: Itanium C++ mangled symbol names (ubiquitous in
+// any Qt/C++ Mach-O binary, e.g. minergate-cli's "3connectToHostERK7QStringt")
+// routinely fall inside the same 26-35-char Base58 envelope with mixed case,
+// since the linker's string-suffix-sharing optimization leaves standalone
+// null-terminated fragments that look exactly like address bodies. A real
+// Base58Check address's last 4 bytes are a double-SHA256 checksum of the
+// preceding 21 bytes — decode and verify that here so only cryptographically
+// real addresses fire, instead of adding more probabilistic regex heuristics
+// that the next mangled-symbol shape would just slip past again.
+fn is_valid_base58check_address(s: &str) -> bool {
+    const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+    let mut leading_zeros = 0usize;
+    let mut chars = s.chars().peekable();
+    while chars.peek() == Some(&'1') {
+        leading_zeros += 1;
+        chars.next();
+    }
+
+    // Big-endian base58 -> base256 via repeated "multiply whole number by
+    // 58, add next digit" on a little-endian byte accumulator.
+    let mut bytes: Vec<u8> = Vec::new();
+    for c in s.chars() {
+        let Some(digit) = ALPHABET.iter().position(|&a| a as char == c) else {
+            return false; // not valid base58 charset at all
+        };
+        let mut carry = digit as u32;
+        for b in bytes.iter_mut() {
+            carry += (*b as u32) * 58;
+            *b = (carry & 0xFF) as u8;
+            carry >>= 8;
+        }
+        while carry > 0 {
+            bytes.push((carry & 0xFF) as u8);
+            carry >>= 8;
+        }
+    }
+    bytes.resize(bytes.len() + leading_zeros, 0);
+    bytes.reverse(); // was little-endian, address payload is big-endian
+
+    // Standard legacy address payload: 1-byte version + 20-byte hash160 + 4-byte checksum.
+    if bytes.len() != 25 {
+        return false;
+    }
+    let (payload, checksum) = bytes.split_at(21);
+    let round1 = Sha256::digest(payload);
+    let round2 = Sha256::digest(round1);
+    &round2[0..4] == checksum
+}
+
 // Defang a network IOC before display — standard analyst practice, and the
 // same reasoning that already applies to the Analyze rollup: a rendered/
 // displayed URL that reads exactly like a live clickable link is the wrong
@@ -354,6 +405,11 @@ impl Mstrings {
             let mut seen_rules: std::collections::HashSet<String> = std::collections::HashSet::new();
             for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
                 if let Ok(Some(found)) = regex.find(&m.matched_str) {
+                    if rule_name == "Hardcoded Bitcoin address (P2PKH/P2SH)"
+                        && !is_valid_base58check_address(found.as_str())
+                    {
+                        continue; // shape matched but checksum didn't — not a real address
+                    }
                     if seen_rules.insert(rule_name.clone()) {
                         new_matches.push(Match {
                             offset: m.offset,

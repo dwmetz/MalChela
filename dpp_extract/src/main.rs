@@ -152,7 +152,14 @@ fn extract_dmg(input: &Path, dest: &Path) -> Result<ExtractSummary, String> {
         // this — it's routine (one bad alias/NUL-byte-name entry) and the
         // extraction already succeeded well enough to be useful as-is.
         let hint = if files == 0 && !skipped.is_empty() {
-            " This container's filesystem could not be read by the built-in extractor — on macOS, try mounting it directly instead: `hdiutil attach -readonly -nobrowse <file>`, then copy files out of the mounted volume and `hdiutil detach` when done."
+            // `hdiutil attach`/`detach` still work but print a deprecation
+            // warning as of recent macOS versions in favor of `diskutil image
+            // attach` (mount) / plain `diskutil eject` (unmount — there is no
+            // `diskutil image eject`, confirmed via `diskutil` and `diskutil
+            // image --help`: eject is a top-level verb, not under `image`).
+            // Use the current syntax so this hint doesn't itself steer
+            // someone at a deprecated command.
+            " This container's filesystem could not be read by the built-in extractor — on macOS, try mounting it directly instead: `diskutil image attach --readOnly --nobrowse <file>`, then copy files out of the mounted volume and `diskutil eject <mountpoint>` when done."
         } else {
             ""
         };

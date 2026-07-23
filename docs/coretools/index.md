@@ -26,7 +26,6 @@
   </thead>
   <tbody>
     <tr><td>Combine YARA</td><td>Point it at a directory of YARA files and it will output one combined rule</td></tr>
-    <tr><td>dpp Extract</td><td>Unwraps a .dmg or .pkg (UDIF &rarr; HFS+/APFS &rarr; XAR &rarr; PBZX/CPIO) to reach the real payload files inside</td></tr>
     <tr><td>Extract Samples</td><td>Point it at a directory of password protected malware files to extract all</td></tr>
     <tr><td>File Analyzer</td><td>Get the hash, entropy, packing, PE info, YARA and VT match status for a file</td></tr>
     <tr><td>File Miner</td><td>Scans a folder for file type mismatches and metadata, and provides suggested tools</td></tr>
@@ -42,28 +41,8 @@
   </tbody>
 </table>
 
-<h2 style="text-align: center;">Mac Analysis Tools</h2>
 <p style="text-align: center;">
-  Dedicated tools for static analysis of macOS binaries, bundles, and property lists.
-</p>
-
-<table style="margin-left: 8%; width: 100%;">
-  <thead>
-    <tr>
-      <th>Program</th>
-      <th>Function</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr><td>Code Sign Check</td><td>Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and get-task-allow flag</td></tr>
-    <tr><td>Mach-O Info</td><td>Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection</td></tr>
-    <tr><td>mStrings</td><td>Extracts strings, IOCs, and MITRE ATT&CK matches from Mach-O binaries and .app bundles</td></tr>
-    <tr><td>Plist Analyzer</td><td>Parses .plist files and .app bundle Info.plist for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection</td></tr>
-  </tbody>
-</table>
-
-<p style="text-align: center;">
-  All four tools auto-resolve a .app bundle's main executable — point them at the bundle directly. Run all four together against a bundle or binary with <code>./mac_stack.sh</code>.
+  MalChela also includes a dedicated <a href="../mac/">Mac Analysis</a> tool stack for static analysis of macOS binaries, bundles, and property lists.
 </p>
 
 <p style="text-align: center;">

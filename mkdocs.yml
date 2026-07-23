@@ -26,17 +26,18 @@ nav:
   - Home: index.md
   - About: about.md
   - Installation: install.md
+  - Navigation: navigation.md
   - Configuration:
       - tools.yaml: configuration/tools-yaml.md
       - api configuration: configuration/api-configuration.md
       - offline mode: configuration/offline-mode.md
   - Case Management: cases.md
+  - AI Integration & MCP: mcp.md
   - Core Tools:
       - Overview: coretools/index.md
       - Usage: coretools/usage.md
       - Analyze: coretools/analyze.md
       - CombineYARA: coretools/combine_yara.md
-      - dppExtract: coretools/dpp_extract.md
       - ExtractSamples: coretools/extract_samples.md
       - FileAnalyzer: coretools/fileanalyzer.md
       - FileMiner: coretools/fileminer.md
@@ -52,9 +53,13 @@ nav:
       - XMZHash: coretools/xmzhash.md
 
   - Mac Analysis:
-      - Code Sign Check: coretools/codesign_check.md
-      - Mach-O Info: coretools/macho_info.md
-      - Plist Analyzer: coretools/plist_analyzer.md
+      - Overview: mac/index.md
+      - Analyze: coretools/analyze.md
+      - Code Sign Check: mac/codesign_check.md
+      - dppExtract: mac/dpp_extract.md
+      - Mach-O Info: mac/macho_info.md
+      - MStrings: coretools/mstrings.md
+      - Plist Analyzer: mac/plist_analyzer.md
 
   - Third-Party Tools:
       - Integrating Third Party Tools: tools/index.md

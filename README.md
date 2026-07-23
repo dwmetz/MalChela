@@ -58,11 +58,12 @@
 | Program          | Function |
 |------------------|----------|
 | Code Sign Check  | Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and `get-task-allow` flag |
+| dpp Extract      | Unwraps a `.dmg` or `.pkg` (UDIF → HFS+/APFS → XAR → PBZX/CPIO) to reach the real payload files inside |
 | Mach-O Info      | Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection |
 | mStrings         | Extracts strings, IOCs, and MITRE ATT&CK matches from Mach-O binaries and `.app` bundles |
 | Plist Analyzer   | Parses `.plist` files and `.app` bundle `Info.plist` for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection |
 
-All four tools auto-resolve a `.app` bundle's main executable (via `CFBundleExecutable`, falling back to the sole binary in `Contents/MacOS/`) — point them at the bundle directly. Run all four together against a bundle or binary with `./mac_stack.sh`. More Mac-specific detections are planned for upcoming releases.
+Code Sign Check, Mach-O Info, mStrings, and Plist Analyzer auto-resolve a `.app` bundle's main executable (via `CFBundleExecutable`, falling back to the sole binary in `Contents/MacOS/`) — point them at the bundle directly. Run those four together against a bundle or binary with `./mac_stack.sh`. More Mac-specific detections are planned for upcoming releases.
 
 *Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically.*
 

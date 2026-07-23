@@ -327,7 +327,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="codesign_check/" class="md-tabs__link">
+        <a href="analyze/" class="md-tabs__link">
           
   
   
@@ -822,29 +822,6 @@
   
   
     <li class="md-nav__item">
-      <a href="dpp_extract/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    dppExtract
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="extract_samples/" class="md-nav__link">
         
   
@@ -1192,6 +1169,29 @@
   
   
     <li class="md-nav__item">
+      <a href="analyze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Analyze
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="codesign_check/" class="md-nav__link">
         
   
@@ -1215,12 +1215,58 @@
   
   
     <li class="md-nav__item">
+      <a href="dpp_extract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    dppExtract
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="macho_info/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     Mach-O Info
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="mstrings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    MStrings
     
   </span>
   
@@ -1599,7 +1645,6 @@
   </thead>
   <tbody>
     <tr><td>Combine YARA</td><td>Point it at a directory of YARA files and it will output one combined rule</td></tr>
-    <tr><td>dpp Extract</td><td>Unwraps a .dmg or .pkg (UDIF &rarr; HFS+/APFS &rarr; XAR &rarr; PBZX/CPIO) to reach the real payload files inside</td></tr>
     <tr><td>Extract Samples</td><td>Point it at a directory of password protected malware files to extract all</td></tr>
     <tr><td>File Analyzer</td><td>Get the hash, entropy, packing, PE info, YARA and VT match status for a file</td></tr>
     <tr><td>File Miner</td><td>Scans a folder for file type mismatches and metadata, and provides suggested tools</td></tr>
@@ -1628,7 +1673,9 @@
     </tr>
   </thead>
   <tbody>
+    <tr><td>Analyze</td><td>One-click auto-triage for a file, folder, or .app bundle — dispatches every relevant tool, including the Mac Analysis stack, and produces a combined rollup report</td></tr>
     <tr><td>Code Sign Check</td><td>Inspects macOS code signing: Developer-signed vs. ad-hoc vs. unsigned, Team ID, Bundle ID, entitlements, and get-task-allow flag</td></tr>
+    <tr><td>dpp Extract</td><td>Unwraps a .dmg or .pkg (UDIF &rarr; HFS+/APFS &rarr; XAR &rarr; PBZX/CPIO) to reach the real payload files inside</td></tr>
     <tr><td>Mach-O Info</td><td>Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection</td></tr>
     <tr><td>mStrings</td><td>Extracts strings, IOCs, and MITRE ATT&CK matches from Mach-O binaries and .app bundles</td></tr>
     <tr><td>Plist Analyzer</td><td>Parses .plist files and .app bundle Info.plist for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection</td></tr>
@@ -1636,7 +1683,7 @@
 </table>
 
 <p style="text-align: center;">
-  All four tools auto-resolve a .app bundle's main executable — point them at the bundle directly. Run all four together against a bundle or binary with <code>./mac_stack.sh</code>.
+  Code Sign Check, Mach-O Info, mStrings, and Plist Analyzer auto-resolve a .app bundle's main executable — point them at the bundle directly. Run those four together against a bundle or binary with <code>./mac_stack.sh</code>.
 </p>
 
 <p style="text-align: center;">

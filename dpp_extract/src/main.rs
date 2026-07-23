@@ -374,7 +374,21 @@ fn extract_walk_resilient(
                 })();
                 match result {
                     Ok(_) => files += 1,
-                    Err(e) => skipped.push(format!("{} ({})", entry.path, e)),
+                    Err(e) => {
+                        // File::create above already made an empty stub on
+                        // disk before read_file_to failed — observed on a
+                        // legacy partitioned-HFS+ DMG (DropDMG-style, Apple_
+                        // partition_map + Driver Descriptor Map) where every
+                        // single entry hit "HFS+ error: file not found",
+                        // leaving 140 real-looking 0-byte files behind that
+                        // downstream tools (fileminer's suggested_tools,
+                        // which requires file_size > 0) silently skipped
+                        // without any indication the read had failed. Remove
+                        // the stub so a failed read leaves no file at all,
+                        // matching what actually happened.
+                        let _ = fs::remove_file(&dest_path);
+                        skipped.push(format!("{} ({})", entry.path, e));
+                    }
                 }
             }
             FsEntryKind::Symlink => {} // matches dpp's own extract_all behavior: symlinks are never created

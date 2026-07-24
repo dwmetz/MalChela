@@ -3535,3 +3535,30 @@ FruitFlyJavaRobotRemoteControl:
       technique_name: "Video Capture"
       tactics: ["Collection"]
 
+IWormEmbeddedLuaVM:
+  title: "iWorm bot embeds a Lua scripting VM (defense-evasion-relevant for a macOS backdoor)"
+  id: "mac-iworm-lua-vm-001"
+  status: "experimental"
+  description: "Detects a statically-linked Lua interpreter's own internal error strings ('PANIC: unprotected error in call to Lua API', the lua_pushfstring option-parsing error) embedded inside the UPX-packed iWorm bot binary (JavaW, TAOMM Ch1). Confirmed by unpacking a copy with `upx -d` (never executed) — the packed file itself has almost no plaintext, but decompression reveals a full Lua VM plus an AES/ARC4 cipher-suite name list and a 1024-bit Oakley/RFC-2409-style DH prime constant, consistent with historical reporting that iWorm implements its actual bot/C2 logic (including the Reddit-based server-list lookup) as Lua scripts run inside an embedded interpreter rather than as native compiled logic — a scripting-engine-inside-a-backdoor pattern that's unusual enough on macOS to be a meaningful signal on its own, complementary to the existing IWormJavaWPersistence rule which instead catches the dropper's LaunchDaemon strings."
+  references:
+    - "http://www.intego.com/mac-security-blog/iworm-botnet-uses-reddit-as-command-and-control-center/"
+    - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "PANIC: unprotected error in call to Lua API"
+      - "invalid option '%%%c' to 'lua_pushfstring'"
+  falsepositives:
+    - "Any legitimate macOS/cross-platform application that statically links a Lua interpreter (game engines, some automation tools) will also contain these exact strings — treat as suspicious only alongside other iWorm indicators or unusual packing/entropy"
+  level: high
+  tags:
+    - attack.t1059
+  mitre:
+    - technique_id: "T1059"
+      technique_name: "Command and Scripting Interpreter"
+      tactics: ["Execution"]
+

@@ -3431,3 +3431,107 @@ IPStormPlatformPayloadNamingScheme:
       technique_name: "Lateral Tool Transfer"
       tactics: ["Lateral Movement"]
 
+FruitFlyReversedHostnameC2:
+  title: "FruitFly Perl backdoor's reversed-string C2 hostname obfuscation"
+  id: "fruitfly-reversed-hostname-001"
+  status: "experimental"
+  description: "Detects Perl's 'PeerAddr=>scalar(reverse ...)' idiom used by the FruitFly (Quimitchin) backdoor to connect to its C2 server: the hostname/IP is stored reversed (and often also XOR'd with 0x03) in the script, then un-reversed only at the moment of connection — defeating a plain grep/strings scan for the real domain. Confirmed verbatim, with only the inner variable name differing, across all 6 distinct FruitFly Perl variants in the TAOMM Ch1 FruitFly/A and FruitFly/B samples (the two non-minified 'send_/recv_'-style network-scanner variants, matching the macsvc/afpscan secondary tools described in the Malwarebytes writeup, use this exact same connection idiom despite otherwise completely different code style from the main minified '.client' backdoor)."
+  references:
+    - "https://www.malwarebytes.com/blog/threat-analysis/2017/01/new-mac-backdoor-using-antiquated-code"
+    - "https://speakerdeck.com/patrickwardle/fruitfly-via-a-custom-c-and-c-server"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "PeerAddr=>scalar\\(reverse ?\\$"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1027
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+FruitFlyJavaProcessMasquerade:
+  title: "FruitFly Perl backdoor masquerading its process name as 'java'"
+  id: "fruitfly-java-masquerade-001"
+  status: "experimental"
+  description: "Detects the Perl statement $0='java', which FruitFly uses to rewrite its own process name (as shown in ps/Activity Monitor) from 'perl' to 'java' immediately after parsing its C2 host/port arguments — a cheap but effective way to blend in on a Mac where a real Java runtime process is unremarkable. Confirmed verbatim and byte-for-byte identical across all 6 distinct FruitFly Perl variants analyzed (TAOMM Ch1 FruitFly/A and FruitFly/B), despite otherwise substantial differences in variable naming, subroutine style, and C2 configuration between them — the most stable single fingerprint found across the sample set."
+  references:
+    - "https://www.malwarebytes.com/blog/threat-analysis/2017/01/new-mac-backdoor-using-antiquated-code"
+    - "https://speakerdeck.com/patrickwardle/fruitfly-via-a-custom-c-and-c-server"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "\\$0='java'"
+  falsepositives:
+    - "Legitimate Perl scripts that deliberately rewrite $0 to present as a different process for cosmetic/ps-output reasons — rare, but not unheard of in some daemon-wrapper scripts"
+  level: high
+  tags:
+    - attack.t1036.005
+  mitre:
+    - technique_id: "T1036.005"
+      technique_name: "Masquerading: Match Legitimate Name or Location"
+      tactics: ["Defense Evasion"]
+
+FruitFlyAntiquatedQuickTimeCapture:
+  title: "FruitFly Mach-O helper's antiquated QuickTime SequenceGrabber webcam/screen capture"
+  id: "fruitfly-quicktime-sequencegrabber-001"
+  status: "experimental"
+  description: "Detects FruitFly's pre-OS X-era QuickTime SequenceGrabber API calls (SGGetChannelDeviceList, SGSetChannelDevice, SGSetChannelDeviceInput) used to enumerate and capture from webcam/video-input devices, plus the embedded libjpeg copyright string dating the bundled JPEG encoder to 1998 (Thomas G. Lane, the original libjpeg author) — both cited as notably 'antiquated code' in Malwarebytes' original writeup and confirmed verbatim in the a83fbe4c...a1a0936 Mach-O helper binary (TAOMM Ch1 FruitFly/A), which also embeds the exact SGGetChannelDeviceList error-format string used at a call site."
+  references:
+    - "https://www.malwarebytes.com/blog/threat-analysis/2017/01/new-mac-backdoor-using-antiquated-code"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "SGGetChannelDeviceList error %d"
+      - "Copyright \\(C\\) 1998, Thomas G\\. Lane"
+  falsepositives:
+    - "The libjpeg 1998 copyright string alone could appear in any legitimate application statically linking a very old libjpeg build — treat as suspicious only in combination with the SequenceGrabber error string or other FruitFly indicators"
+  level: high
+  tags:
+    - attack.t1125
+  mitre:
+    - technique_id: "T1125"
+      technique_name: "Video Capture"
+      tactics: ["Collection"]
+
+FruitFlyJavaRobotRemoteControl:
+  title: "FruitFly's embedded java.awt.Robot-based remote mouse/keyboard/screen-capture payload"
+  id: "fruitfly-java-robot-remote-001"
+  status: "experimental"
+  description: "Detects FruitFly's secondary payload: a compiled Java class (dropped to /tmp/client.class per the Perl dropper's own path table, launched via 'java -Dapple.awt.UIElement=true -cp /tmp client' to hide its Dock icon) that uses java.awt.Robot together with createScreenCapture and getScreenSize to remotely capture the screen and simulate mouse movement/clicks and key presses — the cross-platform fallback FruitFly uses for remote control when its native Mach-O SequenceGrabber component isn't used. Confirmed verbatim in the a94dd8bf...bbe5d37 Java class file (TAOMM Ch1 FruitFly/A); the apple.awt.UIElement string and /tmp/client.class path both cross-referenced against the same-directory Perl dropper that extracts and launches it."
+  references:
+    - "https://www.malwarebytes.com/blog/threat-analysis/2017/01/new-mac-backdoor-using-antiquated-code"
+    - "https://speakerdeck.com/patrickwardle/fruitfly-via-a-custom-c-and-c-server"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: any
+  detection:
+    strings:
+      - "java/awt/Robot"
+      - "apple\\.awt\\.UIElement"
+  falsepositives:
+    - "java/awt/Robot alone is a standard Java SE class used by many legitimate GUI test-automation tools — only flag when both strings are present together in the same small/otherwise-suspicious file, as here"
+  level: high
+  tags:
+    - attack.t1125
+  mitre:
+    - technique_id: "T1125"
+      technique_name: "Video Capture"
+      tactics: ["Collection"]
+

@@ -3761,3 +3761,103 @@ AppleJeusUnionCryptoC2:
       technique_name: "Reflective Code Loading"
       tactics: ["Defense Evasion"]
 
+DokRogueAutoProxyPacMitm:
+  title: "OSX.Dok rogue system-wide auto-proxy MITM (networksetup)"
+  id: "dok-rogue-autoproxy-001"
+  status: "experimental"
+  description: "Detects OSX.Dok's core technique: programmatically enumerating every network service (networksetup -listallnetworkservices) and forcing a malicious Proxy Auto-Configuration URL onto each one (networksetup -setautoproxyurl, networksetup -setautoproxystate ... on), silently routing all of the victim's HTTP/HTTPS traffic through an attacker-controlled PAC server. Legitimate software essentially never scripts this specific combination of networksetup subcommands against every interface at once. Confirmed verbatim in a base64-encoded shell script embedded in Dokument.app/Contents/MacOS/AppStore (TAOMM Ch1 Dok/Dok.A), matching CheckPoint's original OSX/Dok writeup. Scoped to the networksetup command names themselves rather than any IP/port from this build, so it should still catch other Dok-style rogue-proxy variants."
+  references:
+    - "http://blog.checkpoint.com/2017/04/27/osx-malware-catching-wants-read-https-traffic/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "networksetup -setautoproxyurl"
+      - "networksetup -setautoproxystate"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1557
+  mitre:
+    - technique_id: "T1557"
+      technique_name: "Adversary-in-the-Middle"
+      tactics: ["Credential Access", "Collection"]
+
+DokPacFileIpTrackingUrl:
+  title: "OSX.Dok's local PAC-file URL shape (loopback + random path + IP query param)"
+  id: "dok-pac-url-shape-001"
+  status: "experimental"
+  description: "Detects the distinctive shape of the URL OSX.Dok assigns as the victim's system-wide PAC file: a plain HTTP loopback address, a randomly-generated path component ending in .js (masquerading the PAC config as a JavaScript file), and the victim's own public IP (fetched from api.ipify.org moments earlier) appended as a query parameter for the attacker's server to key off of. Generalized with a port-number character class and a path wildcard rather than this build's exact 127.0.0.1:5555 and random suffix, since both are plausibly build-specific — the loopback+.js+?ip= combination is the structural fingerprint. Confirmed verbatim (with the literal port) in the same embedded shell script as DokRogueAutoProxyPacMitm (TAOMM Ch1 Dok/Dok.A)."
+  references:
+    - "http://blog.checkpoint.com/2017/04/27/osx-malware-catching-wants-read-https-traffic/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "http://127\\.0\\.0\\.1:\\d{1,5}/(?:\\$\\{[A-Za-z0-9_]+\\}|[A-Za-z0-9]{4,20})\\.js\\?ip="
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1557
+  mitre:
+    - technique_id: "T1557"
+      technique_name: "Adversary-in-the-Middle"
+      tactics: ["Credential Access", "Collection"]
+
+DokTorSocatProxyRelay:
+  title: "OSX.Dok local socat relay tunneling PAC/proxy traffic through Tor"
+  id: "dok-tor-socat-relay-001"
+  status: "experimental"
+  description: "Detects OSX.Dok's socat command templates for relaying its local rogue-proxy listener out through a Tor SOCKS4A proxy to a .onion C2/PAC server (tcp4-LISTEN:<port>,reuseaddr,fork,keepalive,bind=127.0.0.1 piped to SOCKS4A:127.0.0.1:<onion-placeholder>:<port>,socksport=9050 — 9050 being Tor's standard SOCKS port, not campaign-specific) alongside the commands it uses to silently install and start its own bundled Tor instance (sudo -u %@ %@ install tor / services start tor, both Homebrew-flavored NSString format templates). Confirmed verbatim in Dokument.app/Contents/MacOS/AppStore (TAOMM Ch1 Dok/Dok.A) — the same binary also references the specific .onion domain paoyu7gub72lykuk.onion from CheckPoint's writeup, but that's this campaign's own infrastructure and deliberately excluded from the match here so the rule generalizes to other Dok-style Tor-relay variants using a different address."
+  references:
+    - "http://blog.checkpoint.com/2017/04/27/osx-malware-catching-wants-read-https-traffic/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "tcp4-LISTEN:\\d{1,5},reuseaddr,fork,keepalive,bind=127\\.0\\.0\\.1"
+      - "SOCKS4A:127\\.0\\.0\\.1:%@:\\d{1,5},socksport=9050"
+      - "services start tor"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1090.003
+  mitre:
+    - technique_id: "T1090.003"
+      technique_name: "Proxy: Multi-hop Proxy"
+      tactics: ["Command and Control"]
+
+DokRogueRootCAInstall:
+  title: "OSX.Dok installing a rogue root CA into the System keychain"
+  id: "dok-rogue-root-ca-001"
+  status: "experimental"
+  description: "Detects the exact `security` CLI invocation OSX.Dok uses to install its own certificate as a fully-trusted root CA in the System keychain (add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain), the step that lets its rogue PAC proxy transparently MITM HTTPS traffic without browser certificate warnings. Confirmed verbatim in Dokument.app/Contents/MacOS/AppStore (TAOMM Ch1 Dok/Dok.A), matching CheckPoint's writeup."
+  references:
+    - "http://blog.checkpoint.com/2017/04/27/osx-malware-catching-wants-read-https-traffic/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "add-trusted-cert -d -r trustRoot -k /Library/Keychains/System\\.keychain"
+  falsepositives:
+    - "Some legitimate enterprise MDM/software installers add a trusted root CA this same way for internal purposes (e.g. corporate MITM proxies, internal PKI) — rare enough outside managed-fleet contexts to still be a strong signal on a consumer Mac"
+  level: high
+  tags:
+    - attack.t1553.004
+  mitre:
+    - technique_id: "T1553.004"
+      technique_name: "Subvert Trust Controls: Install Root Certificate"
+      tactics: ["Defense Evasion"]
+

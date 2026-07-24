@@ -402,7 +402,16 @@ impl Mstrings {
         let mut new_matches: Vec<Match> = Vec::new();
         for m in &self.matches {
             let mut any_match = false;
-            let mut seen_rules: std::collections::HashSet<String> = std::collections::HashSet::new();
+            // Keyed by (rule_name, matched text) rather than rule_name alone: a
+            // rule with multiple patterns (e.g. two distinct command strings
+            // that are both meaningful evidence on their own) can have both
+            // patterns match within the same single extracted string — most
+            // often a large base64-decoded blob, which mstrings treats as one
+            // whole matched_str rather than splitting it back into lines.
+            // Deduping on rule_name alone silently dropped every pattern after
+            // the first one that matched in that blob, even though each was a
+            // genuine independent hit at a different offset within it.
+            let mut seen_rules: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
             for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
                 if let Ok(Some(found)) = regex.find(&m.matched_str) {
                     if rule_name == "Hardcoded Bitcoin address (P2PKH/P2SH)"
@@ -410,7 +419,7 @@ impl Mstrings {
                     {
                         continue; // shape matched but checksum didn't — not a real address
                     }
-                    if seen_rules.insert(rule_name.clone()) {
+                    if seen_rules.insert((rule_name.clone(), found.as_str().to_string())) {
                         new_matches.push(Match {
                             offset: m.offset,
                             encoding: m.encoding.clone(),

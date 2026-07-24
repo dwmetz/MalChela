@@ -34,6 +34,8 @@ The rollup leads with a **Triage Summary** banner, built to answer the questions
 | Multi-layer obfuscation | mStrings | Flagged when a detection only fired after peeling multiple layers of base64 re-encoding — a single decode is routine, but repeated re-encoding is itself an evasion tell |
 | Flags / Indicators | Mach-O Info, Plist Analyzer, Code Sign Check | Structural findings — RPATH entries, hidden-Dock plists, Team ID mismatches, and similar — attributed to the specific file and tool that flagged them |
 
+![Analyze Summary](../images/summary.png)
+
 Every filename and IOC in the Triage Summary is a link that jumps straight to that finding's section further down the same report — not out to the indicator itself, which is exactly why network indicators are defanged: the link target is always an internal anchor, but the *displayed text* shouldn't read like a live, clickable URL regardless.
 
 Below the summary, each file gets its own section with every tool's actual formatted report embedded — real tables and headers pulled from each tool's own Markdown output, not raw console text. The rollup reads cleanly whether you're viewing it in the PWA or opening the file directly.

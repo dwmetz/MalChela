@@ -2,6 +2,7 @@
 
 MalChela normally makes a handful of network calls on its own — some obvious (Threat Intel Query's API-key-gated lookups), some less so. Offline Mode is a single switch that skips **every** one of them at the source, before any connection is even attempted. It's built for air-gapped labs and malware analysis scenarios where an unexpected outbound connection attempt — even a harmless, timed-out one — isn't acceptable.
 
+![MalChela CLI](/images/offline.png)
 ---
 
 ## What It Skips

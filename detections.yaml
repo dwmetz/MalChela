@@ -3661,3 +3661,103 @@ AppleJeusCheckUpdateC2:
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
 
+AppleJeusJMTTraderPersistence:
+  title: "AppleJeus/JMTTrader LaunchDaemon persistence"
+  id: "applejeus-jmttrader-persistence-001"
+  status: "experimental"
+  description: "Detects AppleJeus's JMTTrader variant persistence artifacts: the embedded LaunchDaemon plist Label 'org.jmttrading.jmttrader', its ProgramArguments path '/Library/JMTTrader/CrashReporter', and the 'Maintain' argument it's launched with. The .pkg's postinstall script moves a hidden .org.jmttrading.plist and .CrashReporter out of the app bundle's Resources into /Library/LaunchDaemons and /Library/JMTTrader respectively, then runs 'CrashReporter Maintain' immediately (RunAtLoad handles the reboot case). Confirmed verbatim in both the extracted .org.jmttrading.plist/postinstall script and the standalone CrashReporter binary (TAOMM Ch1 AppleJeus/B) — a completely different persistence identity from AppleJeus/A's Updater despite being the same campaign/actor (Lazarus Group)."
+  references:
+    - "https://objective-see.org/blog/blog_0x49.html"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "org\\.jmttrading\\.jmttrader"
+      - "/Library/JMTTrader/CrashReporter"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1543.004
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+AppleJeusJMTTraderC2:
+  title: "AppleJeus/JMTTrader C2 domain and XOR key"
+  id: "applejeus-jmttrader-c2-001"
+  status: "experimental"
+  description: "Detects AppleJeus/JMTTrader's C2 domain (beastgoc.com, checkin endpoint /grepmonux.php) and its hardcoded XOR obfuscation key. The backdoor supports remote commands including 'exit', 'up ' (file download), 'kcon', and 'stand ' (shell command execution via popen), beaconing every 5 seconds with backoff up to a 900-second sleep after repeated failures. Confirmed verbatim in the CrashReporter binary (TAOMM Ch1 AppleJeus/B), matching the objective-see writeup on this variant exactly."
+  references:
+    - "https://objective-see.org/blog/blog_0x49.html"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "https://%s/grepmonux\\.php"
+      - "X,%`PMk--Jj8s\\+6="
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1027
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+AppleJeusUnionCryptoPersistence:
+  title: "AppleJeus/UnionCryptoTrader LaunchDaemon persistence"
+  id: "applejeus-unioncrypto-persistence-001"
+  status: "experimental"
+  description: "Detects AppleJeus's UnionCryptoTrader variant persistence artifacts: the embedded LaunchDaemon plist Label 'vip.unioncrypto.product' and its ProgramArguments path '/Library/UnionCrypto/unioncryptoupdater'. The .pkg's postinstall script moves a hidden .vip.unioncrypto.plist and .unioncryptoupdater out of the app bundle's Resources into /Library/LaunchDaemons and /Library/UnionCrypto respectively, running as root on every boot via RunAtLoad. Confirmed verbatim in both the extracted .vip.unioncrypto.plist/postinstall script and the standalone unioncryptoupdater binary (TAOMM Ch1 AppleJeus/C) — a third distinct persistence identity for the same Lazarus Group campaign, alongside AppleJeus/A's Updater and AppleJeus/B's JMTTrader."
+  references:
+    - "https://objective-see.org/blog/blog_0x51.html"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "vip\\.unioncrypto\\.product"
+      - "/Library/UnionCrypto/unioncryptoupdater"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1543.004
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+AppleJeusUnionCryptoC2:
+  title: "AppleJeus/UnionCryptoTrader C2 domain and fileless-execution capability"
+  id: "applejeus-unioncrypto-c2-001"
+  status: "experimental"
+  description: "Detects AppleJeus/UnionCryptoTrader's C2 checkin endpoint (https://unioncrypto.vip/update, with auth_timestamp/auth_signature parameters) and its hardcoded config key. This variant is notable for fileless second-stage execution: on receiving a payload it allocates RWX memory via mmap and loads it in-process with NSCreateObjectFileImageFromMemory/NSLinkModule rather than writing to disk, falling back to a /tmp/updater drop-and-exec only if that fails. It also fingerprints the host via IOKit's IOPlatformSerialNumber. Confirmed verbatim in the unioncryptoupdater binary (TAOMM Ch1 AppleJeus/C), including the exact ad-hoc code-signing identifier 'macloader-55554944ee2cb96a1f5132ce8788c3fe0dfe7392' cited in the objective-see writeup — matched via `codesign -dvvv` rather than mstrings, since codesign identifiers aren't extractable as plain strings from the binary the way the C2/config literals are."
+  references:
+    - "https://objective-see.org/blog/blog_0x51.html"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "https://unioncrypto\\.vip/update"
+      - "12GWAPCT1F0I1S14"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1620
+  mitre:
+    - technique_id: "T1620"
+      technique_name: "Reflective Code Loading"
+      tactics: ["Defense Evasion"]
+

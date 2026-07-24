@@ -116,8 +116,30 @@ fn run(cli: &Cli) -> Result<ExtractSummary, String> {
     }
 }
 
+// `hdiutil attach`/`detach` still work but print a deprecation warning as of
+// recent macOS versions in favor of `diskutil image attach` (mount) / plain
+// `diskutil eject` (unmount — there is no `diskutil image eject`, confirmed
+// via `diskutil` and `diskutil image --help`: eject is a top-level verb, not
+// under `image`). Use the current syntax so this hint doesn't itself steer
+// someone at a deprecated command.
+const MANUAL_MOUNT_HINT: &str = " This container's filesystem could not be read by the built-in extractor — on macOS, try mounting it directly instead: `diskutil image attach --readOnly --nobrowse <file>`, then copy files out of the mounted volume and `diskutil eject <mountpoint>` when done.";
+
 fn extract_dmg(input: &Path, dest: &Path) -> Result<ExtractSummary, String> {
-    let mut pipeline = DmgPipeline::open(input).map_err(|e| format!("Failed to open DMG: {}", e))?;
+    let mut pipeline = DmgPipeline::open(input).map_err(|e| {
+        // The dpp crate hard-requires a UDIF 'koly' trailer to recognize any
+        // .dmg at all. Found on AppleJeus/A's CelasTradePro-Installer.dmg
+        // (TAOMM Ch1): a raw, koly-trailer-less UDRW/GPT disk image — `file`
+        // and `diskutil image info` both read it fine (Class Name:
+        // CRawDiskImage, Format: UDRW), and `diskutil image attach` mounts
+        // it without issue, but dpp's format sniffing rejects it outright
+        // before we ever get to the walk step, so there's no ExtractSummary
+        // to attach a note to — the hint has to go on the error string itself.
+        if format!("{e}").to_lowercase().contains("koly") {
+            format!("Failed to open DMG: {e}.{MANUAL_MOUNT_HINT}")
+        } else {
+            format!("Failed to open DMG: {e}")
+        }
+    })?;
     let mut fs_handle = pipeline
         .open_filesystem()
         .map_err(|e| format!("Failed to open filesystem in DMG: {}", e))?;
@@ -152,14 +174,7 @@ fn extract_dmg(input: &Path, dest: &Path) -> Result<ExtractSummary, String> {
         // this — it's routine (one bad alias/NUL-byte-name entry) and the
         // extraction already succeeded well enough to be useful as-is.
         let hint = if files == 0 && !skipped.is_empty() {
-            // `hdiutil attach`/`detach` still work but print a deprecation
-            // warning as of recent macOS versions in favor of `diskutil image
-            // attach` (mount) / plain `diskutil eject` (unmount — there is no
-            // `diskutil image eject`, confirmed via `diskutil` and `diskutil
-            // image --help`: eject is a top-level verb, not under `image`).
-            // Use the current syntax so this hint doesn't itself steer
-            // someone at a deprecated command.
-            " This container's filesystem could not be read by the built-in extractor — on macOS, try mounting it directly instead: `diskutil image attach --readOnly --nobrowse <file>`, then copy files out of the mounted volume and `diskutil eject <mountpoint>` when done."
+            MANUAL_MOUNT_HINT
         } else {
             ""
         };

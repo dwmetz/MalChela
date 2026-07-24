@@ -3861,3 +3861,55 @@ DokRogueRootCAInstall:
       technique_name: "Subvert Trust Controls: Install Root Certificate"
       tactics: ["Defense Evasion"]
 
+YortC2Endpoints:
+  title: "OSX.Yort (Lazarus) hardcoded C2 endpoints"
+  id: "yort-c2-endpoints-001"
+  status: "experimental"
+  description: "Detects the three hardcoded C2 checkin URLs embedded in OSX.Yort.A's mt.dat first-stage implant, all disguised as ordinary-looking PHP endpoints on legitimate-appearing but attacker-controlled domains (a towing company, a wp-content language file, a wedding/event site) — a Lazarus Group tradecraft pattern of using unrelated, plausible-looking compromised or purchased domains rather than obviously malicious ones. Unlike a build-specific port or key, these URLs are the IOC itself for this campaign, so they're kept as exact literals rather than generalized. Confirmed verbatim in mt.dat (TAOMM Ch1 Yort/A), matching objective-see's writeup exactly; mt.dat was delivered via a macro in a Korean-language 'Sample Technology Business Plan' decoy .doc, consistent with Lazarus's cryptocurrency-business targeting documented by Securelist."
+  references:
+    - "https://objective-see.org/blog/blog_0x53.html#osx-yort"
+    - "https://securelist.com/cryptocurrency-businesses-still-being-targeted-by-lazarus/90019/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "https://towingoperations\\.com/chat/chat\\.php"
+      - "https://baseballcharlemagnelegardeur\\.com/wp-content/languages/common\\.php"
+      - "https://www\\.tangowithcolette\\.com/pages/common\\.php"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+YortFlashUpdatePersistence:
+  title: "OSX.Yort.B fake-Flash-update LaunchAgent persistence"
+  id: "yort-flashupdate-persistence-001"
+  status: "experimental"
+  description: "Detects OSX.Yort.B's persistence identity: LaunchAgent Label 'FlashUpdate' written to ~/Library/LaunchAgents/com.adobe.macromedia.flash.plist, running a hidden helper named .FlashUpdateCheck at every login (RunAtLoad). Dropped by Album.app/Contents/MacOS/Flash Player, an unsigned binary disguised as a Flash Player installer alongside a real, hidden copy of Flash Player (.Flash Player) to complete the ruse — delivered via a Korean-language 'Lover Psychology Test' decoy .xls in the same TAOMM sample set. Confirmed verbatim, including the full embedded LaunchAgent plist template, in the Flash Player binary (TAOMM Ch1 Yort/B), matching objective-see's writeup."
+  references:
+    - "https://objective-see.org/blog/blog_0x53.html#osx-yort"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "com\\.adobe\\.macromedia\\.flash\\.plist"
+      - "\\.FlashUpdateCheck"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1543.001
+  mitre:
+    - technique_id: "T1543.001"
+      technique_name: "Create or Modify System Process: Launch Agent"
+      tactics: ["Persistence", "Privilege Escalation"]
+

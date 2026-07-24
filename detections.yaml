@@ -2465,15 +2465,15 @@ EmbeddedBase64Payload:
   title: "Large embedded base64 blob"
   id: "obfuscation-b64blob-001"
   status: "experimental"
-  description: "Detects a single extracted string that is almost entirely a long, unbroken base64-alphabet run (200+ chars) — the shape of an embedded encoded payload (script, executable, config) rather than incidental text. A backstop signal alongside mstrings' base64 auto-decode-and-rescan step: this still fires even when the blob doesn't decode to printable text (e.g. it's encrypted before being base64-encoded) or in any context that only runs detections.yaml pattern matching without the decode step."
+  description: "Detects a single extracted string that is almost entirely a long, unbroken base64-alphabet run (200+ chars) — the shape of an embedded encoded payload (script, executable, config) rather than incidental text. A backstop signal alongside mstrings' base64 auto-decode-and-rescan step: this still fires even when the blob doesn't decode to printable text (e.g. it's encrypted before being base64-encoded) or in any context that only runs detections.yaml pattern matching without the decode step. Requires at least one character outside the 0-9/A-F/a-f hex range: a long pure-hex constant (a crypto prime, RSA modulus, hash chain) trivially satisfies the base64 charset+length envelope despite not being base64 at all, and the odds of a genuine base64-encoded blob this long staying entirely within the hex-compatible subset of the alphabet are astronomically small. Confirmed false positive on iWorm's JavaW (TAOMM Ch1, unpacked with upx -d): matched two ~256-char embedded Diffie-Hellman prime constants (part of its embedded crypto library) before this fix."
   author: Doug Metz
-  date: 2026-07-21
+  date: 2026-07-24
   logsource:
     category: file_event
     product: any
   detection:
     strings:
-      - "^[A-Za-z0-9+/]{200,}={0,2}$"
+      - "^(?=[A-Za-z0-9+/]*[G-Zg-z+/])[A-Za-z0-9+/]{200,}={0,2}$"
   falsepositives:
     - "Long non-encoded alphanumeric identifiers (rare at this length), embedded font/resource data that happens to be base64-alphabet-shaped without being a deliberately encoded payload"
   level: medium

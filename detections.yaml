@@ -3499,7 +3499,7 @@ FruitFlyAntiquatedQuickTimeCapture:
       - "SGGetChannelDeviceList error %d"
       - "Copyright \\(C\\) 1998, Thomas G\\. Lane"
   falsepositives:
-    - "The libjpeg 1998 copyright string alone could appear in any legitimate application statically linking a very old libjpeg build — treat as suspicious only in combination with the SequenceGrabber error string or other FruitFly indicators"
+    - "Each string fires this rule independently (mstrings has no cross-string AND condition), so the libjpeg 1998 copyright string alone could in principle match any legitimate application statically linking a very old libjpeg build — weight a match on that string alone lower than one on the much more distinctive SGGetChannelDeviceList error string, or one where both fire together as they did here"
   level: high
   tags:
     - attack.t1125
@@ -3526,7 +3526,7 @@ FruitFlyJavaRobotRemoteControl:
       - "java/awt/Robot"
       - "apple\\.awt\\.UIElement"
   falsepositives:
-    - "java/awt/Robot alone is a standard Java SE class used by many legitimate GUI test-automation tools — only flag when both strings are present together in the same small/otherwise-suspicious file, as here"
+    - "Each string fires this rule independently (mstrings has no cross-string AND condition): java/awt/Robot alone is a standard Java SE class used by many legitimate GUI test-automation tools, and apple.awt.UIElement alone is a common flag for any Mac Java app that wants to hide its Dock icon. Neither is very distinctive by itself — weight a match on only one of them much lower than a match where both fire together in the same small file, as they did here"
   level: high
   tags:
     - attack.t1125
@@ -3561,4 +3561,103 @@ IWormEmbeddedLuaVM:
     - technique_id: "T1059"
       technique_name: "Command and Scripting Interpreter"
       tactics: ["Execution"]
+
+AppleJeusHardcodedCryptoKeys:
+  title: "AppleJeus/Fallchill hardcoded XOR and RC4 keys"
+  id: "applejeus-crypto-keys-001"
+  status: "experimental"
+  description: "Detects the two hardcoded encryption keys used by the AppleJeus (Operation AppleJeus / Lazarus) macOS Updater backdoor: 'Moz&Wie;#t/6T!2y' XORs collected system info (hostname, OS version, architecture, kernel details) before it's smuggled out disguised as a GIF upload, and 'W29ab@ad%Df324V$Yd' RC4-decrypts the base64 payload the C2 sends back on an HTTP 200 response. Confirmed verbatim in the Updater binary from the CelasTradePro-Installer.dmg sample (TAOMM Ch1 AppleJeus/A) — both keys match Kaspersky's Securelist writeup on the campaign exactly."
+  references:
+    - "https://securelist.com/operation-applejeus/87553/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "Moz&Wie;#t/6T!2y"
+      - "W29ab@ad%Df324V\\$Yd"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1027
+  mitre:
+    - technique_id: "T1027"
+      technique_name: "Obfuscated Files or Information"
+      tactics: ["Defense Evasion"]
+
+AppleJeusGifSmugglingExfil:
+  title: "AppleJeus C2 exfil disguised as a GIF image upload"
+  id: "applejeus-gif-smuggling-001"
+  status: "experimental"
+  description: "Detects AppleJeus's technique for smuggling encrypted system-recon data out to its C2 server disguised as an ordinary image upload: the XOR'd payload is prepended with the literal GIF89a magic header, given the filename temp.gif, and sent as a multipart/form-data POST using the custom boundary string 'jeus' (--jeus / --jeus--) rather than a typical randomly-generated boundary. Confirmed verbatim in the Updater binary (TAOMM Ch1 AppleJeus/A), matching Kaspersky's Securelist writeup on Operation AppleJeus."
+  references:
+    - "https://securelist.com/operation-applejeus/87553/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "filename=\"temp\\.gif\""
+      - "--jeus"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1132.001
+  mitre:
+    - technique_id: "T1132.001"
+      technique_name: "Data Encoding: Standard Encoding"
+      tactics: ["Command and Control"]
+
+AppleJeusSandboxEvasionPayloadDrop:
+  title: "AppleJeus downloaded-payload drop path and hidden sandbox-evasion argument"
+  id: "applejeus-payload-drop-001"
+  status: "experimental"
+  description: "Detects AppleJeus's fixed drop path for second-stage payloads downloaded from its C2 (/var/zdiffsec, written world-executable) and the hidden command-line argument 'bf6a0c760cc642' it launches them with — an argument value that means nothing on its own but is checked for by the payload itself, so a sandbox or analyst running the dropped binary directly (without this exact flag) sees different, usually inert, behavior. Confirmed verbatim in the Updater binary (TAOMM Ch1 AppleJeus/A), matching Kaspersky's Securelist writeup on Operation AppleJeus."
+  references:
+    - "https://securelist.com/operation-applejeus/87553/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "/var/zdiffsec"
+      - "bf6a0c760cc642"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1622
+  mitre:
+    - technique_id: "T1622"
+      technique_name: "Debugger Evasion"
+      tactics: ["Defense Evasion"]
+
+AppleJeusCheckUpdateC2:
+  title: "AppleJeus fake-updater C2 checkin URL"
+  id: "applejeus-checkupdate-c2-001"
+  status: "experimental"
+  description: "Detects AppleJeus's exact C2 checkin URL — the trojanized CelasTradePro app's fake update-check endpoint, hosted on the attacker-registered celasllc.com domain used to distribute the malicious DMG/MSI installers in the first place. The malware's LaunchAgent/LaunchDaemon also passes the literal argument 'CheckUpdate' to the Updater binary on every login/boot (a seemingly benign name chosen to look unremarkable to a sandbox or analyst glancing at the process list), but that word alone is too generic to detect on its own — this rule is scoped to just the distinctive URL. Confirmed verbatim in the Updater binary (TAOMM Ch1 AppleJeus/A), matching Kaspersky's Securelist writeup on Operation AppleJeus, attributed to the Lazarus Group."
+  references:
+    - "https://securelist.com/operation-applejeus/87553/"
+  author: Doug Metz
+  date: 2026-07-24
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "https://www\\.celasllc\\.com/checkupdate\\.php"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
 

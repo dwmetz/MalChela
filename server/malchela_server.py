@@ -1400,6 +1400,7 @@ def analyze():
 
         scan_results = fm_data.get("results", [])
 
+        target_resolved = None
         if single_file_mode:
             try:
                 target_resolved = target.resolve()
@@ -1458,6 +1459,14 @@ def analyze():
                     args = [sha256] if sha256 else None
                 elif slug == "nsrlquery":
                     args = [md5] if md5 else None
+                elif slug == "codesign_check":
+                    args = [filepath]
+                    # OCSP revocation needs network access, so it's skipped in
+                    # offline mode, and scoped to the top-level binary only —
+                    # a single bundle can embed 90+ signed frameworks/helpers,
+                    # each of which would otherwise fire its own OCSP query.
+                    if not is_offline_mode() and _is_top_level_binary(filepath, single_file_mode, target_resolved):
+                        args = args + ["--check-revocation"]
                 else:
                     args = [filepath]
 
@@ -1559,6 +1568,25 @@ def _paths_match(candidate: str, resolved_target: Path) -> bool:
         return Path(candidate).resolve() == resolved_target
     except Exception:
         return candidate == str(resolved_target)
+
+
+_EMBEDDED_BINARY_MARKERS = ("/Contents/Frameworks/", "/Contents/PlugIns/", "/Contents/XPCServices/")
+
+def _is_top_level_binary(filepath: str, single_file_mode: bool, target_resolved: Optional[Path]) -> bool:
+    """Best-effort 'is this the top-level executable, not something embedded
+    inside a bundle' check — scopes Analyze's --check-revocation to the main
+    binary instead of firing an OCSP query for every framework/plugin/XPC
+    helper a bundle carries (Audacity.app alone embeds 90+ signed dylibs)."""
+    if single_file_mode:
+        return target_resolved is not None and _paths_match(filepath, target_resolved)
+    if any(marker in filepath for marker in _EMBEDDED_BINARY_MARKERS):
+        return False
+    # Nested bundle (e.g. a wrapper .app bundling a second real .app inside
+    # Resources/, or Sparkle's Autoupdate.app) — only the outermost bundle's
+    # own executable counts as top-level.
+    if filepath.count(".app/") > 1:
+        return False
+    return True
 
 
 _TIQUERY_VT_ROW = re.compile(r"^\s*VT\s+FOUND\s+.*?(\d+)/(\d+)", re.MULTILINE)

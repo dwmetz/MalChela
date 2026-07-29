@@ -654,6 +654,41 @@ function pathsMatch(candidate, resolvedTarget) {
   }
 }
 
+// Same on-disk toggle the PWA's Configuration screen writes
+// (server/malchela_server.py's is_offline_mode()) — a plain file, not a
+// server-process flag, so both the Flask app and this separate Node process
+// read the identical source of truth with no IPC needed.
+const OFFLINE_MODE_FILE = `${MALCHELA_DIR}/api/offline_mode.txt`;
+function isOfflineMode() {
+  try {
+    return readFileSync(OFFLINE_MODE_FILE, 'utf8').trim() === '1';
+  } catch {
+    return false;
+  }
+}
+
+const EMBEDDED_BINARY_MARKERS = ['/Contents/Frameworks/', '/Contents/PlugIns/', '/Contents/XPCServices/'];
+
+// Best-effort "is this the top-level executable, not something embedded
+// inside a bundle" check — scopes Analyze's --check-revocation to the main
+// binary instead of firing an OCSP query for every framework/plugin/XPC
+// helper a bundle carries (Audacity.app alone embeds 90+ signed dylibs).
+function isTopLevelBinary(filepath, singleFileMode, resolvedTarget) {
+  if (singleFileMode) {
+    return resolvedTarget != null && pathsMatch(filepath, resolvedTarget);
+  }
+  if (EMBEDDED_BINARY_MARKERS.some(marker => filepath.includes(marker))) {
+    return false;
+  }
+  // Nested bundle (e.g. a wrapper .app bundling a second real .app inside
+  // Resources/, or Sparkle's Autoupdate.app) — only the outermost bundle's
+  // own executable counts as top-level.
+  if ((filepath.match(/\.app\//g) || []).length > 1) {
+    return false;
+  }
+  return true;
+}
+
 // Read back the .md report a tool just wrote (Analyze always requests -o -m,
 // case or not) so the rollup can embed genuinely formatted content instead of
 // raw CLI stdout. Picks the most-recently-modified report_*.md in the tool's
@@ -1230,8 +1265,9 @@ function runAnalyze(rawTargetPath) {
   let scanResults = fmData.results || [];
 
   let finalExtractionNote = extractionNote;
+  let resolvedTarget = null;
   if (singleFileMode) {
-    const resolvedTarget = realpathSync(targetPath);
+    resolvedTarget = realpathSync(targetPath);
     scanResults = scanResults.filter(r => pathsMatch(r.filepath, resolvedTarget));
     if (scanResults.length === 0) {
       throw new Error(
@@ -1290,6 +1326,13 @@ function runAnalyze(rawTargetPath) {
       // the -t default every other MCP tool call uses via buildCommand.
       const cmdArgs = [arg, '-o', '-m'];
       if (currentCase) cmdArgs.push('--case', currentCase);
+      // OCSP revocation needs network access, so it's skipped in offline
+      // mode, and scoped to the top-level binary only — a single bundle can
+      // embed 90+ signed frameworks/helpers, each of which would otherwise
+      // fire its own OCSP query.
+      if (slug === 'codesign_check' && !isOfflineMode() && isTopLevelBinary(filepath, singleFileMode, resolvedTarget)) {
+        cmdArgs.push('--check-revocation');
+      }
 
       try {
         const output = execFileSync(binary, cmdArgs, {

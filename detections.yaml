@@ -3913,3 +3913,82 @@ YortFlashUpdatePersistence:
       technique_name: "Create or Modify System Process: Launch Agent"
       tactics: ["Persistence", "Privilege Escalation"]
 
+KitmDeveloperIDSignature:
+  title: "OSX/KitM (Kitmos) 'Kumar in the Mac' Developer ID signing identity"
+  id: "kitm-signer-identity-001"
+  status: "experimental"
+  description: "Detects the embedded X.509 signer identity 'Rajinder Kumar' and its OU/Team identifier 'N37CXSRXLD', found in the Developer ID Application code-signature blob of this KitM/FileSteal/HackBack/Kitmos sample (TAOMM Chapter2). F-Secure's family name 'KitM' (Kumar in the Mac) is derived directly from this abused Apple Developer ID, which was used to sign multiple variants of this activist-targeting spyware. Confirmed via 'grep -a' against the raw binary and 'codesign -dvvv' (Authority=Developer ID Application: Rajinder Kumar); note the strings did not surface via a plain 'strings -a' pass since they sit inside the __LINKEDIT code-signature region, but mstrings' full-file scan recovers them."
+  references:
+    - "https://community.f-secure.com/en/discussion/26294/osx-kitm-a-virus"
+    - "https://blog.sbarbeau.fr/2013/05/osx-kitmos-analysis.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "Rajinder Kumar"
+      - "N37CXSRXLD"
+  falsepositives:
+    - "Benign software legitimately signed under an Apple Developer ID belonging to a real person or org named 'Rajinder Kumar' (unlikely, but not impossible)."
+  level: high
+  tags:
+    - attack.t1588.003
+  mitre:
+    - technique_id: "T1588.003"
+      technique_name: "Obtain Capabilities: Code Signing Certificates"
+      tactics: ["Resource Development"]
+
+KitmC2Endpoints:
+  title: "OSX/KitM (Kitmos) hardcoded C2 lang.php checkin endpoints"
+  id: "kitm-c2-endpoints-001"
+  status: "experimental"
+  description: "Detects the two hardcoded C2 upload endpoints embedded in this KitM/Kitmos sample (TAOMM Chapter2): http://securitytable.org/lang.php and http://docsforum.info/lang.php, both disguised as ordinary PHP language files on plausible-looking attacker-registered domains. Confirmed verbatim in the 'macs' sample bytes, matching Steeve Barbeau's OSX/Kitmos writeup, which also documents the domains resolving to a shared Linode IP (50.116.28.24) and securitytable.org's registrant using a fake identity ('Christopher', n.christopher@mail.ru). This spyware was used against activists at the 2013 Oslo Freedom Forum."
+  references:
+    - "https://blog.sbarbeau.fr/2013/05/osx-kitmos-analysis.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "securitytable\\.org/lang\\.php"
+      - "docsforum\\.info/lang\\.php"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+KitmScreenCaptureExfil:
+  title: "OSX/KitM (Kitmos) periodic screen-capture spying and zip/upload exfiltration"
+  id: "kitm-screencapture-exfil-001"
+  status: "experimental"
+  description: "Detects internal debug/log strings from this KitM/Kitmos sample's screen-spying routine (TAOMM Chapter2): it shells out to /usr/sbin/screencapture roughly every 20 seconds, stages PNGs under a ~/MacApp directory named by timestamp, zips them, and uploads via /usr/bin/curl to the C2. 'Hellooo' and 'finished zipping file'/'finished uploading file' are distinctive developer debug-log literals; 'ComputerName_UserName : %@' is the victim-fingerprinting format string (hostname_username, dots replaced with 'p') described in the writeup. Confirmed verbatim in the 'macs' sample, matching Steeve Barbeau's OSX/Kitmos analysis. Note: the bare ivar name 'm_ComputerName_UserName' was dropped from this rule after regression testing showed it also appears in the unrelated WindTail/OceanLotus sample (TAOMM Chapter1) — too generic to stand alone."
+  references:
+    - "https://blog.sbarbeau.fr/2013/05/osx-kitmos-analysis.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "Hellooo"
+      - "finished zipping file"
+      - "finished uploading file"
+      - "ComputerName_UserName : %@"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1113
+  mitre:
+    - technique_id: "T1113"
+      technique_name: "Screen Capture"
+      tactics: ["Collection"]
+

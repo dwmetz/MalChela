@@ -426,7 +426,7 @@ fn build_report(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Command::new("codesign_check")
-        .version("4.4.0")
+        .version("4.3.1")
         .about("Inspect macOS code signing: signature type, team ID, entitlements, ad-hoc detection")
         .arg(Arg::new("input").help("Path to .app bundle or Mach-O binary").index(1))
         .arg(Arg::new("output").short('o').long("output").num_args(0).help("Save output"))

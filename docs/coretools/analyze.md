@@ -58,6 +58,8 @@ saved_output/analyze/
 
 Analyze dispatches nsrlquery, Threat Intel Query, and FileAnalyzer's VirusTotal check automatically along with everything else — with [Offline Mode](../configuration/offline-mode.md) enabled, those tools skip their network call cleanly and the rollup still completes normally, just without the results that require connectivity.
 
+Analyze also passes [Code Sign Check](../mac/codesign_check.md)'s `--check-revocation` flag automatically, scoped to each sample's top-level binary only (not embedded frameworks/plugins/XPC helpers — a single bundle can carry dozens of those, each of which would otherwise trigger its own OCSP query and slow the run down considerably). Like the other network-dependent tools above, this is skipped automatically with Offline Mode enabled.
+
 ---
 
 ### PWA Usage

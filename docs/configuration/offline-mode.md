@@ -12,6 +12,7 @@ MalChela normally makes a handful of network calls on its own — some obvious (
 | `nsrlquery` | `hashlookup.circl.lu` | Despite the name, this is a live lookup against CIRCL's public hash database — not a local NSRL file. No API key involved, so this one is easy to trigger by accident. |
 | `tiquery` | Every configured source | Including Objective-See's malware catalogue (`os`), the one source with no API-key gate of its own — it normally attempts a fetch on any cache miss regardless of which keys you've configured. |
 | `fileanalyzer` | VirusTotal | A separate embedded check from Threat Intel Query's own VirusTotal source — gated on a VT key being configured, but if one is, plain FileAnalyzer also phones home. |
+| `codesign_check --check-revocation` | `ocsp.apple.com` (or whichever responder the certificate specifies) | Opt-in — off unless `--check-revocation` is passed directly, or the run comes through [Analyze](../coretools/analyze.md), which passes it automatically for each sample's top-level binary. Checked inside the tool itself (via `MALCHELA_OFFLINE`), so it self-skips no matter how it's invoked. |
 | Home screen | Update check (`git remote update`) | Runs automatically every time the Home screen loads, since it's the app's default/startup screen. |
 
 Each of these normally fails only after a DNS/connect attempt (and, on a truly air-gapped host, a real timeout). With Offline Mode on, they return a clean "skipped" result immediately instead.

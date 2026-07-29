@@ -99,6 +99,18 @@ fn ocsp_uri(cert_path: &Path) -> Option<String> {
 // `cms_der` is the raw CMS ContentInfo blob extracted from the Mach-O
 // LC_CODE_SIGNATURE superblob's BlobWrapper entry.
 pub fn check_revocation(cms_der: &[u8]) -> RevocationResult {
+    // Same MALCHELA_OFFLINE convention every other network-touching tool
+    // (nsrlquery, tiquery, fileanalyzer's VT check) already honors — checked
+    // here, at the source, so this is offline-safe even when --check-revocation
+    // is passed directly on the CLI rather than through Analyze's own gating.
+    if common_config::is_offline_mode() {
+        return RevocationResult {
+            status: RevocationStatus::NotChecked("offline mode (MALCHELA_OFFLINE) — skipped OCSP network request".into()),
+            ocsp_url: None,
+            detail: None,
+        };
+    }
+
     let tmp_dir = std::env::temp_dir().join(format!("malchela_ocsp_{}", std::process::id()));
     if fs::create_dir_all(&tmp_dir).is_err() {
         return not_checked("failed to create temp directory for OCSP check");

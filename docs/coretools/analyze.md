@@ -28,6 +28,7 @@ The rollup leads with a **Triage Summary** banner, built to answer the questions
 |---------|--------|----------------|
 | File counts | File Miner | Total files analyzed, with duplicate content (identical SHA256 under different filenames — common with carved or exported artifacts) automatically grouped into one write-up instead of repeats |
 | Flagged malicious | FileAnalyzer + Threat Intel Query | VirusTotal verdicts, cross-referenced from both sources so Mach-O samples get the same coverage as PE (FileAnalyzer isn't suggested for Mach-O files, so Threat Intel Query is what catches those) |
+| Certificate revoked | Code Sign Check | Called out with the same prominence as the VirusTotal verdict whenever `--check-revocation` finds the signer's Developer ID certificate has been revoked by Apple — a strong triage signal independent of any AV verdict |
 | Malware tags | Threat Intel Query | Family/tag names pulled from Threat Intel Query's multi-source lookups, for files that were flagged malicious |
 | MITRE ATT&CK findings | mStrings | Total match count, broken down by tactic |
 | Filesystem / Network IOCs | mStrings | Dropped filenames, paths, and network indicators surfaced during string extraction. Network indicators are shown defanged (`hxxp://`, `[.]`) |

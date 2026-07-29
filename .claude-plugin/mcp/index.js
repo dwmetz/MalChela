@@ -788,17 +788,35 @@ function extractTiqueryTags(markdown) {
 
 // Pull '[!]'-style flag/indicator lines from a tool's markdown report.
 // macho_info and plist_analyzer emit an identical '- **[!]** ...' bullet
-// list under their own 'Flags / Indicators' heading; codesign_check's
-// markdown just wraps its raw colorized stdout in a code fence, where the
-// same kind of finding shows up as a '⚠  ...' line instead (its "No
-// suspicious indicators" clean case uses '✓', so it's naturally excluded
-// here) — scoped to codesign_check specifically so this pattern can't match
-// some other tool's content.
+// list under their own 'Flags / Indicators' heading; codesign_check's own
+// saved report instead emits a plain '## Flags' heading followed by plain
+// '- ...' bullets (its "No suspicious indicators" clean case emits nothing
+// under that heading at all), so it needs its own block-scoped pattern —
+// scoped to codesign_check specifically so this can't match some other
+// tool's bullet list.
 const MD_FLAG_BULLET = /^-\s*\*\*\[!\]\*\*\s*(.+)$/gm;
-const CODESIGN_WARN_LINE = /^\s*⚠\s+(.+)$/gm;
+const CODESIGN_FLAGS_BLOCK = /^## Flags\n\n((?:-.*\n?)+)/m;
+const MD_PLAIN_BULLET = /^- (.+)$/gm;
+
+// True if codesign_check's Revocation (OCSP) summary-table row reports
+// REVOKED. Deliberately independent of extractFlags/CODESIGN_FLAGS_BLOCK
+// above — matches the literal table row so this stays correct even if the
+// Flags section's wording ever changes.
+function extractRevokedCert(markdown) {
+  return markdown.includes('| Revocation (OCSP) | REVOKED |');
+}
 
 function extractFlags(tool, markdown) {
-  const pattern = tool === 'codesign_check' ? CODESIGN_WARN_LINE : MD_FLAG_BULLET;
+  if (tool === 'codesign_check') {
+    const block = CODESIGN_FLAGS_BLOCK.exec(markdown);
+    if (!block) return [];
+    MD_PLAIN_BULLET.lastIndex = 0;
+    const flags = [];
+    let bm;
+    while ((bm = MD_PLAIN_BULLET.exec(block[1])) !== null) flags.push(bm[1].trim());
+    return flags;
+  }
+  const pattern = MD_FLAG_BULLET;
   pattern.lastIndex = 0;
   const flags = [];
   let m;
@@ -898,6 +916,7 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
   const netIocs = []; // { ioc, anchor } — anchor of the first file it was found in
   const netIocsSeen = new Set();
   const obfuscationFindings = []; // { filename, maxLayers }
+  const revokedCerts = []; // { filename, anchor }
   for (const key of order) {
     const members = groups.get(key);
     const anchor = anchorByKey.get(key);
@@ -905,6 +924,9 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     if (isFlagged) flagged.push({ filename: members[0].filename, anchor });
     if (members.length > 1) dupGroups.push(members);
     for (const run of members[0].tool_runs) {
+      if (run.tool === 'codesign_check' && run.success && run.markdown && extractRevokedCert(run.markdown)) {
+        revokedCerts.push({ filename: members[0].filename, anchor });
+      }
       if (run.tool === 'mstrings' && run.success && run.markdown) {
         const { rawTotal, tactics } = extractMitreTactics(run.markdown);
         mitreTotal += rawTotal;
@@ -963,6 +985,10 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
       + flagged.map(({ filename, anchor }) => `[\`${filename}\`](#${anchor})`).join(', '));
   } else {
     lines.push('- No files flagged malicious by VirusTotal');
+  }
+  if (revokedCerts.length) {
+    lines.push(`- **⚠ ${revokedCerts.length} certificate(s) REVOKED** (Apple OCSP): `
+      + revokedCerts.map(({ filename, anchor }) => `[\`${filename}\`](#${anchor})`).join(', '));
   }
   if (malwareTags.length) {
     lines.push('- **Malware tags** (tiquery): ' + malwareTags.map(t => `\`${t}\``).join(', '));

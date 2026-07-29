@@ -1661,21 +1661,31 @@ def _extract_tiquery_tags(markdown: str) -> list:
 
 
 _MD_FLAG_BULLET = re.compile(r"^-\s*\*\*\[!\]\*\*\s*(.+)$", re.MULTILINE)
-_CODESIGN_WARN_LINE = re.compile(r"^\s*⚠\s+(.+)$", re.MULTILINE)
+_CODESIGN_FLAGS_BLOCK = re.compile(r"^## Flags\n\n((?:-.*\n?)+)", re.MULTILINE)
+_MD_PLAIN_BULLET = re.compile(r"^- (.+)$", re.MULTILINE)
 
 
 def _extract_flags(tool: str, markdown: str) -> list:
     """Pull '[!]'-style flag/indicator lines from a tool's markdown report.
     macho_info and plist_analyzer emit an identical '- **[!]** ...' bullet
-    list under their own 'Flags / Indicators' heading; codesign_check's
-    markdown just wraps its raw colorized stdout in a code fence, where the
-    same kind of finding shows up as a '⚠  ...' line instead (its "No
-    suspicious indicators" clean case uses '✓', so it's naturally excluded
-    here) — scoped to codesign_check specifically so this pattern can't
-    match some other tool's content."""
+    list under their own 'Flags / Indicators' heading; codesign_check's own
+    saved report instead emits a plain '## Flags' heading followed by plain
+    '- ...' bullets (its "No suspicious indicators" clean case emits nothing
+    under that heading at all), so it needs its own block-scoped pattern —
+    scoped to codesign_check specifically so this can't match some other
+    tool's bullet list."""
     if tool == "codesign_check":
-        return [m.strip() for m in _CODESIGN_WARN_LINE.findall(markdown)]
+        m = _CODESIGN_FLAGS_BLOCK.search(markdown)
+        return [b.strip() for b in _MD_PLAIN_BULLET.findall(m.group(1))] if m else []
     return [m.strip() for m in _MD_FLAG_BULLET.findall(markdown)]
+
+
+def _extract_revoked_cert(markdown: str) -> bool:
+    """True if codesign_check's Revocation (OCSP) summary-table row reports
+    REVOKED. Deliberately independent of _extract_flags/_CODESIGN_FLAGS_BLOCK
+    above — matches the literal table row so this stays correct even if the
+    Flags section's wording ever changes."""
+    return "| Revocation (OCSP) | REVOKED |" in markdown
 
 
 _MSTRINGS_FS_IOC_BLOCK = re.compile(r"## Potential Filesystem IOCs\n\n((?:- `.+`\n)+)")
@@ -1785,6 +1795,7 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     net_iocs: list = []  # (ioc, anchor of the first file it was found in)
     net_iocs_seen: set = set()
     obfuscation_findings: list = []  # (filename, max_layers)
+    revoked_certs: list = []  # (filename, anchor)
     for key in order:
         members = groups[key]
         anchor = anchor_by_key[key]
@@ -1794,6 +1805,9 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
         if len(members) > 1:
             dup_groups.append(members)
         for run in members[0]["tool_runs"]:
+            if run.get("tool") == "codesign_check" and run.get("success") and run.get("markdown"):
+                if _extract_revoked_cert(run["markdown"]):
+                    revoked_certs.append((members[0]["filename"], anchor))
             if run.get("tool") == "mstrings" and run.get("success") and run.get("markdown"):
                 raw_total, tactics = _extract_mitre_tactics(run["markdown"])
                 mitre_total += raw_total
@@ -1852,6 +1866,9 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
                       + ", ".join(f"[`{n}`](#{a})" for n, a in flagged))
     else:
         lines.append("- No files flagged malicious by VirusTotal")
+    if revoked_certs:
+        lines.append(f"- **⚠ {len(revoked_certs)} certificate(s) REVOKED** (Apple OCSP): "
+                      + ", ".join(f"[`{n}`](#{a})" for n, a in revoked_certs))
     if malware_tags:
         lines.append("- **Malware tags** (tiquery): " + ", ".join(f"`{t}`" for t in malware_tags))
     if mitre_total:

@@ -3992,3 +3992,128 @@ KitmScreenCaptureExfil:
       technique_name: "Screen Capture"
       tactics: ["Collection"]
 
+GmeraLinkPhpBeacon:
+  title: "GMERA trojanized trading-app whoami/ip beacon (link.php checkin)"
+  id: "gmera-link-beacon-001"
+  status: "experimental"
+  description: "Detects GMERA's initial victim-fingerprint checkin: a hardcoded C2 domain's /link.php endpoint, called with the victim's whoami and public IP before any other action. Confirmed as literal plaintext directly in the compiled Mach-O binaries themselves (not just their bundled shell-script stagers): 'http://nagsrsdfsudinasa.com/link.php?' in Cointrazer/Cointrazer, 'http://stepbystepby.com/link.php?' in Licatrade/Licatrade (TAOMM Chapter2/GMERA). Matches Trend Micro's and ESET's writeups on this trojanized-trading-app family (Cointrazer, Licatrade, Stockfolio/Stockfoli, Cupatrade, Trezarus)."
+  references:
+    - "https://www.trendmicro.com/en_us/research/19/i/mac-malware-that-spoofs-trading-app-steals-user-information-uploads-it-to-website.html"
+    - "https://www.welivesecurity.com/2020/07/16/mac-cryptocurrency-trading-application-rebranded-bundled-malware/"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "nagsrsdfsudinasa\\.com/link\\.php"
+      - "stepbystepby\\.com/link\\.php"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+GmeraReverseShellC2:
+  title: "GMERA TCP reverse-shell backdoor (/dev/tcp, zsh ztcp) to hardcoded C2"
+  id: "gmera-reverseshell-001"
+  status: "experimental"
+  description: "Detects GMERA's reverse-shell one-liners. Licatrade/Licatrade embeds six ready-made commands targeting 193.37.212.97 on ports 25733-25738, alternating bash's /dev/tcp pseudo-device with zsh's 'zmodload zsh/net/tcp && ztcp' module, each launched under 'screen -d -m' so it survives the parent process — confirmed as literal plaintext directly in the binary via strings -a, no extraction needed. Cointrazer/Cointrazer uses the identical technique against a different C2 IP (85.217.171.87) but wraps each one-liner as 'echo '<base64>' | base64 --decode | bash' directly in the compiled binary; that obfuscation idiom (six occurrences) is the confirmed literal evidence for Cointrazer. Matches ESET's and Trend Micro's writeups describing GMERA's TCP/2573x reverse-shell range (TAOMM Chapter2/GMERA)."
+  references:
+    - "https://www.welivesecurity.com/2020/07/16/mac-cryptocurrency-trading-application-rebranded-bundled-malware/"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "/dev/tcp/193\\.37\\.212\\.97/2573"
+      - "zmodload zsh/net/tcp && ztcp"
+      - "echo '[A-Za-z0-9+/=]+' \\| base64 --decode \\| bash"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1095
+  mitre:
+    - technique_id: "T1095"
+      technique_name: "Non-Application Layer Protocol"
+      tactics: ["Command and Control"]
+
+GmeraBundleIdSpoof:
+  title: "GMERA trojanized apps' 'appIe' homoglyph bundle identifier spoof"
+  id: "gmera-bundleid-spoof-001"
+  status: "experimental"
+  description: "Detects GMERA's bundle-identifier masquerading trick: a capital 'I' substituted for lowercase 'l' in 'apple' to read as a legitimate Apple-owned identifier at a glance. Confirmed via codesign -dvvv (Identifier=com.appIe.Trezarusios.Trezarus for Cointrazer/Cointrazer) and plutil -p of Info.plist's CFBundleIdentifier (com.appIe.stockfolioses.Stockfoli, present in both Trial_Stockfoli_1.zip and Trial_Stockfoli_2.zip's bundled Stockfoli.app, TAOMM Chapter2/GMERA)."
+  references:
+    - "https://www.welivesecurity.com/2020/07/16/mac-cryptocurrency-trading-application-rebranded-bundled-malware/"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "com\\.appIe\\."
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1036.005
+  mitre:
+    - technique_id: "T1036.005"
+      technique_name: "Masquerading: Match Legitimate Name or Location"
+      tactics: ["Defense Evasion"]
+
+GmeraGatedPayloadDecrypt:
+  title: "GMERA C2-gated AES second-stage payload decryption (appcode)"
+  id: "gmera-gated-payload-001"
+  status: "experimental"
+  description: "Detects GMERA's C2-gated payload-reveal step, found in the Stockfoli wrapper's Contents/Resources/stock launcher (extracted from Trial_Stockfoli_2.zip, TAOMM Chapter2/GMERA): a bundled encrypted Resources/appcode file is copied to /private/var/tmp/appcode, then the script polls until the C2 drops a per-victim decryption password at ~/Library/Containers/.pass, before running 'openssl aes-256-cbc -d -a -in /private/var/tmp/appcode -out /tmp/appcode -k \"$pass\"' and executing the result. This keeps the real second-stage backdoor invisible to static/sandbox analysis of the shipped artifact — it only decrypts for victims the operators actively escalate against. Confirmed verbatim in the extracted Resources/stock script; matches WeLiveSecurity's description of this GMERA wave."
+  references:
+    - "https://www.welivesecurity.com/2020/07/16/mac-cryptocurrency-trading-application-rebranded-bundled-malware/"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "openssl aes-256-cbc -d -a -in /private/var/tmp/appcode"
+      - "Library/Containers/\\.pass"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
+GmeraReconExfil:
+  title: "GMERA system/Wi-Fi recon and screenshot exfiltration to appstockfolio.com"
+  id: "gmera-recon-exfil-001"
+  status: "experimental"
+  description: "Detects GMERA's info-stealer stage, found in the Stockfoli wrapper's Contents/Resources/plugin script (extracted from Trial_Stockfoli_2.zip, TAOMM Chapter2/GMERA): fingerprints the victim (system_profiler serial, whoami), enumerates /Applications, ~/Documents, ~/Desktop and disk usage, scans nearby Wi-Fi SSIDs via the private Apple80211 framework's bundled 'airport' tool, captures and downsamples a screenshot, base64-encodes everything into /tmp/.info, and uploads it via curl multipart POST to https://appstockfolio.com/panel/upload.php — then long-polls the same endpoint for an operator-supplied decryption password (feeding GmeraGatedPayloadDecrypt's next stage). Confirmed verbatim in the extracted Resources/plugin script; matches WeLiveSecurity's description of this GMERA wave. Note: the Apple80211/airport path was dropped from this rule after regression testing showed it also appears in the unrelated Dok.B sample (TAOMM Chapter1) — it's the standard system path to macOS's built-in Wi-Fi CLI tool, too generic to stand alone."
+  references:
+    - "https://www.welivesecurity.com/2020/07/16/mac-cryptocurrency-trading-application-rebranded-bundled-malware/"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "appstockfolio\\.com/panel/upload\\.php"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1005
+  mitre:
+    - technique_id: "T1005"
+      technique_name: "Data from Local System"
+      tactics: ["Collection"]
+

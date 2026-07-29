@@ -7,6 +7,9 @@ use common_ui::styled_line;
 use common_config::get_output_dir;
 use clap::{Arg, Command};
 
+mod revocation;
+use revocation::{RevocationResult, RevocationStatus};
+
 // ── Code Signature superblob magic values (big-endian) ────────────────────────
 const CSMAGIC_EMBEDDED_SIGNATURE: u32 = 0xFADE_0CC0;
 const CSMAGIC_CODEDIRECTORY:      u32 = 0xFADE_0C02;
@@ -24,6 +27,7 @@ struct CsInfo {
     found:             bool,
     is_adhoc:          bool,
     has_cms:           bool,  // real certificate chain present
+    cms_der:           Option<Vec<u8>>, // raw CMS ContentInfo bytes, for OCSP revocation checks
     bundle_id:         Option<String>,
     team_id:           Option<String>,
     cd_version:        Option<u32>,
@@ -58,6 +62,19 @@ fn parse_superblob(blob: &[u8]) -> CsInfo {
         match blob_magic {
             m if m == CSMAGIC_BLOBWRAPPER => {
                 info.has_cms = true;
+                // Capture the raw CMS ContentInfo bytes (magic(4)+length(4)+data)
+                // so a later --check-revocation pass can parse the cert chain
+                // without re-reading the file.
+                if blob_offset + 8 <= blob.len() {
+                    let blob_len = u32::from_be_bytes([
+                        blob[blob_offset+4], blob[blob_offset+5],
+                        blob[blob_offset+6], blob[blob_offset+7],
+                    ]) as usize;
+                    let end = (blob_offset + blob_len).min(blob.len());
+                    if end > blob_offset + 8 {
+                        info.cms_der = Some(blob[blob_offset+8..end].to_vec());
+                    }
+                }
             }
             m if m == CSMAGIC_CODEDIRECTORY => {
                 parse_code_directory(&blob[blob_offset..], &mut info);
@@ -171,6 +188,16 @@ struct EmbeddedBinary {
     team_id:          Option<String>,
     has_entitlements: bool,
     warnings:         Vec<String>,
+}
+
+// Revocation status text shared by text/markdown reports.
+fn revocation_label(rev: &RevocationResult) -> String {
+    match &rev.status {
+        RevocationStatus::Good => "GOOD (not revoked)".to_string(),
+        RevocationStatus::Revoked => "REVOKED".to_string(),
+        RevocationStatus::Unknown => "UNKNOWN (no OCSP record)".to_string(),
+        RevocationStatus::NotChecked(reason) => format!("Not checked ({})", reason),
+    }
 }
 
 // Signing status classification shared by console output and reports.
@@ -299,6 +326,7 @@ fn build_report(
     cs:           &CsInfo,
     flags_text:   &[String],
     embedded:     &[EmbeddedBinary],
+    revocation:   Option<&RevocationResult>,
     format:       &str,
 ) -> String {
     let mut buf = String::new();
@@ -320,6 +348,10 @@ fn build_report(
         if let Some(v) = cs.cd_version   { buf.push_str(&format!("| CD Version | `{:#010x}` |\n", v)); }
         buf.push_str(&format!("| Entitlements | {} |\n", if cs.has_entitlements { "Yes" } else { "No" }));
         if cs.task_allow { buf.push_str("| get-task-allow | Yes (debug build) |\n"); }
+        if let Some(rev) = revocation {
+            buf.push_str(&format!("| Revocation (OCSP) | {} |\n", revocation_label(rev)));
+            if let Some(url) = &rev.ocsp_url { buf.push_str(&format!("| OCSP URL | `{}` |\n", url)); }
+        }
 
         let cs_dir_exists = codesig_dir.map(|d| d.exists()).unwrap_or(false);
         buf.push_str(&format!("| _CodeSignature/ | {} |\n\n", if cs_dir_exists { "Present" } else { "Absent" }));
@@ -360,6 +392,10 @@ fn build_report(
         if let Some(v) = cs.cd_version   { buf.push_str(&format!("CD Version:          {:#010x}\n", v)); }
         buf.push_str(&format!("Entitlements:        {}\n", if cs.has_entitlements { "Yes" } else { "No" }));
         if cs.task_allow { buf.push_str("get-task-allow:      Yes (debug build)\n"); }
+        if let Some(rev) = revocation {
+            buf.push_str(&format!("Revocation (OCSP):   {}\n", revocation_label(rev)));
+            if let Some(url) = &rev.ocsp_url { buf.push_str(&format!("OCSP URL:            {}\n", url)); }
+        }
         let cs_dir_exists = codesig_dir.map(|d| d.exists()).unwrap_or(false);
         buf.push_str(&format!("_CodeSignature/:     {}\n", if cs_dir_exists { "Present" } else { "Absent" }));
 
@@ -390,7 +426,7 @@ fn build_report(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Command::new("codesign_check")
-        .version("4.2.0")
+        .version("4.4.0")
         .about("Inspect macOS code signing: signature type, team ID, entitlements, ad-hoc detection")
         .arg(Arg::new("input").help("Path to .app bundle or Mach-O binary").index(1))
         .arg(Arg::new("output").short('o').long("output").num_args(0).help("Save output"))
@@ -399,6 +435,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg(Arg::new("markdown").short('m').long("markdown").action(clap::ArgAction::SetTrue)
             .conflicts_with_all(&["text","json"]))
         .arg(Arg::new("case").long("case").num_args(1).help("Case name for output grouping"))
+        .arg(Arg::new("check-revocation").long("check-revocation").action(clap::ArgAction::SetTrue)
+            .help("Query Apple's OCSP responder to check whether the Developer ID certificate has been revoked (requires network access and openssl on PATH)"))
         .get_matches();
 
     // ── Resolve input path ────────────────────────────────────────────────────
@@ -516,6 +554,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
+    // ── Revocation (OCSP) ──────────────────────────────────────────────────────
+    let revocation: Option<RevocationResult> = if args.get_flag("check-revocation") {
+        Some(if cs.found && cs.has_cms && !cs.is_adhoc {
+            match &cs.cms_der {
+                Some(der_bytes) => revocation::check_revocation(der_bytes),
+                None => RevocationResult {
+                    status: RevocationStatus::NotChecked("CMS blob present but could not be extracted".into()),
+                    ocsp_url: None,
+                    detail: None,
+                },
+            }
+        } else {
+            RevocationResult {
+                status: RevocationStatus::NotChecked("no certificate chain to check (ad-hoc or unsigned)".into()),
+                ocsp_url: None,
+                detail: None,
+            }
+        })
+    } else {
+        None
+    };
+
+    if let Some(rev) = &revocation {
+        println!("{}", styled_line("SECTION", "Revocation (OCSP)"));
+        match &rev.status {
+            RevocationStatus::Good => flag("Status:", "GOOD (not revoked)", "green"),
+            RevocationStatus::Revoked => flag("Status:", "REVOKED", "red"),
+            RevocationStatus::Unknown => flag("Status:", "UNKNOWN (no OCSP record)", "yellow"),
+            RevocationStatus::NotChecked(reason) => flag("Status:", &format!("Not checked ({})", reason), "yellow"),
+        }
+        if let Some(url) = &rev.ocsp_url {
+            flag_str("OCSP URL:", url);
+        }
+        if let Some(detail) = &rev.detail {
+            for line in detail.lines().filter(|l| !l.trim().is_empty()) {
+                println!("    {}", line.dimmed());
+            }
+        }
+        println!();
+    }
+
     // ── Flags / indicators ────────────────────────────────────────────────────
     println!("{}", styled_line("SECTION", "Indicators"));
     let mut flags_text: Vec<String> = Vec::new();
@@ -545,6 +624,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         warn("get-task-allow entitlement present — debug build, not App Store / notarized");
         flags_text.push("get-task-allow entitlement (debug build)".into());
         any_flag = true;
+    }
+    if let Some(rev) = &revocation {
+        if matches!(rev.status, RevocationStatus::Revoked) {
+            warn("Certificate has been REVOKED by Apple — signature should not be trusted");
+            flags_text.push("Certificate REVOKED (OCSP)".into());
+            any_flag = true;
+        }
     }
     if !any_flag {
         ok("No suspicious indicators");
@@ -604,6 +690,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &cs,
             &flags_text,
             &embedded,
+            revocation.as_ref(),
             fmt,
         );
         let out_path = output_dir.join(&filename);

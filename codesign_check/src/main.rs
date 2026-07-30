@@ -600,9 +600,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut flags_text: Vec<String> = Vec::new();
     let mut any_flag = false;
 
-    if !cs_dir_exists {
-        warn("No _CodeSignature/ directory — binary is unsigned");
-        flags_text.push("Unsigned: no _CodeSignature/ directory".into());
+    if !cs.found {
+        warn("No embedded code signature found in the binary — unsigned");
+        flags_text.push("Unsigned: no embedded code signature".into());
+        any_flag = true;
+    } else if !cs_dir_exists {
+        warn("_CodeSignature/ directory missing — bundle resources are not sealed (the binary itself is still signed)");
+        flags_text.push("_CodeSignature/ directory missing (resource sealing absent)".into());
         any_flag = true;
     }
     if cs.found && !cs.has_cms {

@@ -46,6 +46,7 @@ fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>, is_network
 enum Encoding {
     Ascii,
     Utf8,
+    Utf16,
     Base64,
 }
 
@@ -253,17 +254,26 @@ impl Mstrings {
     }
 
     pub fn process_line(&mut self, line: &str, offset: usize) {
-        if !line.trim().is_empty() && !is_objc_swift_noise(line) {
-            let encoding_type = if std::str::from_utf8(line.as_bytes()).is_ok() {
-                Encoding::Utf8
-            } else {
-                Encoding::Ascii
-            };
+        let encoding_type = if std::str::from_utf8(line.as_bytes()).is_ok() {
+            Encoding::Utf8
+        } else {
+            Encoding::Ascii
+        };
+        self.push_line(line, offset, encoding_type);
+    }
 
+    // Same as process_line, but for a run recovered from the UTF-16LE
+    // extraction pass in scan_file (see there for why that pass exists).
+    pub fn process_line_utf16(&mut self, line: &str, offset: usize) {
+        self.push_line(line, offset, Encoding::Utf16);
+    }
+
+    fn push_line(&mut self, line: &str, offset: usize, encoding: Encoding) {
+        if !line.trim().is_empty() && !is_objc_swift_noise(line) {
             let trimmed = line.trim_start().to_string();
             self.matches.push(Match {
                 offset,
-                encoding: encoding_type,
+                encoding,
                 display_str: trimmed.clone(),
                 matched_str: trimmed,
                 decode_layers: 0,
@@ -556,6 +566,48 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
     if current.len() >= 4 {
         if let Ok(s) = String::from_utf8(current.clone()) {
             mstrings.process_line(&s, string_start);
+        }
+    }
+
+    // UTF-16LE extraction pass — catches text stored as 16-bit little-endian
+    // code units instead of UTF-8/ASCII bytes: Windows PE resources, and
+    // macOS's compiled AppleScript (.scpt) format, which osacompile uses for
+    // every text literal in a script. Confirmed necessary via a TAOMM
+    // Bundlore sample: a 'do shell script' payload (domain, curl/tar
+    // commands) was only recoverable by decoding the .scpt as UTF-16LE —
+    // the ASCII/UTF-8 pass above never found it at all, since none of the
+    // bytes form a valid run under that scan (every other byte is 0x00).
+    // Restricted to the printable-ASCII/Latin-1 range (low byte only, high
+    // byte must be 0x00) since that covers every case relevant to detection
+    // rules; full BMP decoding would need String::from_utf16 and complicate
+    // the noise filtering below for no practical benefit here. Naturally
+    // low-noise: a plain ASCII/UTF-8 file has no null bytes to pair against,
+    // so this pass only ever fires on genuinely UTF-16-encoded content.
+    let mut current16: Vec<u8> = Vec::new();
+    let mut string_start16: usize = 0;
+    let mut i = 0usize;
+    while i + 1 < buffer.len() {
+        let lo = buffer[i];
+        let hi = buffer[i + 1];
+        if hi == 0 && (lo.is_ascii_graphic() || lo == b' ') {
+            if current16.is_empty() {
+                string_start16 = i;
+            }
+            current16.push(lo);
+            i += 2;
+        } else {
+            if current16.len() >= 4 {
+                if let Ok(s) = String::from_utf8(current16.clone()) {
+                    mstrings.process_line_utf16(&s, string_start16);
+                }
+            }
+            current16.clear();
+            i += 1;
+        }
+    }
+    if current16.len() >= 4 {
+        if let Ok(s) = String::from_utf8(current16.clone()) {
+            mstrings.process_line_utf16(&s, string_start16);
         }
     }
 

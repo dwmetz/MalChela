@@ -4117,3 +4117,289 @@ GmeraReconExfil:
       technique_name: "Data from Local System"
       tactics: ["Collection"]
 
+FlashBackPlatformUuidKeyedCrypto:
+  title: "Payload/config decryption keyed by IOPlatformUUID (host-locked crypto)"
+  id: "flashback-platform-uuid-key-001"
+  status: "experimental"
+  description: "Detects use of IORegistryEntryCreateCFProperty to read the IOPlatformUUID (a per-machine hardware identifier) and feed it directly into a decryption routine, locking an encrypted payload/config so it will only decrypt on the one machine it was captured/first run on — an execution-guardrail/anti-sandbox technique. Confirmed in the TAOMM Chapter1 FlashBack sample: the literal string 'IOPlatformUUID' is present in a otherwise heavily stripped/obfuscated 59KB Mach-O (only two readable strings total), which also directly links IOKit.framework (needed to call IORegistryEntryCreateCFProperty) alongside CoreFoundation/CoreServices; ESET's OSX/Flashback whitepaper documents this exact mechanism — the UUID is used as an RC4 key to decrypt the malware's own data section and, once machine-locked, later communications. Same technique, not literal bytes, generalizes to any dropper keying decryption off IOPlatformUUID rather than a fixed key."
+  references:
+    - "https://web-assets.esetstatic.com/wls/200x/white-papers/osx_flashback.pdf"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "IOPlatformUUID"
+  falsepositives:
+    - "Legitimate software that reads IOPlatformUUID for licensing/device-fingerprinting purposes (not inherently malicious, but rare enough outside DRM/licensing code to warrant review)."
+  level: medium
+  tags:
+    - attack.t1480.001
+  mitre:
+    - technique_id: "T1480.001"
+      technique_name: "Execution Guardrails: Environmental Keying"
+      tactics: ["Defense Evasion"]
+
+ShlayerQuarantineCampaignCheckin:
+  title: "Shlayer-style campaign checkin via macOS Quarantine Events database"
+  id: "shlayer-quarantine-campaign-001"
+  status: "experimental"
+  description: "Detects querying the macOS Gatekeeper quarantine database (com.apple.LaunchServices.QuarantineEventsV2, read via the sqlite3 CLI) for the most recent download whose origin URL carries a campaign-tracking parameter (ft=<id>), then using that id plus the machine's IOPlatformUUID to build a tracking-pixel/checkin request that fetches and bash-executes the response. Confirmed verbatim (SQL query text, including the literal 'ft=' parameter matching) in the postinstall script of Player.pkg, extracted from the notarized Shlayer sample TAOMM Chapter1/Shlayer/notarized/Player.pkg; the campaign id and 'a.checksvc.com/xt?c=' checkin endpoint also appear verbatim in the same script. This is a documented Shlayer/Bundlore technique — reading the OS's own download-provenance record to attribute an infection to its distribution campaign before serving the next stage."
+  references:
+    - "https://www.intego.com/mac-security-blog/osxshlayer-new-mac-malware-comes-out-of-its-shell"
+    - "https://www.carbonblack.com/2019/02/12/tau-threat-intelligence-notification-new-macos-malware-variant-of-shlayer-osx-discovered/"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "select LSQuarantineDataURLString from LSQuarantineEvent where LSQuarantineDataURLString like \\\"%[&?]ft=\\d+%\\\""
+      - "a\\.checksvc\\.com/xt\\?c="
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+ShlayerEvalOpensslDecryptExec:
+  title: "Fileless payload execution via eval-wrapped openssl AES decrypt"
+  id: "shlayer-eval-openssl-decrypt-001"
+  status: "experimental"
+  description: "Detects the idiom eval \"$(openssl enc -base64 -d -aes-256-cbc -nosalt -pass pass:<key> <encrypted-resource)\" — decrypting a bundled resource file with a hardcoded password and piping the plaintext directly into eval, so the real next-stage script is never written to disk and never appears in a static scan of the shipped artifact. Confirmed verbatim (password 2833846567) in a fake Flash Player installer's launcher script, Contents/MacOS/<random-name>, extracted from AdobeFlashPlayer.dmg (TAOMM Chapter1/Shlayer) — it decrypts and evals the bundle's own Contents/Resources/enc file. The numeric password is per-build/incidental, generalized to \\d+ here since the eval+openssl structure is the stable, distinctive part of the technique."
+  references:
+    - "https://www.intego.com/mac-security-blog/osxshlayer-new-mac-malware-comes-out-of-its-shell"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "eval \\\"\\$\\(openssl enc -base64 -d -aes-256-cbc -nosalt -pass pass:\\d+"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
+WindTailDecoyDocumentIdentity:
+  title: "WindTail decoy-document app bundle (fixed bundle ID + custom openurl scheme)"
+  id: "windtail-decoy-identity-001"
+  status: "experimental"
+  description: "Detects the fixed bundle identifier 'com.alis.tre' and/or the custom URL scheme handler 'openurl2622007' registered in CFBundleURLTypes — both confirmed verbatim in Info.plist across four separately-named decoy .app bundles (Meeting_Agenda.app, Scandal_Report_2017.app, NPC_Agenda_230617.app, Final_Presentation.app; TAOMM Chapter1/WindTail), all masquerading as Office documents while actually being LSUIElement (backgrounded, Dock-hidden) applications with NSAllowsArbitraryLoads set to disable ATS. Matches the WINDSHIFT APT / WindTail technique described in Taha Karim's HITB presentation and objective-see's writeup: a scheme-handler app triggered by opening a companion malicious link/document. Both values are literal identifiers reused unchanged across this campaign's samples, not randomized per-decoy in this batch."
+  references:
+    - "https://gsec.hitb.org/materials/sg2018/D1%20COMMSEC%20-%20In%20the%20Trails%20of%20WINDSHIFT%20APT%20-%20Taha%20Karim.pdf"
+    - "https://objective-see.org/blog/blog_0x3B.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "com\\.alis\\.tre"
+      - "openurl2622007"
+  falsepositives:
+    - "com.alis.tre and openurl2622007 are literal campaign-specific identifiers, not a generalized pattern — a different WindTail build could use different values"
+  level: high
+  tags:
+    - attack.t1036.008
+  mitre:
+    - technique_id: "T1036.008"
+      technique_name: "Masquerading: Masquerade File Type"
+      tactics: ["Defense Evasion"]
+
+WindTailAesConfigDecrypt:
+  title: "WindTail AES-decrypted date.txt configuration file"
+  id: "windtail-aes-datetxt-config-001"
+  status: "experimental"
+  description: "Detects the pairing of a '%@/date.txt' path-format string (building a path to Contents/Resources/date.txt inside the app bundle) with an AESCrypt Objective-C category exposing AESDecryptFile:toFile:usingPassphrase:error: / AESEncryptFile:toFile:usingPassphrase:error: — used to decrypt a bundled config (timestamp + random identifier per objective-see's writeup) before use. Confirmed verbatim in the usrnode Mach-O binary shared across all four WindTail decoy .app bundles (TAOMM Chapter1/WindTail). The AESCrypt category itself is a commonly reused open-source component and not inherently malicious on its own; the distinctive signal is combining it with the app's own date.txt config path, which the falsepositives note below accounts for."
+  references:
+    - "https://gsec.hitb.org/materials/sg2018/D1%20COMMSEC%20-%20In%20the%20Trails%20of%20WINDSHIFT%20APT%20-%20Taha%20Karim.pdf"
+    - "https://objective-see.org/blog/blog_0x3B.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "%@/date\\.txt"
+      - "AES(Decrypt|Encrypt)File:toFile:usingPassphrase:error:"
+  falsepositives:
+    - "AESDecryptFile:toFile:usingPassphrase:error: alone is a common open-source (AESCrypt/RNCryptor-derived) selector reused by legitimate software; treat that entry as supporting evidence, not a standalone verdict — the %@/date.txt path pairing is the stronger signal"
+  level: medium
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
+MacOffersMmInstallStub:
+  title: "MacOffers-style staged mm-install-macos second-stage downloader"
+  id: "macoffers-mm-install-stub-001"
+  status: "experimental"
+  description: "Detects a compiled-AppleScript 'do shell script' stage that checks sw_vers -productVersion to pick an OS-version-specific payload folder, downloads 'mmStub.tar.gz' from a hardcoded CDN domain, extracts it to a temp dir, chmods +x, and directly executes the bundled mm-install-macos.app's main binary. Confirmed via osadecompile of Install.app/Contents/Resources/Scripts/main.scpt, extracted from Bundlore.dmg (TAOMM Chapter2/Bundlore) — literal domain cdn.absurdbyte.win. The identical 'mm-install-macos' binary name and 'mmStub.tar.gz' staging archive also appear verbatim (as plain ASCII) in a TAOMM Chapter1/Shlayer sample's Install.app shell script (different domain, aqk.spoonstory.win), confirming both families share the same underlying 'MacOffers' second-stage distribution framework — matches VMware TAU's mm-install-macos writeup. Note: in the Bundlore .scpt itself these strings are stored UTF-16 (osacompile's on-disk format for text literals), first surfaced here via decompilation; mstrings' UTF-16LE extraction pass now also recovers them directly from the compiled .scpt without decompiling first."
+  references:
+    - "http://www.thesafemac.com/arg-bundlore/"
+    - "https://blogs.vmware.com/security/2020/06/tau-threat-analysis-bundlore-macos-mm-install-macos.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "mm-install-macos"
+      - "mmStub\\.tar\\.gz"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1105
+  mitre:
+    - technique_id: "T1105"
+      technique_name: "Ingress Tool Transfer"
+      tactics: ["Command and Control"]
+
+JanicabDecoySplitFileExtraction:
+  title: "Janicab decoy-file extraction via SPLITFILESANDRUN zip marker"
+  id: "janicab-splitfilesandrun-001"
+  status: "experimental"
+  description: "Detects a self-extraction technique that scans sibling .zip files (in the distribution archive's own parent directory, not the app bundle) under 10MB for a literal 'SPLITFILESANDRUN' delimiter, then splits the zip's raw bytes on that marker to recover an embedded decoy filename and payload, which it opens via 'open' to distract the user while the app quietly sets up persistence in the background. Confirmed verbatim in installer.py, extracted from RecentNews.?fdp.app (TAOMM Chapter2/Janicab) — matches Intego's and F-Secure's description of Janicab masquerading as a PDF/news-article decoy while installing spyware."
+  references:
+    - "https://www.intego.com/mac-security-blog/new-mac-malware-janicab-uses-old-trick-to-hide/"
+    - "https://www.f-secure.com/weblog/archives/00002576.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "SPLITFILESANDRUN"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1140
+  mitre:
+    - technique_id: "T1140"
+      technique_name: "Deobfuscate/Decode Files or Information"
+      tactics: ["Defense Evasion"]
+
+JanicabCrontabWatchdogPersistence:
+  title: "Janicab crontab persistence with kill-and-respawn watchdog"
+  id: "janicab-crontab-watchdog-001"
+  status: "experimental"
+  description: "Detects Janicab's persistence/watchdog pair: installer.py appends a per-minute crontab entry ('* * * * * python ~/.t/runner.pyc') that re-launches its payload from a hidden ~/.t directory every minute, while runner.pyc itself checks whether its service is already running/stuck (via the distinctive misspelled debug string 'Runner: serivce already running, checking status...') and kills+respawns 'starter.pyc' via 'nohup /usr/bin/python .../starter.pyc &' if so — a self-healing persistence loop. Confirmed verbatim in installer.py and Libsc/runner.pyc, both extracted from RecentNews.?fdp.app (TAOMM Chapter2/Janicab); matches Intego's description of Janicab's hidden '.t' folder plus a crontab job executing every minute."
+  references:
+    - "https://www.intego.com/mac-security-blog/new-mac-malware-janicab-uses-old-trick-to-hide/"
+    - "https://www.f-secure.com/weblog/archives/00002576.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "\\* \\* \\* \\* \\* python ~/\\.t/runner\\.pyc"
+      - "Runner: serivce already running, checking status"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1053.003
+  mitre:
+    - technique_id: "T1053.003"
+      technique_name: "Scheduled Task/Job: Cron"
+      tactics: ["Execution", "Persistence", "Privilege Escalation"]
+
+VSearchTrkitokTelemetryBeacon:
+  title: "VSearch/Pirrit telemetry beacon to trkitok.com"
+  id: "vsearch-trkitok-beacon-001"
+  status: "experimental"
+  description: "Detects VSearch/Pirrit's install/status telemetry beacon: curl requests to t.trkitok.com's /track/slog (log) and /track/surl (success-url/install confirmation) endpoints, carrying a machine ID (mid=, derived from IOPlatformUUID via 'ioreg -rd1 -c IOPlatformExpertDevice' confirmed elsewhere in the same binary) plus ht=/nt=/su= parameters. Confirmed verbatim in the TAOMM Chapter2/VSearch (Pirrit) sample's Mach-O strings."
+  references:
+    - "http://www.thesafemac.com/arg-vsearch/"
+    - "https://www.levelblue.com/blogs/levelblue-blog/osx-pirrit-adware-notes-from-the-underground"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "t\\.trkitok\\.com/track/slog"
+      - "t\\.trkitok\\.com/track/surl"
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1071.001
+  mitre:
+    - technique_id: "T1071.001"
+      technique_name: "Application Layer Protocol: Web Protocols"
+      tactics: ["Command and Control"]
+
+VSearchSelfHealingLaunchDaemon:
+  title: "VSearch/Pirrit self-regenerating Apple-masquerading LaunchDaemon"
+  id: "vsearch-selfheal-launchdaemon-001"
+  status: "experimental"
+  description: "Detects an in-binary LaunchDaemon plist template (KeepAlive+RunAtLoad both true, Label hardcoded to a 'com.apple.' prefix to blend in with genuine Apple daemons) written out to /Library/LaunchDaemons/com.apple.<x>.plist, paired with a 'selfProtector' routine that detects when the plist or its settings.dat config have been removed and silently regenerates both. Confirmed verbatim via the embedded plist XML template and the debug strings 'selfProtector - plist file regenerating...' / 'selfProtector - settings.dat regenerating...' / 'generatePlist - ... open failed' in the TAOMM Chapter2/VSearch (Pirrit) sample."
+  references:
+    - "http://www.thesafemac.com/arg-vsearch/"
+    - "https://objective-see.org/blog/blog_0x0E.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "selfProtector - plist file regenerating"
+      - "selfProtector - settings\\.dat regenerating"
+      - "/Library/LaunchDaemons/com\\.apple\\."
+  falsepositives:
+    - "'/Library/LaunchDaemons/com.apple.' alone is a normal path prefix for genuine Apple daemons too — treat it as supporting evidence, not a standalone verdict; the selfProtector debug strings are the distinctive signal"
+  level: high
+  tags:
+    - attack.t1543.004
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+VSearchAntiCompetitorCleanup:
+  title: "VSearch/Pirrit rival-adware detection and removal (antiCompetitors)"
+  id: "vsearch-anticompetitor-cleanup-001"
+  status: "experimental"
+  description: "Detects an adware 'turf war' routine that hunts for and deletes other adware/PUA's persistence artifacts before or after installing its own: scans /Library/LaunchDaemons and /Library/LaunchAgents, Safari's *.safariextz/*.safariextension bundles, and ~/Library/Preferences and ~/Library/Application Support for competing software's plists/JSON configs, unloading their LaunchDaemons via 'launchctl unload -F' and removing the files. Confirmed verbatim via the debug strings 'Checking for competitors... done.', 'Competitor found... ', and 'antiCompetitors - Removing with... ' in the TAOMM Chapter2/VSearch (Pirrit) sample."
+  references:
+    - "http://www.thesafemac.com/arg-vsearch/"
+    - "https://objective-see.org/blog/blog_0x0E.html"
+  author: Doug Metz
+  date: 2026-07-29
+  logsource:
+    category: file_event
+    product: macos
+  detection:
+    strings:
+      - "antiCompetitors - Removing with"
+      - "Checking for competitors\\.\\.\\. done\\."
+  falsepositives: []
+  level: high
+  tags:
+    - attack.t1070.004
+  mitre:
+    - technique_id: "T1070.004"
+      technique_name: "Indicator Removal: File Deletion"
+      tactics: ["Defense Evasion"]
+

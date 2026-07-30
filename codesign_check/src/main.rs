@@ -1,12 +1,10 @@
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-
 use colored::*;
 use common_ui::styled_line;
 use common_config::get_output_dir;
 use clap::{Arg, Command};
-
 mod revocation;
 use revocation::{RevocationResult, RevocationStatus};
 

@@ -4,13 +4,9 @@ fn is_gui_mode() -> bool {
 }
 use std::fs::File;
 use std::io::{self, BufReader, Write, Read};
-
 use sha2::{Sha256, Digest};
-
 use common_ui::styled_line;
-
 use common_config::get_output_dir;
-
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use clap::{Arg, ArgMatches, Command};
 use fancy_regex::Regex;

@@ -22,7 +22,6 @@ SuspiciousURLStrangeDomain:
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
 
-
 HardcodedIPAddress:
   title: "Hardcoded IP address"
   id: "b2e9a3d7-cf18-4b6f-987b-4d90d7a94b88"

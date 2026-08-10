@@ -60,7 +60,7 @@ but read from a temp file via `YaraBackend::scan_file`.
 | 1 MiB | 575 us   | 1.70 GiB/s |
 | 16 MiB | 5.12 ms | 3.05 GiB/s |
 
-yara-x mmaps the file by default. The 16 MiB on disk number is
+yara-x only memory maps inputs above 500 MB and otherwise reads the file into a heap buffer. This wrapper refuses anything above 256 MiB (`MAX_SCAN_INPUT_BYTES`), so the memory-mapped path is unreachable for every input it permits. The 16 MiB on disk number is
 slower than the 16 MiB in memory number because mmap setup and page
 fault costs are real at that size; for our typical sample sizes
 (a few MB) the gap is negligible.

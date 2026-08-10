@@ -78,7 +78,8 @@ impl YaraBackend {
     /// Each source is capped at 16 MiB; passing something larger
     /// returns [`Error::SourceTooLarge`] without touching the engine.
     pub fn from_inline_sources(sources: &[(&str, &str)]) -> Result<Self> {
-        let rules = compile::compile_sources(sources)?;
+        let output = compile::compile_sources(sources)?;
+        let rules = output.rules;
         let n = rules.iter().count();
         log::debug!(
             "yara-backend loaded {n} inline rule(s) from {} source(s)",
@@ -87,7 +88,7 @@ impl YaraBackend {
         let state = CacheState {
             signature: DirSignature::new(),
             rules,
-            compile_warnings: Vec::new(),
+            compile_warnings: output.warnings,
         };
         Ok(YaraBackend {
             rules_dir: None,

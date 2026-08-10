@@ -1576,9 +1576,9 @@ dependencies = [
  "ssdeep",
  "strip-ansi-escapes",
  "sys-info",
+ "tempfile",
  "tokio",
- "walkdir",
- "yara",
+ "yara-backend",
 ]
 
 [[package]]

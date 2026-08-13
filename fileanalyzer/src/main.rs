@@ -530,7 +530,14 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
         let line = styled_line("yellow", &format!("- YARA: Error - {}", e));
         println!("{}", line);
         writeln!(temp_file, "{}", plain_text(&line)).ok();
-        vec![format!("Error: {}", e)]
+        eprintln!("YARA scan failed: {e}");
+        // The failure is reported above and on stderr. It is deliberately not
+        // pushed into yara_matches: that field is serialised into the JSON
+        // report as a list of rule names, so an error string there is read by
+        // any consumer as a match, and these errors render absolute local
+        // paths. An empty list is wrong in a different way, because it cannot
+        // be told apart from a clean scan, which is worth raising upstream.
+        Vec::new()
     }
 };
     temp_file.flush().expect("Failed to flush after YARA scan");

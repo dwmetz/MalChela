@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn scan_bytes_matches_mz_header() {
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let r = scan_bytes_with(&rules, &mz_bytes(), Duration::ZERO, "buf", Vec::new()).unwrap();
         assert_eq!(r.matches.len(), 1);
         assert_eq!(r.matches[0].rule_name, "mz_header");
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn scan_bytes_no_match_returns_empty() {
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let zeros = vec![0u8; 60];
         let r = scan_bytes_with(&rules, &zeros, Duration::ZERO, "buf", Vec::new()).unwrap();
         assert!(r.is_empty());
@@ -243,14 +243,14 @@ mod tests {
 
     #[test]
     fn scan_bytes_with_empty_buffer_returns_empty() {
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let r = scan_bytes_with(&rules, &[], Duration::ZERO, "buf", Vec::new()).unwrap();
         assert!(r.is_empty());
     }
 
     #[test]
     fn scan_with_no_rules_returns_empty_report() {
-        let rules = compile_sources(&[]).unwrap();
+        let rules = compile_sources(&[]).unwrap().rules;
         let r = scan_bytes_with(&rules, &mz_bytes(), Duration::ZERO, "buf", Vec::new()).unwrap();
         assert_eq!(r.rules_evaluated, 0);
         assert!(r.is_empty());
@@ -261,7 +261,7 @@ mod tests {
         let td = tempfile::TempDir::new().unwrap();
         let p = td.path().join("sample.bin");
         std::fs::write(&p, mz_bytes()).unwrap();
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let r = scan_file_with(&rules, &p, Duration::ZERO, "sample.bin", Vec::new()).unwrap();
         assert_eq!(r.matches.len(), 1);
         assert_eq!(r.matches[0].rule_name, "mz_header");
@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn scan_file_missing_path_returns_scan_failed() {
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let phantom = Path::new("/definitely/does/not/exist/file.bin");
         let err =
             scan_file_with(&rules, phantom, Duration::ZERO, "phantom", Vec::new()).unwrap_err();
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn scan_report_carries_compile_warnings_through() {
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let warnings = vec!["one".to_string(), "two".to_string()];
         let r =
             scan_bytes_with(&rules, &mz_bytes(), Duration::ZERO, "buf", warnings.clone()).unwrap();
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn tags_and_meta_are_collected() {
-        let rules = compile_sources(&[("default", TAGGED_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", TAGGED_RULE)]).unwrap().rules;
         let buf = b"marker bytes here";
         let r = scan_bytes_with(&rules, buf, Duration::ZERO, "buf", Vec::new()).unwrap();
         assert_eq!(r.matches.len(), 1);
@@ -305,7 +305,7 @@ mod tests {
             rule zebra { strings: $z = "hit" condition: $z }
             rule alpha { strings: $a = "hit" condition: $a }
         "#;
-        let rules = compile_sources(&[("default", TWO_RULES)]).unwrap();
+        let rules = compile_sources(&[("default", TWO_RULES)]).unwrap().rules;
         let r = scan_bytes_with(&rules, b"hit", Duration::ZERO, "buf", Vec::new()).unwrap();
         assert_eq!(r.matches.len(), 2);
         assert_eq!(r.matches[0].rule_name, "alpha");
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn scan_bytes_rejects_oversized_buffer() {
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let oversized = vec![0u8; (MAX_SCAN_INPUT_BYTES + 1) as usize];
         let err =
             scan_bytes_with(&rules, &oversized, Duration::ZERO, "huge", Vec::new()).unwrap_err();
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn scan_file_rejects_oversized_file() {
-        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap();
+        let rules = compile_sources(&[("default", MZ_RULE)]).unwrap().rules;
         let td = tempfile::TempDir::new().unwrap();
         let p = td.path().join("huge.bin");
         let huge = vec![0u8; (MAX_SCAN_INPUT_BYTES + 1) as usize];

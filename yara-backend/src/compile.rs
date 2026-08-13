@@ -49,8 +49,15 @@ pub(crate) fn discover_rule_files(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     }
     for entry in WalkDir::new(dir) {
         let entry = entry?;
-        if !entry.file_type().is_file() {
-            continue;
+        // `file_type()` comes from `symlink_metadata`, so a symlink to a rule
+        // file reports as a symlink and would be skipped. libyara followed it,
+        // via `add_rules_file`, and an operator who symlinks a rule repository
+        // into the rules directory expects those rules to load. Resolve the
+        // link and keep the "regular file only" guarantee, which is what keeps
+        // a FIFO named `rules.yar` from blocking the walk forever.
+        match std::fs::metadata(entry.path()) {
+            Ok(md) if md.is_file() => {}
+            _ => continue,
         }
         let path = entry.path();
         if let Some(ext) = path.extension() {
@@ -73,6 +80,25 @@ pub(crate) fn discover_rule_files(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
 pub(crate) fn compile_files(files: &[PathBuf], fail_fast: bool) -> Result<CompileOutput> {
     let mut compiler = Compiler::new();
     let mut warnings: Vec<String> = Vec::new();
+
+    // libyara accepted regex constructs yara-x rejects by default, such as an
+    // unescaped `{` or an empty-match `a?`. Those appear in real corpora, and
+    // because the initial load is fail-fast, one of them would take down every
+    // rule rather than its own. yara-x ships this switch for exactly that.
+    compiler.relaxed_re_syntax(true);
+
+    // `include` resolved relative to the including file under libyara, which
+    // passed a path. Reading the source into a string loses that origin, so
+    // includes resolved against the process working directory: they failed, or
+    // worse, silently picked up a different file. Every directory holding a
+    // rule file becomes an include root.
+    compiler.enable_includes(true);
+    let mut include_dirs: Vec<&Path> = files.iter().filter_map(|f| f.parent()).collect();
+    include_dirs.sort();
+    include_dirs.dedup();
+    for dir in include_dirs {
+        compiler.add_include_dir(dir);
+    }
 
     for file in files {
         match std::fs::metadata(file) {
@@ -137,6 +163,12 @@ pub(crate) fn compile_files(files: &[PathBuf], fail_fast: bool) -> Result<Compil
         }
     }
 
+    // yara-x's own diagnostics, which nothing here previously collected. These
+    // are the messages that tell an analyst a rule is not doing what they think
+    // (`slow_pattern`, `non_bool_expr` and friends); they are warnings rather
+    // than failures, so they are reported and the load continues.
+    warnings.extend(compiler.warnings().iter().map(|w| w.to_string()));
+
     let rules = compiler.build();
     Ok(CompileOutput {
         rules: Arc::new(rules),
@@ -149,8 +181,9 @@ pub(crate) fn compile_files(files: &[PathBuf], fail_fast: bool) -> Result<Compil
 /// Callers pass `(namespace, source)` pairs. Passing "default" for the
 /// namespace mirrors libyara's behavior when no namespace was set, which is
 /// what every existing inline-rule caller in MalChela does today.
-pub(crate) fn compile_sources(sources: &[(&str, &str)]) -> Result<Arc<Rules>> {
+pub(crate) fn compile_sources(sources: &[(&str, &str)]) -> Result<CompileOutput> {
     let mut compiler = Compiler::new();
+    compiler.relaxed_re_syntax(true);
     for (namespace, src) in sources {
         let src_len = src.len() as u64;
         if src_len > MAX_RULE_SOURCE_BYTES {
@@ -170,7 +203,11 @@ pub(crate) fn compile_sources(sources: &[(&str, &str)]) -> Result<Arc<Rules>> {
             });
         }
     }
-    Ok(Arc::new(compiler.build()))
+    let warnings: Vec<String> = compiler.warnings().iter().map(|w| w.to_string()).collect();
+    Ok(CompileOutput {
+        rules: Arc::new(compiler.build()),
+        warnings,
+    })
 }
 
 #[cfg(test)]
@@ -178,6 +215,117 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    /// libyara resolved `include` relative to the including file, because it
+    /// was handed a path. Reading the source into a string loses that origin,
+    /// so includes resolved against the process working directory: they failed
+    /// with E043, or silently picked up a different file that happened to sit
+    /// there. Every directory holding a rule file is now an include root.
+    #[test]
+    fn include_resolves_relative_to_the_including_file() {
+        let td = TempDir::new().unwrap();
+        fs::write(
+            td.path().join("base.yar"),
+            "rule base_rule { condition: true }",
+        )
+        .unwrap();
+        let main = td.path().join("main.yar");
+        fs::write(
+            &main,
+            "include \"base.yar\"\nrule main_rule { condition: true }",
+        )
+        .unwrap();
+
+        // Only main.yar is compiled; base.yar arrives through the include.
+        let out = compile_files(&[main], true).expect("include must resolve");
+        assert_eq!(out.rules.iter().count(), 2);
+    }
+
+    /// A symlink pointing at a real rule file used to be skipped, because
+    /// `file_type()` comes from `symlink_metadata`. The old libyara path
+    /// followed it. An operator who symlinks a rule repository into the rules
+    /// directory would otherwise get an empty rule set and no diagnostic.
+    #[test]
+    fn symlinked_rule_file_is_discovered() {
+        let td = TempDir::new().unwrap();
+        let real = td.path().join("real.yar");
+        fs::write(&real, MINIMAL_RULE).unwrap();
+
+        let linked_dir = td.path().join("rules");
+        fs::create_dir(&linked_dir).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, linked_dir.join("linked.yar")).unwrap();
+
+        let found = discover_rule_files(&linked_dir).unwrap();
+        assert_eq!(found.len(), 1, "a symlink to a rule file must be compiled");
+    }
+
+    /// The decisive one: the whole load path, not just the audit, must survive
+    /// a rule file engineered to overflow the parser. Before the cap this
+    /// aborted the process with `fatal runtime error: stack overflow` at exit
+    /// 134, so a test asserting anything at all is proof the abort is gone.
+    #[test]
+    fn deeply_nested_rule_file_fails_the_load_instead_of_aborting() {
+        let td = TempDir::new().unwrap();
+        let depth = 5000;
+        let src = format!(
+            "rule deep {{ condition: {}1{} }}",
+            "(".repeat(depth),
+            ")".repeat(depth)
+        );
+        let p = write(td.path(), "deep.yar", &src);
+
+        let err = compile_files(&[p], true).unwrap_err();
+        assert!(
+            format!("{err}").contains("nesting"),
+            "expected the nesting cap to refuse it, got: {err}"
+        );
+    }
+
+    /// yara-x rejects regex constructs libyara accepted, such as an unescaped
+    /// brace. Because the initial load is fail-fast, one of those would take
+    /// down an entire corpus rather than its own file.
+    #[test]
+    fn libyara_era_regex_still_compiles() {
+        let td = TempDir::new().unwrap();
+        let p = write(
+            td.path(),
+            "re.yar",
+            r#"rule r { strings: $a = /foo{bar/ condition: $a }"#,
+        );
+        let out = compile_files(&[p], true).expect("relaxed regex syntax must be enabled");
+        assert_eq!(out.rules.iter().count(), 1);
+    }
+
+    /// yara-x's own diagnostics were never collected: the crate never called
+    /// `Compiler::warnings()`. A rule that compiles with a complaint compiled
+    /// silently, which is exactly what the warnings are for.
+    #[test]
+    fn engine_warnings_are_collected() {
+        let td = TempDir::new().unwrap();
+        // A wildcard-only hex pattern; yara-x warns `slow_pattern` on it.
+        let p = write(
+            td.path(),
+            "slow.yar",
+            "rule slow { strings: $a = { ?? ?? ?? ?? } condition: $a }",
+        );
+        let out = compile_files(&[p], true).unwrap();
+        assert!(
+            !out.warnings.is_empty(),
+            "engine warnings must reach the caller"
+        );
+    }
+
+    /// The same, on the inline path, which previously hardcoded an empty list.
+    #[test]
+    fn engine_warnings_are_collected_from_inline_sources() {
+        let out = compile_sources(&[(
+            "default",
+            "rule slow { strings: $a = { ?? ?? ?? ?? } condition: $a }",
+        )])
+        .unwrap();
+        assert!(!out.warnings.is_empty());
+    }
 
     const MINIMAL_RULE: &str = r#"
         rule minimal {
@@ -319,7 +467,7 @@ mod tests {
 
     #[test]
     fn compile_sources_inline_rule_succeeds() {
-        let arc = compile_sources(&[("default", MINIMAL_RULE)]).unwrap();
+        let arc = compile_sources(&[("default", MINIMAL_RULE)]).unwrap().rules;
         assert_eq!(arc.iter().count(), 1);
     }
 
@@ -335,7 +483,8 @@ mod tests {
             ("a", "rule one { condition: true }"),
             ("b", "rule two { condition: true }"),
         ])
-        .unwrap();
+        .unwrap()
+        .rules;
         assert_eq!(arc.iter().count(), 2);
     }
 
@@ -345,7 +494,8 @@ mod tests {
             ("ns_a", "rule shared { condition: true }"),
             ("ns_b", "rule shared { condition: true }"),
         ])
-        .unwrap();
+        .unwrap()
+        .rules;
         assert_eq!(arc.iter().count(), 2);
     }
 

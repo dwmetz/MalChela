@@ -37,12 +37,31 @@ use crate::error::{Error, Result};
 /// Modules that yara-x does not currently implement. Adding a module to this
 /// list means rule files mentioning it will be rejected at load time with a
 /// clear error rather than a low level engine diagnostic.
-pub(crate) const FORBIDDEN_IMPORTS: &[&str] = &["magic"];
+pub(crate) const FORBIDDEN_IMPORTS: &[&str] = &["magic", "cuckoo"];
+
+/// Hard cap on how deeply a rule condition may nest brackets.
+///
+/// yara-x parses conditions with a recursive descent parser, so nesting depth
+/// translates directly into stack depth. A 4 KB rule file of nested parentheses
+/// overflows the main thread's stack and ABORTS the process: not a panic that
+/// `catch_unwind` could contain, but `fatal runtime error: stack overflow`.
+/// Measured on a debug build at roughly 2,000 levels and on release at roughly
+/// 30,000, both of which fit in a file small enough to arrive unnoticed.
+///
+/// 256 is far above anything a human writes (real corpora rarely exceed a
+/// dozen) and far below the level that threatens the stack.
+pub(crate) const MAX_CONDITION_NESTING: usize = 256;
 
 const IMPORT_KEYWORD: &[u8] = b"import";
 
 pub(crate) fn audit_rule_source(path: &Path, src: &str) -> Result<()> {
     let stripped = strip_block_comments(src);
+
+    // Before anything else: a source that would overflow the parser's stack
+    // must never reach the compiler, because the failure is an abort rather
+    // than an error we could report.
+    check_nesting_depth(path, &stripped)?;
+
     let bytes = stripped.as_bytes();
     let mut i = 0;
 
@@ -95,6 +114,56 @@ pub(crate) fn audit_rule_source(path: &Path, src: &str) -> Result<()> {
 
         i += 1;
     }
+    Ok(())
+}
+
+/// Reject a source whose bracket nesting could overflow the parser's stack.
+///
+/// Counts `(`, `[` and `{` outside string literals and comments. The audit
+/// already walks the source byte by byte for imports, so this is nearly free
+/// and it runs before a single byte reaches the compiler.
+fn check_nesting_depth(path: &Path, src: &str) -> Result<()> {
+    let bytes = src.as_bytes();
+    let mut depth: usize = 0;
+    let mut max_depth: usize = 0;
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' | b'\'' => {
+                // `skip_string_literal` wants the index OF the opening quote.
+                i = skip_string_literal(bytes, i, bytes[i]);
+                continue;
+            }
+            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'/' => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            b'(' | b'[' | b'{' => {
+                depth += 1;
+                if depth > max_depth {
+                    max_depth = depth;
+                }
+                if max_depth > MAX_CONDITION_NESTING {
+                    return Err(Error::CompileFailed {
+                        path: path.to_path_buf(),
+                        msg: format!(
+                            "bracket nesting exceeds {MAX_CONDITION_NESTING}; \
+                             deeply nested conditions overflow the parser stack"
+                        ),
+                    });
+                }
+            }
+            b')' | b']' | b'}' => {
+                depth = depth.saturating_sub(1);
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
     Ok(())
 }
 
@@ -221,6 +290,62 @@ fn strip_block_comments(src: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A rule file of nested parentheses is small on disk and fatal in the
+    /// parser: 2,000 levels is about 4 KB and aborts a debug build outright,
+    /// with `fatal runtime error: stack overflow`. That is an abort, not a
+    /// panic, so no `catch_unwind` anywhere could contain it. It has to be
+    /// refused before the compiler sees it.
+    #[test]
+    fn deeply_nested_condition_is_rejected_before_compiling() {
+        let depth = MAX_CONDITION_NESTING + 1;
+        let src = format!(
+            "rule deep {{ condition: {}1{} }}",
+            "(".repeat(depth),
+            ")".repeat(depth)
+        );
+        let err = audit_rule_source(Path::new("deep.yar"), &src).unwrap_err();
+        match err {
+            Error::CompileFailed { msg, .. } => assert!(msg.contains("nesting")),
+            other => panic!("expected CompileFailed, got {other:?}"),
+        }
+    }
+
+    /// The cap must not fire on rules people actually write.
+    #[test]
+    fn ordinary_nesting_is_accepted() {
+        let src = r#"rule ok {
+            strings:
+                $a = "x"
+            condition:
+                ($a and (true or (false and true))) or (uint16(0) == 0x5A4D)
+        }"#;
+        assert!(audit_rule_source(Path::new("ok.yar"), src).is_ok());
+    }
+
+    /// Brackets inside a string literal are text, not nesting.
+    #[test]
+    fn brackets_inside_strings_do_not_count_towards_nesting() {
+        let many = "(".repeat(MAX_CONDITION_NESTING + 50);
+        let src = format!("rule s {{ strings: $a = \"{many}\" condition: $a }}");
+        assert!(audit_rule_source(Path::new("s.yar"), &src).is_ok());
+    }
+
+    /// yara-x implements the cuckoo module, but it evaluates against a Cuckoo
+    /// report supplied as module input, and this wrapper has no API to supply
+    /// one. So a cuckoo rule compiles, counts towards `rule_count()`, and can
+    /// never match. libyara as this workspace builds it rejected the import
+    /// outright. A rule that silently cannot fire is worse than one that fails
+    /// to load, so it is refused here with a named error.
+    #[test]
+    fn cuckoo_import_is_rejected_because_no_report_can_be_supplied() {
+        let src = "import \"cuckoo\"\nrule c { condition: true }";
+        let err = audit_rule_source(Path::new("c.yar"), src).unwrap_err();
+        match err {
+            Error::UnsupportedModule { module, .. } => assert_eq!(module, "cuckoo"),
+            other => panic!("expected UnsupportedModule, got {other:?}"),
+        }
+    }
 
     #[test]
     fn rule_with_only_supported_imports_passes() {

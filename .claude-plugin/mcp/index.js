@@ -1266,10 +1266,13 @@ function runAnalyze(rawTargetPath) {
     );
   }
 
+  // fileminer scans a single file directly when given one, rather than its
+  // whole containing directory — pointing Analyze at a file dropped into a
+  // large folder (Downloads, an inbox) used to trigger a full recursive scan
+  // (hash + type-ID) of every other file in that folder too.
   const singleFileMode = statSync(targetPath).isFile();
-  const scanDir = singleFileMode ? dirname(targetPath) : targetPath;
 
-  const fmArgs = [scanDir, '--no-prompt'];
+  const fmArgs = [targetPath, '--no-prompt'];
   if (currentCase) fmArgs.push('--case', currentCase);
 
   let fmOutput;

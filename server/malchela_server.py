@@ -1381,14 +1381,17 @@ def analyze():
 
         # A .app bundle is a directory on disk, so it's already handled the same
         # way as any other folder — FileMiner's WalkDir walks into it naturally.
+        # A single file is scanned directly (not via its containing directory) —
+        # fileminer supports this natively, so pointing Analyze at a file dropped
+        # into a large folder (Downloads, an inbox) doesn't trigger a full
+        # recursive scan of everything else in that folder too.
         single_file_mode = target.is_file()
-        scan_dir = target.parent if single_file_mode else target
 
-        fm_args = [str(scan_dir), "--no-prompt"]
+        fm_args = [str(target), "--no-prompt"]
         if case_name:
             fm_args += ["--case", case_name]
 
-        _analyze_progress.update({"phase": "Scanning with File Miner", "detail": str(scan_dir)})
+        _analyze_progress.update({"phase": "Scanning with File Miner", "detail": str(target)})
         fm_result = run_binary("fileminer", fm_args, timeout=120)
         if not fm_result.get("success"):
             return jsonify({"success": False, "error": fm_result.get("error", "fileminer failed to run")})

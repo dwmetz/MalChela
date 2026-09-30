@@ -41,7 +41,7 @@ fn format_size(bytes: u64) -> String {
 #[command(name = "FileMiner")]
 #[command(about = "Analyze files in a directory by magic bytes and hash (formerly MismatchMiner)", long_about = None)]
 struct Cli {
-    #[arg(value_name = "DIR", help = "Directory to analyze")]
+    #[arg(value_name = "PATH", help = "Directory or file to analyze")]
     path: Option<String>,
 
     #[arg(long, help = "Optional case name to save output under")]
@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir_path = match cli.path {
         Some(p) => p,
         None => {
-            print!("Enter directory path to analyze: ");
+            print!("Enter directory or file path to analyze: ");
             io::stdout().flush().unwrap();
             let mut input = String::new();
             io::stdin().read_line(&mut input).unwrap();
@@ -137,12 +137,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let save_json = cli.json || cli.case.is_some();
 
-    if !Path::new(&dir_path).is_dir() {
-        eprintln!("Provided path is not a directory.");
+    let target = Path::new(&dir_path);
+    let is_single_file = target.is_file();
+    if !is_single_file && !target.is_dir() {
+        eprintln!("Provided path is not a file or directory.");
         std::process::exit(1);
     }
 
-    match analyze_directory(&dir_path, save_json, case_name) {
+    let scan_result = if is_single_file {
+        analyze_single_file(&dir_path, save_json, case_name)
+    } else {
+        analyze_directory(&dir_path, save_json, case_name)
+    };
+
+    match scan_result {
         Ok(results) => {
             use std::collections::HashMap;
 
@@ -326,17 +334,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn analyze_directory(
-    path: &str,
-    save_json: bool,
-    case: Option<&str>,
-) -> Result<Vec<ScanResult>, Box<dyn std::error::Error>> {
-    let mut results = Vec::new();
-
-    for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
-        let path = entry.path().to_path_buf();
-
-        if path.is_file() {
+fn analyze_one_file(path: &Path) -> Result<ScanResult, Box<dyn std::error::Error>> {
             let file_type = identify_magic(&path)?;
             let actual_type = file_type.clone();
             let metadata = fs::metadata(&path)?;
@@ -466,7 +464,7 @@ fn analyze_directory(
 
 
 
-            results.push(ScanResult {
+            Ok(ScanResult {
                 filename: path
                     .file_name()
                     .unwrap()
@@ -483,10 +481,48 @@ fn analyze_directory(
                 extension_mismatch: ext_mismatch,
                 actual_type,
                 extension_inferred,
-            });
+            })
+}
+
+fn analyze_directory(
+    path: &str,
+    save_json: bool,
+    case: Option<&str>,
+) -> Result<Vec<ScanResult>, Box<dyn std::error::Error>> {
+    let mut results = Vec::new();
+
+    for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
+        let entry_path = entry.path().to_path_buf();
+        if entry_path.is_file() {
+            results.push(analyze_one_file(&entry_path)?);
         }
     }
 
+    save_results_json(&results, save_json, case)?;
+
+    Ok(results)
+}
+
+// A single file given directly on the command line (rather than discovered
+// via WalkDir): scanned in isolation so pointing FileMiner at one file never
+// pulls in — and hashes — every other file in its containing directory,
+// which for a real-world drop folder (Downloads, an inbox) can be large
+// enough to make the scan take drastically longer than the caller expects.
+fn analyze_single_file(
+    path: &str,
+    save_json: bool,
+    case: Option<&str>,
+) -> Result<Vec<ScanResult>, Box<dyn std::error::Error>> {
+    let results = vec![analyze_one_file(Path::new(path))?];
+    save_results_json(&results, save_json, case)?;
+    Ok(results)
+}
+
+fn save_results_json(
+    results: &[ScanResult],
+    save_json: bool,
+    case: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let is_gui = std::env::var("MALCHELA_GUI_MODE").is_ok();
     if save_json && !is_gui && case.is_none() {
         let output_dir = Path::new("saved_output").join("fileminer");
@@ -496,8 +532,7 @@ fn analyze_directory(
         serde_json::to_writer_pretty(file, &results)?;
         println!("Results saved to {}", out_path.display());
     }
-
-    Ok(results)
+    Ok(())
 }
 
 // infer only recognizes binary format magic-byte signatures — there's no

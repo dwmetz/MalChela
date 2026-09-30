@@ -235,8 +235,10 @@ def _register_cli_case_output(tool: str, case_name: str, target: str,
     register it in case.yaml so the case browser picks it up.
     """
     import time
-    case_name = _sanitize_case_name(case_name) or case_name
-    case_dir = CASES_DIR / case_name
+    case_dir = _case_dir(case_name)
+    if case_dir is None:
+        return
+    case_name = case_dir.name
     tool_dir = case_dir / tool
     if not tool_dir.exists():
         return
@@ -307,8 +309,9 @@ def _rename_case_report(tool: str, case_name: str, display_name: str, window_sec
     after. So this also drops any existing case.yaml entry for the old path
     before renaming — the fresh, correct one gets added straight after by
     the caller, same as it always has."""
-    case_name = _sanitize_case_name(case_name) or case_name
-    case_dir = CASES_DIR / case_name
+    case_dir = _case_dir(case_name)
+    if case_dir is None:
+        return
     tool_dir = case_dir / tool
     if not tool_dir.exists():
         return
@@ -360,13 +363,30 @@ def safe_path(raw: str) -> Optional[Path]:
     try:
         browser_root = str(BROWSER_ROOT.resolve())
         resolved_str = os.path.realpath(raw)
-        # Explicit prefix check that CodeQL recognizes as path sanitization
-        if not (resolved_str == browser_root or
-                resolved_str.startswith(browser_root + os.sep)):
+        # The root itself is returned from config, not from the user's string,
+        # and the prefix check stays a lone `if not x.startswith(...)` — CodeQL
+        # only recognizes that shape as a path sanitizer (an `a == b or
+        # a.startswith(...)` compound doesn't count).
+        if resolved_str == browser_root:
+            return BROWSER_ROOT.resolve()
+        if not resolved_str.startswith(browser_root.rstrip(os.sep) + os.sep):
             return None
         return Path(resolved_str)
     except Exception:
         return None
+
+
+def _case_dir(case_name: str) -> Optional[Path]:
+    """Sanitize a case name and return its directory under CASES_DIR, or
+    None if the name is empty/invalid or would land outside CASES_DIR."""
+    clean = _sanitize_case_name(case_name)
+    if not clean:
+        return None
+    cases_root = os.path.abspath(CASES_DIR)
+    candidate  = os.path.abspath(os.path.join(cases_root, clean))
+    if not candidate.startswith(cases_root + os.sep):
+        return None
+    return Path(candidate)
 
 
 _CASE_NAME_RE = re.compile(r'[^\w\-.]')
@@ -1102,8 +1122,9 @@ def fileminer():
 
     try:
         fm_data = json.loads(result["output"])
-    except (ValueError, KeyError) as e:
-        return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
+    except (ValueError, KeyError):
+        logger.warning("Could not parse fileminer output", exc_info=True)
+        return jsonify({"success": False, "error": "Could not parse fileminer output"})
 
     rows = [_scan_result_to_row(r) for r in fm_data.get("results", [])]
 
@@ -1214,9 +1235,10 @@ def _maybe_extract_zip(target: Path) -> tuple:
     7z (what Extract Samples itself uses) — this only needs to run without
     an extra 7zip dependency on whatever host Analyze runs on; it only
     handles classic ZipCrypto-protected zips, not AES-encrypted ones.
-    Returns (target, None) unchanged if target isn't a .zip."""
+    Returns (target, None, None) unchanged if target isn't a .zip; on
+    failure, (target, None, error) with a client-safe error message."""
     if target.suffix.lower() != ".zip":
-        return target, None
+        return target, None, None
 
     extract_dir = target.parent / f"{target.stem}_extracted"
 
@@ -1226,13 +1248,14 @@ def _maybe_extract_zip(target: Path) -> tuple:
             with zipfile.ZipFile(target) as zf:
                 zf.extractall(extract_dir, pwd=pwd.encode() if pwd else None)
             note = f"Auto-extracted `{target.name}`" + (f" (password: `{pwd}`)" if pwd else "")
-            return extract_dir, note
+            return extract_dir, note, None
         except RuntimeError:
             continue  # wrong password — try the next one
-        except zipfile.BadZipFile as e:
-            raise ValueError(f"Not a valid zip file: {e}")
+        except zipfile.BadZipFile:
+            logger.warning("Bad zip file %s", target, exc_info=True)
+            return target, None, f"{target.name} is not a valid zip file"
 
-    raise ValueError(
+    return target, None, (
         f"{target.name} is password-protected with a password not in the common list "
         f"(infected/malware/virus). Extract it manually with Extract Samples first."
     )
@@ -1242,9 +1265,10 @@ def _maybe_extract_dpp(target: Path) -> tuple:
     """If target is a .dmg or .pkg, shell out to dpp_extract to walk
     UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO and return the extracted directory
     as the new analyze target, plus a note for the rollup. Returns
-    (target, None) unchanged if target isn't a .dmg/.pkg."""
+    (target, None, None) unchanged if target isn't a .dmg/.pkg; on failure,
+    (target, None, error) with a client-safe error message."""
     if target.suffix.lower() not in (".dmg", ".pkg"):
-        return target, None
+        return target, None, None
 
     extract_dir = target.parent / f"{target.stem}_extracted"
     shutil.rmtree(extract_dir, ignore_errors=True)
@@ -1253,37 +1277,35 @@ def _maybe_extract_dpp(target: Path) -> tuple:
         "dpp_extract", [str(target), "-o", str(extract_dir), "--json"], timeout=180
     )
     if not result.get("success"):
-        raise ValueError(result.get("error", "dpp_extract failed to run"))
+        return target, None, result.get("error", "dpp_extract failed to run")
 
     try:
         summary = json.loads(result["output"])
-    except (ValueError, KeyError) as e:
-        raise ValueError(f"Could not parse dpp_extract output: {e}")
+    except (ValueError, KeyError):
+        logger.warning("Could not parse dpp_extract output", exc_info=True)
+        return target, None, "Could not parse dpp_extract output"
 
     if not summary.get("success"):
-        raise ValueError(summary.get("error", f"dpp_extract could not unpack {target.name}"))
+        return target, None, summary.get("error", f"dpp_extract could not unpack {target.name}")
 
     note = f"Auto-extracted `{target.name}` via dpp_extract — {summary.get('note', '')}".strip()
     skipped = summary.get("skipped") or []
     if skipped:
         note += f" ({len(skipped)} entries skipped — see dpp_extract output for detail)"
-    return Path(summary["extracted_dir"]), note
+    return Path(summary["extracted_dir"]), note, None
 
 
 def _maybe_extract_container(target: Path) -> tuple:
     """Dispatch to the right auto-extraction step for Analyze's target based
     on file type: .zip (a directory-based sample uploaded through the PWA's
     file-only widget) or .dmg/.pkg (an Apple disk image / installer). Returns
-    (target, None) unchanged if target is neither."""
-    zip_target, zip_note = _maybe_extract_zip(target)
-    if zip_note is not None:
-        return zip_target, zip_note
+    (target, None, None) unchanged if target is neither, or
+    (target, None, error) if extraction failed."""
+    zip_target, zip_note, zip_err = _maybe_extract_zip(target)
+    if zip_note is not None or zip_err:
+        return zip_target, zip_note, zip_err
 
-    dpp_target, dpp_note = _maybe_extract_dpp(target)
-    if dpp_note is not None:
-        return dpp_target, dpp_note
-
-    return target, None
+    return _maybe_extract_dpp(target)
 
 
 _NESTED_CONTAINER_EXTS = {".zip", ".dmg", ".pkg"}
@@ -1323,12 +1345,9 @@ def _expand_nested_containers(scan_results: list, case_name: str) -> list:
         p = Path(res.get("filepath", ""))
         if p.suffix.lower() not in _NESTED_CONTAINER_EXTS:
             continue
-        try:
-            extracted_dir, note = _maybe_extract_container(p)
-        except ValueError:
-            continue  # e.g. zip password not in the common list — leave as-is
+        extracted_dir, note, _err = _maybe_extract_container(p)
         if note is None:
-            continue
+            continue  # not a container, or e.g. zip password not in the common list — leave as-is
         resolved = str(extracted_dir.resolve())
         if resolved in seen_dirs:
             continue
@@ -1372,12 +1391,10 @@ def analyze():
 
     _analyze_progress.update({"running": True, "phase": "Starting", "detail": target.name, "done": 0, "total": 0})
     try:
-        extraction_note = None
-        try:
-            _analyze_progress.update({"phase": "Checking container", "detail": target.name})
-            target, extraction_note = _maybe_extract_container(target)
-        except ValueError as e:
-            return jsonify({"success": False, "error": str(e)})
+        _analyze_progress.update({"phase": "Checking container", "detail": target.name})
+        target, extraction_note, extraction_err = _maybe_extract_container(target)
+        if extraction_err:
+            return jsonify({"success": False, "error": extraction_err})
 
         # A .app bundle is a directory on disk, so it's already handled the same
         # way as any other folder — FileMiner's WalkDir walks into it naturally.
@@ -1398,8 +1415,9 @@ def analyze():
 
         try:
             fm_data = json.loads(fm_result["output"])
-        except (ValueError, KeyError) as e:
-            return jsonify({"success": False, "error": f"Could not parse fileminer output: {e}"})
+        except (ValueError, KeyError):
+            logger.warning("Could not parse fileminer output", exc_info=True)
+            return jsonify({"success": False, "error": "Could not parse fileminer output"})
 
         scan_results = fm_data.get("results", [])
 
@@ -1543,12 +1561,13 @@ def _save_analyze_rollup(target: Path, case_name: str, per_file_results: list,
     # lets _register_cli_case_output("analyze", ...) below find the file it
     # just find via its case_dir/<tool>/ mtime-window scan. Without it the
     # rollup saves fine but silently never lands in case.yaml.
-    rollup_dir = (CASES_DIR / case_name / "analyze") if case_name else (OUTPUT_DIR / "analyze")
+    case_dir = _case_dir(case_name) if case_name else None
+    rollup_dir = (case_dir / "analyze") if case_dir else (OUTPUT_DIR / "analyze")
     rollup_dir.mkdir(parents=True, exist_ok=True)
     rollup_path = rollup_dir / f"malchela_summary_{ts}.md"
     rollup_path.write_text(rollup_md)
 
-    if case_name:
+    if case_dir:
         _register_cli_case_output("analyze", case_name, str(target), "md")
 
     return jsonify({
@@ -1605,7 +1624,8 @@ def _read_tool_markdown(tool: str, case_name: str) -> str:
     tool's run and this read. Not anchored to the report_*.md default name:
     for a case run, _rename_case_report() has already renamed it to
     <source-filename>_<timestamp>.md by the time this runs."""
-    tool_dir = (CASES_DIR / case_name / tool) if case_name else (OUTPUT_DIR / tool)
+    case_dir = _case_dir(case_name) if case_name else None
+    tool_dir = (case_dir / tool) if case_dir else (OUTPUT_DIR / tool)
     if not tool_dir.exists():
         return ""
     md_files = sorted(tool_dir.glob("*.md"), key=lambda p: p.stat().st_mtime)

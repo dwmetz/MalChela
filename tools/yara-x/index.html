@@ -1170,6 +1170,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coretools/yara_scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    YARA Scan
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1856,8 +1879,8 @@
 <hr />
 <p><a href="https://virustotal.github.io/yara-x/">YARA-X</a> is VirusTotal's Rust rewrite of YARA.  MalChela uses it in two separate ways, and only the second one needs anything installed:</p>
 <ul>
-<li><strong>The built-in engine.</strong>  As of v4.4, every MalChela tool that matches YARA rules (File Analyzer, MZHash, XMZHash, MZcount, and mismatchminer) has the yara-x library compiled in.  There is nothing to install or configure.</li>
-<li><strong>The YARA-X integration.</strong>  An optional panel for running VirusTotal's own <code>yr</code> command-line scanner against your rules and a target file or folder, with its full set of options.  <code>yr</code> is a separate program, and building MalChela does not produce it.</li>
+<li><strong>The built-in engine.</strong>  As of v4.4, every MalChela tool that matches YARA rules has the yara-x library compiled in: <a href="../../coretools/yara_scan/">YARA Scan</a>, File Analyzer, MZHash, XMZHash, MZcount, and mismatchminer.  There is nothing to install or configure.  For scanning with your own rules, start with <strong>YARA Scan</strong>: it takes the same arguments as <code>yr scan</code> for the common options, and saves reports to a case.</li>
+<li><strong>The YARA-X integration.</strong>  An optional panel for running VirusTotal's own <code>yr</code> command-line scanner, with its full set of options.  Use it for what YARA Scan doesn't cover, such as compiled rules (<code>-C</code>), module data (<code>-x</code>), <code>--fast-scan</code>, <code>--profiling</code>, or <code>yr</code>'s other subcommands.  <code>yr</code> is a separate program, and building MalChela does not produce it.</li>
 </ul>
 <h2 id="installing-yr">Installing <code>yr</code></h2>
 <p>Pick one:</p>

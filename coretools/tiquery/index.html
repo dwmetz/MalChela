@@ -1294,6 +1294,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../yara_scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    YARA Scan
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2166,14 +2189,15 @@ api/gn-api.txt        # GreyNoise (IP lookups; a free Community key works)
 <p><strong>Web interface:</strong> the TIquery panel's <strong>Bulk Lookup</strong> tab lets you browse to a file and run all lookups in one click. Results are displayed in a consolidated grid.</p>
 <hr />
 <h3 id="web-interface-input-modes">Web Interface Input Modes</h3>
-<p>The MalChela web interface's Threat Intel Query panel offers four input modes, selected via tabs at the top of the panel:</p>
+<p>The MalChela web interface's Threat Intel Query panel offers five input modes, selected via tabs at the top of the panel:</p>
 <ul>
 <li><strong>Single Hash</strong> — paste a hash or click <strong>Browse…</strong> to pick a file; the web interface computes the file's SHA256 and populates the hash field automatically.</li>
 <li><strong>Bulk Lookup</strong> — as described above, for batches of hashes in a file.</li>
 <li><strong>URL</strong> — paste an <code>http://</code> or <code>https://</code> URL to query VirusTotal, urlscan.io, and Google Safe Browsing in parallel.</li>
+<li><strong>IP</strong> — paste an IPv4 or IPv6 address (defanged is fine: <code>1.2.3[.]4</code>) to query VirusTotal, AlienVault OTX, and GreyNoise.  Because an IP being <em>known</em> to a source isn't a verdict (8.8.8.8 is in every one), each row shows what that source concluded instead of FOUND: <strong>FLAGGED</strong> (VirusTotal engines or a GreyNoise malicious scanner), <strong>IN <em>N</em> PULSES</strong> (OTX: discussed, which is context), or <strong>CLEAN</strong> / <strong>KNOWN BENIGN</strong> (no engine detections, or a GreyNoise RIOT business service such as a CDN or public DNS).</li>
 <li><strong>QR Code</strong> — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the web interface decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.</li>
 </ul>
-<p>In URL and QR modes, source checkboxes auto-enable based on which API keys are configured, exactly as in hash mode.</p>
+<p>In URL, IP, and QR modes, source checkboxes auto-enable based on which API keys are configured, exactly as in hash mode.</p>
 
 
 

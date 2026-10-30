@@ -1290,6 +1290,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coretools/yara_scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    YARA Scan
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2113,6 +2136,10 @@ npm install
 <tr>
 <td><code>combine_yara</code></td>
 <td>Merges multiple YARA rule files from a folder into a single consolidated ruleset.</td>
+</tr>
+<tr>
+<td><code>yara_scan</code></td>
+<td>Scans a file or folder with YARA rules (a file or a folder of rules) on the embedded YARA-X engine. Returns NDJSON with each matching rule's namespace, tags, metadata, and strings; saves a Markdown report to the active case.</td>
 </tr>
 </tbody>
 </table>

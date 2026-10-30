@@ -1982,7 +1982,7 @@
 <p>mStrings recursively decodes base64 content it finds — including base64 nested inside base64, up to 12 layers deep — and re-runs detection against whatever it unwraps to. When a detection only fires after peeling <strong>more than one</strong> layer, that's flagged directly on the finding (<code>⚠ found after N layers of base64 decoding</code> in the summary table, <code>Base64×N</code> in the detail table's encoding column) — a single decode is routine, but deliberate re-encoding multiple times over is itself an evasion signal worth noting.</p>
 <h3 id="encoded-string-tables">Encoded String Tables</h3>
 <p>Some malware keeps its entire payload as hundreds or thousands of encrypted, base64-alphabet strings and decodes them at runtime — the AMOS stealer stores its whole AppleScript this way, about 1,900 strings in one section.  Per-string matches are noise at that scale, and the real behavior never appears as plaintext, so no other rule fires.  When the large-base64-blob rule matches 25 or more distinct strings, mStrings adds one <strong>Encoded string table</strong> row instead: how many strings, their total size, their share of the file, and the offset range they span, mapped to T1027.013 (Encrypted/Encoded File).  Treat it as a pointer to dynamic analysis or a family-specific decoder rather than a dead end.</p>
-<p><img alt="MStrings" src="../images/mstrings.png" /></p>
+<p><img alt="MStrings" src="../../images/mstrings.png" /></p>
 <p align="center"><strong> MStrings</p>
 
 <hr />

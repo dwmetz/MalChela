@@ -1131,6 +1131,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../coretools/xmzhash/" class="md-nav__link">
         
   
@@ -1346,6 +1369,29 @@
   
   <span class="md-ellipsis">
     Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1604,18 +1650,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
+  <a href="#installing-yr" class="md-nav__link">
     <span class="md-ellipsis">
-      Installation
+      Installing yr
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#configuration-in-malchela" class="md-nav__link">
+  <a href="#enabling-the-panel" class="md-nav__link">
     <span class="md-ellipsis">
-      Configuration in MalChela
+      Enabling the Panel
     </span>
   </a>
   
@@ -1749,18 +1795,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
+  <a href="#installing-yr" class="md-nav__link">
     <span class="md-ellipsis">
-      Installation
+      Installing yr
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#configuration-in-malchela" class="md-nav__link">
+  <a href="#enabling-the-panel" class="md-nav__link">
     <span class="md-ellipsis">
-      Configuration in MalChela
+      Enabling the Panel
     </span>
   </a>
   
@@ -1808,44 +1854,55 @@
 <p align="center"><strong> YARA-X </p>
 
 <hr />
-<p>YARA-X is an extended version of YARA with enhanced performance and features. To integrate YARA-X with MalChela, follow these steps:</p>
-<h2 id="installation">Installation</h2>
+<p><a href="https://virustotal.github.io/yara-x/">YARA-X</a> is VirusTotal's Rust rewrite of YARA.  MalChela uses it in two separate ways, and only the second one needs anything installed:</p>
+<ul>
+<li><strong>The built-in engine.</strong>  As of v4.4, every MalChela tool that matches YARA rules (File Analyzer, MZHash, XMZHash, MZcount, and mismatchminer) has the yara-x library compiled in.  There is nothing to install or configure.</li>
+<li><strong>The YARA-X integration.</strong>  An optional panel for running VirusTotal's own <code>yr</code> command-line scanner against your rules and a target file or folder, with its full set of options.  <code>yr</code> is a separate program, and building MalChela does not produce it.</li>
+</ul>
+<h2 id="installing-yr">Installing <code>yr</code></h2>
+<p>Pick one:</p>
 <ul>
 <li>
-<p><strong>Download the latest release:</strong><br />
-   Visit the official YARA-X GitHub releases page at <a href="https://github.com/VirusTotal/yara-x/releases">https://github.com/VirusTotal/yara-x/releases</a> and download the appropriate binary for your platform.</p>
+<p><strong>With Cargo</strong> (you already have Rust if you built MalChela):</p>
+<p><code>bash
+cargo install yara-x-cli</code></p>
+<p>This puts <code>yr</code> in <code>~/.cargo/bin</code>, which rustup adds to your <code>PATH</code>.</p>
 </li>
 <li>
-<p><strong>Extract and install:</strong><br />
-   Extract the downloaded archive and place the <code>yara-x</code> binary (<code>yr</code>) in a directory included in your system’s <code>$PATH</code>, or note its absolute path for configuration.</p>
+<p><strong>From a release build:</strong>  Download the archive for your platform from <a href="https://github.com/VirusTotal/yara-x/releases">github.com/VirusTotal/yara-x/releases</a>, extract it, and put <code>yr</code> in a directory on your <code>PATH</code>.</p>
 </li>
 <li>
-<p><strong>Verify installation:</strong><br />
-   Run the following command to confirm YARA-X is installed correctly:</p>
+<p><strong>With Homebrew</strong> (macOS):</p>
+<p><code>bash
+brew install yara-x</code></p>
 </li>
 </ul>
-<pre><code class="language-bash">yr —version
+<p>Confirm it runs:</p>
+<pre><code class="language-bash">yr --version
 </code></pre>
-<h2 id="configuration-in-malchela">Configuration in MalChela</h2>
-<p>To use YARA-X within MalChela tools, update your <code>tools.yaml</code> with the following example entry:</p>
-<pre><code class="language-yaml">- name: yara-x
-  description: “High-performance YARA-X engine”
-  command: [“yara-x”]
-  input_type: “file”
-  file_position: “last”
-  category: “File Analysis”
+<p>If <code>yr</code> is installed somewhere that isn't on the server's <code>PATH</code>, add its directory to <code>tool_paths</code> in <code>server_config.yaml</code>.</p>
+<h2 id="enabling-the-panel">Enabling the Panel</h2>
+<p>The YARA-X entry is already in <code>tools.yaml</code>, commented out under <strong>Special Tools Integrations</strong>.  Uncomment it:</p>
+<pre><code class="language-yaml">- name: YARA-X
+  description: &quot;Run YARA-X with custom rule and target file&quot;
+  command: [&quot;yr&quot;]
+  input_type: file
+  file_position: &quot;last&quot;
+  category: &quot;YARA Tools&quot;
   optional_args: []
   exec_type: binary
+  cargo: false
 </code></pre>
+<p>Keep <code>command: ["yr"]</code> as written.  The web interface recognizes <code>yr</code> and opens the YARA-X panel in place of the generic tool form: a rules path, a target file or folder, a recursive option, and extra arguments.  After a restart, it appears under <strong>YARA Tools</strong> and is counted under <strong>Integrations</strong> on the home page.</p>
 <h2 id="using-yara-x-rules">Using YARA-X Rules</h2>
 <ul>
-<li>Place your YARA rules in the <code>yara_rules</code> folder within the workspace.</li>
-<li>YARA-X supports recursive includes and extended features; ensure your rules are compatible.</li>
-<li>The MalChela web interface and CLI will invoke YARA-X when configured as above, providing faster scans and improved detection.</li>
+<li>The panel runs <code>yr scan [--recursive] [extra args] &lt;rules&gt; &lt;target&gt;</code>.</li>
+<li>The rules path is usually a single <code>.yar</code> or <code>.yara</code> file.  <code>yr</code> also accepts a folder of rules, or you can merge a folder into one file first with <strong>Combine YARA</strong>.</li>
+<li>YARA-X is highly compatible with YARA, but it doesn't support every legacy module or construct.  <code>yr check &lt;rules&gt;</code> reports any rules that won't compile.</li>
 </ul>
 <h2 id="tips">Tips</h2>
 <ul>
-<li>For advanced usage, consult the <a href="https://github.com/Yara-Rules/yara-x">YARA-X documentation</a> for command-line options and rule syntax.</li>
+<li>See the <a href="https://virustotal.github.io/yara-x/docs/">YARA-X documentation</a> for command-line options and the differences from YARA.</li>
 </ul>
 
 

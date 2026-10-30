@@ -1223,6 +1223,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../coretools/xmzhash/" class="md-nav__link">
         
   
@@ -1438,6 +1461,29 @@
   
   <span class="md-ellipsis">
     Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1848,6 +1894,11 @@
 <td><code>fileanalyzer</code></td>
 <td>VirusTotal</td>
 <td>A separate embedded check from Threat Intel Query's own VirusTotal source — gated on a VT key being configured, but if one is, plain FileAnalyzer also phones home.</td>
+</tr>
+<tr>
+<td><code>codesign_check --check-revocation</code></td>
+<td><code>ocsp.apple.com</code> (or whichever responder the certificate specifies)</td>
+<td>Opt-in — off unless <code>--check-revocation</code> is passed directly, or the run comes through <a href="../../coretools/analyze/">Analyze</a>, which passes it automatically for each sample's top-level binary. Checked inside the tool itself (via <code>MALCHELA_OFFLINE</code>), so it self-skips no matter how it's invoked.</td>
 </tr>
 <tr>
 <td>Home screen</td>

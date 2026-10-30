@@ -1251,6 +1251,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../coretools/xmzhash/" class="md-nav__link">
         
   
@@ -1466,6 +1489,29 @@
   
   <span class="md-ellipsis">
     Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1934,7 +1980,7 @@ npm install
 <p>Open <code>example_config.json</code> and update the paths to match your system, then copy the <code>malchela</code> block into your Claude Desktop config — if you already have other MCP servers configured, add it alongside them rather than replacing the whole file. Restart Claude Desktop afterward; the MalChela tools appear in Claude's tool list automatically.</p>
 <hr />
 <h2 id="available-tools">Available Tools</h2>
-<p>17 tools map 1:1 to a compiled MalChela binary. Two more are MCP-only, with no binary of their own: <code>set_case</code> (session state) and <code>analyze</code> (an orchestrator that shells out to the other 17 in sequence).</p>
+<p>17 tools map 1:1 to a compiled MalChela binary. Four more are MCP-only, with no binary of their own: <code>set_case</code> (session state), <code>analyze</code> (an orchestrator that shells out to the other 17 in sequence), and <code>report_template</code> / <code>save_report</code> (malware analysis reports).</p>
 <p>Unlike the PWA, the MCP server uses a <strong>mandatory case model</strong> — call <code>set_case</code> once at the start of a session before running any other tool; every subsequent tool's output is saved to that case automatically.</p>
 <p><strong>Case Management</strong></p>
 <table>
@@ -1971,6 +2017,18 @@ npm install
 <tr>
 <td><code>analyze</code></td>
 <td>One-shot auto-triage: runs <code>fileminer</code> against a file, folder, <code>.app</code> bundle, <code>.dmg</code>, or <code>.pkg</code>, then automatically dispatches every tool <code>fileminer</code> suggests, producing a combined rollup report. <code>.dmg</code>/<code>.pkg</code> targets are auto-unwrapped via <code>dpp_extract</code> first. Requires an active case (<code>set_case</code> first).</td>
+</tr>
+<tr>
+<td><code>unpack</code></td>
+<td>Static packer detection and unpacking for PE, ELF, and Mach-O — never executes the sample. UPX (including tampered headers, repaired before <code>upx -d</code>), fat Mach-O slices, PyInstaller entry scripts, .NET/Costura resources, NSIS/Inno Setup payloads, overlays, and embedded executables; recurses into each recovered layer. Protectors (Themida, VMProtect) are identified with evidence. <code>analyze</code> runs it automatically on every executable.</td>
+</tr>
+<tr>
+<td><code>report_template</code></td>
+<td>Lenny Zeltser's <a href="https://zeltser.com/malware-analysis-report">Malware Analysis Report</a> template (v1.1.0, CC BY 4.0, bundled in <code>assets/report_templates/</code> for offline use), plus a guide to which MalChela output fills each section. No case needed.</td>
+</tr>
+<tr>
+<td><code>save_report</code></td>
+<td>Save a finished report to the active case's <code>report/</code> folder and register it in <code>case.yaml</code>.  Won't overwrite an existing report unless asked.</td>
 </tr>
 </tbody>
 </table>
@@ -2109,12 +2167,16 @@ npm install
 <li><code>mstrings</code> — extract strings, surface IOCs and ATT&amp;CK technique indicators</li>
 <li><code>tiquery</code> — pull full community threat intel with AV verdicts</li>
 <li><code>nsrlquery</code> — confirm or rule out known-good status</li>
+<li><code>report_template</code> → <code>save_report</code> — when you want a written report: Claude fills Lenny Zeltser's template from the case's findings and saves it to the case</li>
 </ol>
 <p>Or skip the manual sequencing entirely and let <code>analyze</code> do it in one call. You don't need to invoke tools individually — just describe what you want:</p>
 <blockquote>
 <p>"Analyze /path/to/suspicious.exe using MalChela and give me a full triage report."</p>
 </blockquote>
-<p>Claude will run the appropriate tools in sequence and synthesize the results.</p>
+<p>Claude will run the appropriate tools in sequence and synthesize the results.  For a formal write-up, ask for a malware analysis report — Claude pulls the bundled Zeltser template with <code>report_template</code>, fills it from the case, and saves it with <code>save_report</code>:</p>
+<blockquote>
+<p>"Write a malware analysis report for this sample using the Zeltser template and save it to the case."</p>
+</blockquote>
 <hr />
 <h2 id="agentic-coding-environments">Agentic Coding Environments</h2>
 <p>For agentic coding environments (OpenCode and similar), MalChela ships an <a href="https://github.com/dwmetz/MalChela/blob/main/.claude-plugin/mcp/AGENTS.md"><code>AGENTS.md</code></a> describing available tools and usage patterns for autonomous discovery.</p>

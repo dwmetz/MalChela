@@ -1131,6 +1131,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../coretools/xmzhash/" class="md-nav__link">
         
   
@@ -1317,6 +1340,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#revocation-ocsp-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      Revocation (OCSP) Check
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pwa-usage" class="md-nav__link">
     <span class="md-ellipsis">
       PWA Usage
@@ -1425,6 +1457,29 @@
   
   <span class="md-ellipsis">
     Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1761,6 +1816,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#revocation-ocsp-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      Revocation (OCSP) Check
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pwa-usage" class="md-nav__link">
     <span class="md-ellipsis">
       PWA Usage
@@ -1852,8 +1916,44 @@
 </tbody>
 </table>
 <blockquote>
-<p><strong>Note:</strong> Code Sign Check reports what is embedded in the binary. It does not perform an online revocation check (OCSP/CRL). A Developer-signed result means a real certificate was used at signing time — it does not confirm the certificate is still valid or unrevoked.</p>
+<p><strong>Note:</strong> By default, Code Sign Check reports what is embedded in the binary and nothing more — a Developer-signed result means a real certificate was used at signing time, not that it's still valid. Pass <code>--check-revocation</code> (see below) for a live OCSP check against Apple's revocation infrastructure.</p>
 </blockquote>
+<hr />
+<h3 id="revocation-ocsp-check">Revocation (OCSP) Check</h3>
+<p><code>--check-revocation</code> queries Apple's OCSP responder to check whether the Developer ID certificate that signed the binary has since been revoked — a strong, independent signal for malware triage: Apple actively revokes certificates tied to known-malicious signers once discovered, so a <code>REVOKED</code> result on an otherwise unremarkable binary is itself a finding.</p>
+<p>This is opt-in and off by default because it requires live network access — it does <strong>not</strong> run as part of a plain Code Sign Check invocation.</p>
+<p><strong>How it works:</strong> the certificate chain is extracted from the Mach-O's embedded CMS blob and handed to the system <code>openssl</code> client (<code>pkcs7</code>/<code>x509</code>/<code>ocsp</code>), which performs the actual query. Apple's codesign tool emits that CMS blob as BER with indefinite-length encoding — valid BER, not valid DER — so this deliberately uses openssl's BER-tolerant ASN.1 parser rather than a strict-DER library, which would reject the blob outright. Leaf vs. issuer certificate is identified generically (the leaf is whichever certificate in the embedded chain wasn't used to issue any other certificate in the set), so it isn't tied to a fixed chain length.</p>
+<p><strong>Possible statuses:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GOOD</code></td>
+<td>Certificate is valid and not revoked, as of the query</td>
+</tr>
+<tr>
+<td><code>REVOKED</code></td>
+<td>Apple has revoked this certificate — shown with the reason and revocation date from the OCSP response</td>
+</tr>
+<tr>
+<td><code>UNKNOWN</code></td>
+<td>The responder has no record of this certificate</td>
+</tr>
+<tr>
+<td><code>Not checked</code></td>
+<td>Query wasn't attempted or couldn't complete — reason given (offline mode, ad-hoc/unsigned binary, no OCSP URL in the certificate — common for pre-~2016 Developer ID certs, network/openssl failure, etc.)</td>
+</tr>
+</tbody>
+</table>
+<p>A <code>REVOKED</code> result also surfaces as a warning in the <strong>Indicators</strong> section and in saved reports.</p>
+<p><strong>Offline Mode:</strong> this check honors <a href="../../configuration/offline-mode/">Offline Mode</a> directly (<code>MALCHELA_OFFLINE</code>) — it self-skips with a clean "Not checked (offline mode)" result rather than attempting the network call, the same convention every other network-touching MalChela tool follows. This is checked inside <code>codesign_check</code> itself, not just by callers like Analyze, so it's honored no matter how <code>--check-revocation</code> gets invoked.</p>
+<p><strong>In Analyze:</strong> <a href="../../coretools/analyze/">Analyze</a> automatically passes <code>--check-revocation</code> for every Code Sign Check run it dispatches, scoped to the <strong>top-level binary only</strong> — not embedded frameworks/plugins/XPC helpers, since a single bundle can carry dozens of those (Audacity.app alone embeds 90+ signed dylibs), each of which would otherwise trigger its own OCSP query. It's skipped automatically whenever Offline Mode is on.</p>
+<p>Not currently exposed as a toggle in the standalone PWA Code Sign Check panel or the MCP <code>codesign_check</code> tool — use the CLI flag directly, or run it through Analyze, for now.</p>
 <hr />
 <h3 id="pwa-usage">PWA Usage</h3>
 <p>Select <strong>Code Sign Check</strong> from the Mac Analysis category. Enter the path to a <code>.app</code> bundle or a Mach-O binary. File Miner will suggest Code Sign Check for any file it identifies as <code>x-mach-binary</code>.</p>
@@ -1864,6 +1964,9 @@ cargo run -p codesign_check -- /path/to/Sample.app
 
 # Check a Mach-O binary directly
 cargo run -p codesign_check -- /path/to/binary
+
+# Also check OCSP revocation status (requires network access and openssl on PATH)
+cargo run -p codesign_check -- /path/to/binary --check-revocation
 
 # Save output as Markdown to a case folder
 cargo run -p codesign_check -- /path/to/Sample.app -o -m --case CaseXYZ

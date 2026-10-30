@@ -1039,6 +1039,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#supported-sources-ip-lookups" class="md-nav__link">
+    <span class="md-ellipsis">
+      Supported Sources — IP Lookups
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
     <span class="md-ellipsis">
       🔧 CLI Syntax
@@ -1229,6 +1238,29 @@
   
   <span class="md-ellipsis">
     StringsToYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1461,6 +1493,29 @@
   
   <span class="md-ellipsis">
     Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1797,6 +1852,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#supported-sources-ip-lookups" class="md-nav__link">
+    <span class="md-ellipsis">
+      Supported Sources — IP Lookups
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
     <span class="md-ellipsis">
       🔧 CLI Syntax
@@ -1871,8 +1935,8 @@
 
   <h1>TiQuery</h1>
 
-<p>Threat Intel Query (<code>tiquery</code>) is a multi-source threat intelligence lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash or URL is known, what family/category it belongs to, and how widely it has been detected.</p>
-<p><code>tiquery</code> accepts a <strong>file hash</strong> (MD5/SHA1/SHA256), an <strong>http/https URL</strong>, or a <strong>QR code image</strong> as input and automatically routes the query to the appropriate set of sources. In the web interface, the Single Hash tab also includes a <strong>Browse</strong> button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).</p>
+<p>Threat Intel Query (<code>tiquery</code>) is a multi-source threat intelligence lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash, IP address, or URL is known, what family/category it belongs to, and how widely it has been detected.</p>
+<p><code>tiquery</code> accepts a <strong>file hash</strong> (MD5/SHA1/SHA256), an <strong>IP address</strong> (IPv4 or IPv6, defanged forms like <code>1[.]2[.]3[.]4</code> accepted), an <strong>http/https URL</strong>, or a <strong>QR code image</strong> as input and automatically routes the query to the appropriate set of sources. In the web interface, the Single Hash tab also includes a <strong>Browse</strong> button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).</p>
 <p><img alt="TIQuery Hash Lookup" src="../../images/tiquery_hash.png" /></p>
 <p align="center"><strong> TIQuery Hash Lookup</p>
 
@@ -1974,7 +2038,39 @@
 </tr>
 </tbody>
 </table>
-<p>All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL, only URL-capable sources are queried. Pass <code>--sources</code> to restrict the query to specific sources.</p>
+<h3 id="supported-sources-ip-lookups">Supported Sources — IP Lookups</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Source</th>
+<th>Key Required</th>
+<th>What it adds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vt</td>
+<td>VirusTotal (IP API)</td>
+<td>Yes</td>
+<td>Engine detections, community reputation, AS owner, and country</td>
+</tr>
+<tr>
+<td>otx</td>
+<td>AlienVault OTX</td>
+<td>Yes</td>
+<td>Pulse count, AS, and country</td>
+</tr>
+<tr>
+<td>gn</td>
+<td>GreyNoise (Community API)</td>
+<td>Yes (free key works)</td>
+<td>Whether the IP is a known internet scanner ("noise") or a known benign business service ("RIOT": cloud, CDN, public DNS), and GreyNoise's classification.  IPv4 only</td>
+</tr>
+</tbody>
+</table>
+<p>Private, loopback, link-local, multicast, documentation, and other non-routable addresses are refused before any source is queried, so they never spend rate-limited quota.  A free VirusTotal key allows 4 lookups a minute and 500 a day.</p>
+<p>All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL or an IP address, only the sources for that input type are queried. Pass <code>--sources</code> to restrict the query to specific sources.</p>
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
 <pre><code class="language-bash"># Hash lookup — queries all hash sources with a configured API key
@@ -1982,6 +2078,10 @@ tiquery &lt;hash&gt;
 
 # URL lookup — queries VirusTotal (URL), urlscan.io, and Google Safe Browsing
 tiquery https://example.com/path
+
+# IP lookup — queries VirusTotal (IP), AlienVault OTX, and GreyNoise
+tiquery 185.220.101.4
+tiquery 185[.]220[.]101[.]4
 
 # Restrict to specific sources
 tiquery &lt;hash&gt; --sources mb,vt,md,ha,fs
@@ -2054,6 +2154,7 @@ api/ms-api.txt        # Malshare
 api/tr-api.txt        # Triage
 api/url-api.txt       # urlscan.io (optional — raises rate limits)
 api/gsb-api.txt       # Google Safe Browsing
+api/gn-api.txt        # GreyNoise (IP lookups; a free Community key works)
 </code></pre>
 <p>Keys can be managed via the <strong>API Keys</strong> panel in the MalChela web interface (Configuration menu → API Keys) or by placing the key directly in the appropriate file.</p>
 <p>See <a href="https://dwmetz.github.io/MalChela/configuration/api-configuration/">API Configuration</a> for details.</p>

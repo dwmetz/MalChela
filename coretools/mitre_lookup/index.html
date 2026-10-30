@@ -1130,6 +1130,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#tactics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tactics
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attck-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      ATT&amp;CK Version
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ATT&amp;CK Version">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#updating-to-a-new-attck-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      Updating to a new ATT&amp;CK release
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1221,6 +1254,29 @@
   
   <span class="md-ellipsis">
     StringsToYARA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1453,6 +1509,29 @@
   
   <span class="md-ellipsis">
     Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1832,6 +1911,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#tactics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tactics
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attck-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      ATT&amp;CK Version
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ATT&amp;CK Version">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#updating-to-a-new-attck-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      Updating to a new ATT&amp;CK release
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1903,11 +2015,46 @@
 
 <h2 id="example">Example</h2>
 <p>Searching for <code>T1027.004</code> yields:</p>
-<pre><code>🔹 T1027.004 - Compile After Delivery  
-Tactic(s): defense-evasion  
-Platforms: Windows, Linux, macOS  
-Detection: Monitor execution of common compilers and correlate with file creation events.  
-Description: Adversaries may compile code after transferring it to a victim system.
+<pre><code>MITRE ATT&amp;CK Enterprise v20.0
+
+T1027.004 - Compile After Delivery
+Tactic(s): stealth
+Platforms: Linux, macOS, Windows
+Detection: Detection strategies: Detection Strategy for Compile After Delivery - Source Code to Executable Transformation (DET0501)
+Description: Adversaries may attempt to make payloads difficult to discover and analyze by delivering files to victims as uncompiled code. Text-based...
+</code></pre>
+<h2 id="tactics">Tactics</h2>
+<p>Tactics have their own entries.  Look one up by ID (<code>TA0002</code>), by name (<code>execution</code>, <code>command and control</code>), or by shortname (<code>command-and-control</code>) to see its description and every technique under it, with sub-technique counts:</p>
+<pre><code>TA0002 - Execution (tactic)
+Description: The adversary is trying to run malicious code or instructions on a system. ...
+Techniques (22 techniques, 44 sub-techniques):
+- T1047 Windows Management Instrumentation
+- T1053 Scheduled Task/Job (+5 sub-techniques)
+- T1059 Command and Scripting Interpreter (+13 sub-techniques)
+...
+</code></pre>
+<ul>
+<li><code>tactics</code> lists all 15 Enterprise tactics in matrix order, with technique counts.</li>
+<li><code>--full</code> expands every sub-technique under its parent.</li>
+<li><code>TA0005</code> or <code>defense evasion</code> shows both Stealth (TA0005) and Defense Impairment (TA0112), with a note on the v20 split.</li>
+</ul>
+<p>Tactic data lives in <code>assets/mitre_tactics.json</code>, which <code>scripts/build_mitre_techniques.py</code> writes alongside the technique data.</p>
+<h2 id="attck-version">ATT&amp;CK Version</h2>
+<p>The lookup data (<code>assets/mitre_techniques.json</code>) is built from MITRE's official ATT&amp;CK STIX release, currently <strong>Enterprise v20.0</strong>. The version is shown at the top of every lookup.</p>
+<ul>
+<li><strong>ATT&amp;CK v20 tactic change:</strong> the Defense Evasion tactic was retired.  TA0005 is now <strong>Stealth</strong> (hiding, obfuscation, masquerading), and a new tactic, <strong>Defense Impairment</strong> (TA0112), covers disabling or tampering with security tools, logging, and firewalls.  Searching <code>defense evasion</code> (or <code>TA0005</code>) returns techniques from both, with a note.  Tactic searches ignore hyphens, so <code>defense impairment</code> matches <code>defense-impairment</code>.</li>
+<li><strong>Deprecated techniques still resolve:</strong> looking up a retired ID such as <code>T1562.001</code> shows it marked deprecated, with its replacement (<code>T1685 Disable or Modify Tools</code>).  Current techniques are listed before deprecated ones.</li>
+<li><strong>Detection field:</strong> ATT&amp;CK v18 replaced per-technique detection text with Detection Strategies, so for current techniques the Detection line lists the strategy names and IDs (<code>DET…</code>).</li>
+</ul>
+<h3 id="updating-to-a-new-attck-release">Updating to a new ATT&amp;CK release</h3>
+<pre><code class="language-bash"># Rebuild the technique and tactic data from the latest Enterprise release (or --version 20.0, or --bundle &lt;file&gt; offline)
+python3 scripts/build_mitre_techniques.py
+
+# Then migrate detections.yaml mappings (tactics, renamed/revoked techniques, tags),
+# passing the previous dataset so author-chosen tactics are preserved
+git show HEAD:assets/mitre_techniques.json &gt; /tmp/mitre_old.json
+python3 scripts/migrate_detections_attack.py --old /tmp/mitre_old.json --dry-run   # review
+python3 scripts/migrate_detections_attack.py --old /tmp/mitre_old.json
 </code></pre>
 
 

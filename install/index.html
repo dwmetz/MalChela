@@ -1232,6 +1232,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../coretools/xmzhash/" class="md-nav__link">
         
   
@@ -1447,6 +1470,29 @@
   
   <span class="md-ellipsis">
     Plist Analyzer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coretools/unpack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unpack
     
   </span>
   
@@ -1858,19 +1904,17 @@
 <pre><code class="language-bash">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 </code></pre>
 <h3 id="system-dependencies">System Dependencies</h3>
+<p>MalChela's YARA engine is <a href="https://virustotal.github.io/yara-x/">YARA-X</a>, compiled in as a Rust crate.  There is no system YARA library to install and no <code>YARA_LIBRARY_PATH</code> or <code>BINDGEN_EXTRA_CLANG_ARGS</code> to set, and HTTPS uses rustls, so OpenSSL isn't needed either.  The build only needs a C compiler and <code>make</code>, for the few bundled C libraries (ssdeep, bzip2, LZFSE, and xz).</p>
 <p><strong>Linux</strong></p>
-<pre><code class="language-bash">sudo apt install openssl libssl-dev clang yara libyara-dev libjansson-dev pkg-config build-essential libglib2.0-dev libgtk-3-dev
+<pre><code class="language-bash">sudo apt install build-essential pkg-config
 </code></pre>
 <p><strong>macOS</strong></p>
-<pre><code class="language-bash">brew install openssl yara pkg-config gtk+3 glib
+<pre><code class="language-bash">xcode-select --install
 </code></pre>
 <blockquote>
-<p>⚠️ YARA 4.2 or greater is required. Before building, point the build at Homebrew's YARA prefix:</p>
-<p><code>bash
-export YARA_LIBRARY_PATH=$(brew --prefix yara)/lib
-export BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix yara)/include"</code></p>
+<p><strong>Upgrading from v4.3 or earlier?</strong>  The old <code>yara</code>, <code>libyara-dev</code>, <code>libjansson-dev</code>, <code>openssl</code>, <code>clang</code>, GTK, and GLib packages are no longer used by the build.  You can leave them installed, and you can drop the <code>YARA_LIBRARY_PATH</code> and <code>BINDGEN_EXTRA_CLANG_ARGS</code> exports from your shell profile.</p>
 </blockquote>
-<p>These packages cover YARA/YARA-X support, native libraries used by Rust crates that link against them (e.g. TShark/glib), and TShark integration.</p>
+<p>Third-party integrations (TShark, Volatility 3, the YARA-X CLI, and others in <code>tools.yaml</code>) are optional and installed separately.  See <a href="../tools/">Integrating Third Party Tools</a> for each one.</p>
 <h3 id="clone-the-repository">Clone the Repository</h3>
 <pre><code class="language-bash">git clone https://github.com/dwmetz/MalChela.git
 cd MalChela

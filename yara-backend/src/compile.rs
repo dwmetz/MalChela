@@ -303,11 +303,13 @@ mod tests {
     #[test]
     fn engine_warnings_are_collected() {
         let td = TempDir::new().unwrap();
-        // A wildcard-only hex pattern; yara-x warns `slow_pattern` on it.
+        // A one-byte text pattern; yara-x warns `slow_pattern` on it. (The
+        // wildcard-only hex pattern used here before stopped warning in
+        // yara-x 1.21, which made this test fail for the wrong reason.)
         let p = write(
             td.path(),
             "slow.yar",
-            "rule slow { strings: $a = { ?? ?? ?? ?? } condition: $a }",
+            "rule slow { strings: $a = \"x\" condition: $a }",
         );
         let out = compile_files(&[p], true).unwrap();
         assert!(
@@ -321,7 +323,7 @@ mod tests {
     fn engine_warnings_are_collected_from_inline_sources() {
         let out = compile_sources(&[(
             "default",
-            "rule slow { strings: $a = { ?? ?? ?? ?? } condition: $a }",
+            "rule slow { strings: $a = \"x\" condition: $a }",
         )])
         .unwrap();
         assert!(!out.warnings.is_empty());
@@ -553,3 +555,4 @@ mod tests {
         assert_eq!(out.rules.iter().count(), 1);
     }
 }
+

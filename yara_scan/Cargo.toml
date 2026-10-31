@@ -1,0 +1,18 @@
+[package]
+name = "yara_scan"
+version.workspace = true
+edition = "2021"
+description = "Scan files with YARA rules using MalChela's embedded YARA-X engine; flags follow `yr scan`."
+
+[dependencies]
+yara-backend = { path = "../yara-backend" }
+common_config = { path = "../common_config" }
+clap = { version = "4.5.57", features = ["derive"] }
+rayon = "1.12"
+walkdir = "2.5.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4.43"
+
+[dev-dependencies]
+tempfile = "3"

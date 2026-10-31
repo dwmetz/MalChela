@@ -27,7 +27,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { execFileSync } from 'child_process';
 import {
   existsSync, readdirSync, statSync, mkdirSync, writeFileSync, readFileSync,
-  realpathSync, openSync, closeSync, unlinkSync, rmSync,
+  realpathSync, openSync, closeSync, unlinkSync, rmSync, renameSync,
 } from 'fs';
 import { dirname, basename, extname } from 'path';
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
@@ -43,6 +43,20 @@ const MALCHELA_DIR = process.env.MALCHELA_DIR || (() => {
   );
 })();
 const RELEASE_DIR  = `${MALCHELA_DIR}/target/release`;
+
+// Release version, read from [workspace.package] in the workspace Cargo.toml
+// (the single place it's set) so the MCP server reports the same version as
+// the Rust tools and the web UI.
+const MALCHELA_VERSION = (() => {
+  try {
+    const toml = readFileSync(`${MALCHELA_DIR}/Cargo.toml`, 'utf8');
+    const section = toml.split('[workspace.package]')[1] || '';
+    const m = section.match(/^\s*version\s*=\s*"([^"]+)"/m);
+    return m ? m[1] : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
 const TIMEOUT_MS   = 60000;
 
 // Tools whose underlying binary needs a raw Mach-O binary, not a bundle directory.
@@ -144,6 +158,9 @@ const TOOLS = [
       'then automatically dispatches every tool fileminer suggests for every file found (no need ' +
       'to call fileminer yourself and manually decide which follow-up tools to run). A .dmg/.pkg ' +
       'target is auto-unwrapped via dpp_extract first (UDIF -> HFS+/APFS -> XAR -> PBZX/CPIO). ' +
+      'Every executable is also run through unpack (static: UPX incl. tampered, PyInstaller, ' +
+      '.NET/Costura, NSIS/Inno, fat Mach-O, overlays) and recovered payloads are analyzed as ' +
+      'files of their own, so the rollup covers the real payload, not just the packer stub. ' +
       'Writes a combined rollup report alongside the individual per-tool reports. Best entry ' +
       'point for a single sample or small bundle (limit 25 files) — over that (common for a ' +
       'dpp-extracted PKG payload, which often bundles the full legitimate app it trojanized ' +
@@ -166,17 +183,20 @@ const TOOLS = [
     category: 'Threat Intel',
     input_type: 'hash',
     description:
-      'Multi-source threat intel hash lookup across MalwareBazaar, VirusTotal, ' +
-      'AlienVault OTX, and InQuest Labs. Returns a combined results matrix with ' +
-      'detection counts, malware families, pulse counts, and source links. ' +
-      'Use --json for machine-readable output. Requires API keys in api/*.txt.',
+      'Multi-source threat intel lookup for a file hash, an IP address, or a URL. ' +
+      'Hashes: MalwareBazaar, VirusTotal, AlienVault OTX, MetaDefender, Hybrid Analysis, ' +
+      'FileScan, Malshare, Triage, Objective-See. IPs (IPv4/IPv6, defanged accepted): ' +
+      'VirusTotal (detections, AS owner, country), OTX (pulses), and GreyNoise (known ' +
+      'internet scanner vs. known benign service such as a cloud or CDN address). ' +
+      'URLs: VirusTotal, urlscan.io, Google Safe Browsing. Private and reserved IPs are ' +
+      'refused. Only sources with an API key in api/*.txt are queried.',
     inputSchema: {
       type: 'object',
       properties: {
-        hash:    { type: 'string', description: 'MD5, SHA1, or SHA256 hash to query' },
+        hash:    { type: 'string', description: 'MD5/SHA1/SHA256 hash, IP address, or http(s) URL to query' },
         sources: {
           type: 'string',
-          description: 'Comma-separated source IDs to query (mb,vt,otx,iq,os). Default: mb,vt,otx,iq',
+          description: 'Comma-separated source IDs (hashes: mb,vt,otx,md,ha,fs,ms,tr,os; IPs: vt,otx,gn; URLs: vt,urlscan,gsb). Default: every source for the input type that has a key',
         },
       },
       required: ['hash'],
@@ -307,6 +327,34 @@ const TOOLS = [
   },
 
   {
+    name: 'yara_scan',
+    category: 'YARA Tools',
+    input_type: 'yara_scan',
+    description:
+      'Scans a file or folder with YARA rules on MalChela\'s embedded YARA-X engine ' +
+      '(no yr install needed). Rules can be a single .yar/.yara file or a folder of rules. ' +
+      'Returns one NDJSON line per file that matched, with each rule\'s namespace, tags, ' +
+      'metadata, and matching strings with offsets. Flags follow VirusTotal\'s `yr scan`. ' +
+      'Saved to the active case as a Markdown report when one is set.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        rules_path: { type: 'string', description: 'A .yar/.yara file or a folder of rules (optionally NAMESPACE:path)' },
+        target_path: { type: 'string', description: 'File or folder to scan' },
+        recursive: { type: 'boolean', description: 'Scan subfolders of target_path (default false)' },
+        negate: { type: 'boolean', description: 'List the rules that did NOT match instead' },
+        tag: { type: 'string', description: 'Only report rules with this tag' },
+        defines: {
+          type: 'array', items: { type: 'string' },
+          description: 'External variables as VAR=VALUE, VALUE in JSON form: 10, true, "text"',
+        },
+        timeout: { type: 'integer', description: 'Per-file timeout in seconds' },
+      },
+      required: ['rules_path', 'target_path'],
+    },
+  },
+
+  {
     name: 'combine_yara',
     category: 'YARA Tools',
     input_type: 'folder',
@@ -431,7 +479,126 @@ const TOOLS = [
       required: ['filepath'],
     },
   },
+
+  {
+    name: 'unpack',
+    category: 'File Analysis',
+    input_type: 'unpack',
+    description:
+      'Static packer detection and unpacking for PE, ELF, and Mach-O — never executes the sample. ' +
+      'Identifies packers/protectors/installers with the evidence behind each call, then recovers ' +
+      'what can be recovered statically: UPX (including Mirai-style tampered headers, repaired ' +
+      'before upx -d), fat Mach-O slices, PyInstaller entry scripts (rebuilt as .pyc), .NET ' +
+      'manifest resources and Costura.Fody assemblies, NSIS (7-Zip) and Inno Setup (innoextract) ' +
+      'payloads, and appended/embedded executables. Recurses into recovered payloads (default ' +
+      'depth 3). Protectors such as Themida/VMProtect are identified but need emulation or a ' +
+      'sandbox. analyze() runs this automatically on every executable and analyzes the recovered ' +
+      'payloads; call it directly to inspect the layer tree or unpack a single file.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filepath:  { type: 'string', description: 'Absolute path to the file to unpack' },
+        max_depth: { type: 'integer', description: 'Maximum unpacking depth (default 3)' },
+      },
+      required: ['filepath'],
+    },
+  },
+
+  // Reporting
+  {
+    name: 'report_template',
+    category: 'Reporting',
+    input_type: 'meta',
+    description:
+      "Get Lenny Zeltser's Malware Analysis Report template (Markdown, CC BY 4.0, bundled for " +
+      'offline use) plus a guide to which MalChela output fills each section. Call this after the ' +
+      'analysis, when the user asks for a malware report, then write the report and save it with ' +
+      'save_report. Headings marked (Optional) are conditional: include them only when the findings ' +
+      'warrant it, and drop the "(Optional)" marker.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'save_report',
+    category: 'Reporting',
+    input_type: 'meta',
+    description:
+      'Save a finished malware analysis report (Markdown) to the active case, under ' +
+      'saved_output/cases/<case>/report/, and register it in the case manifest. Requires an active ' +
+      'case. Will not overwrite an existing report unless overwrite is true.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filename: {
+          type: 'string',
+          description: 'Report file name, e.g. "Mirai_sh7f3a_Malware_Analysis_Report" (".md" is added if missing)',
+        },
+        content: { type: 'string', description: 'The full report in Markdown' },
+        target: { type: 'string', description: 'Path or SHA-256 of the primary sample the report covers (recorded in the case manifest)' },
+        overwrite: { type: 'boolean', description: 'Replace an existing report with the same name (default false)' },
+      },
+      required: ['filename', 'content'],
+    },
+  },
 ];
+
+// ── Malware analysis report (Lenny Zeltser's template) ───────────────────────
+const REPORT_TEMPLATE_DIR = `${MALCHELA_DIR}/assets/report_templates`;
+
+// Where MalChela's own output lands in the template. Kept short: the template's
+// bracketed guidance does the rest.
+const REPORT_FILL_GUIDE = [
+  'How MalChela output maps to the template:',
+  '- Sample Snapshot / Malware Family Identification: tiquery (family names and tags, detection ratios per source) — cite the source for each family call; confidence follows the evidence, not the vendor count.',
+  '- Component Inventory: unpack (recovered payloads and the layer tree: fat slices, UPX layers, PyInstaller entry scripts, carved executables) and fileminer (types and extension mismatches). One row per artifact; hashes go in Indicators of Compromise.',
+  '- Runtime Requirements: fileanalyzer (PE imports, compile time), macho_info (architecture, linked libraries, RPATH), plist_analyzer (Info.plist requirements).',
+  '- Sources: tiquery links (MalwareBazaar, VirusTotal, and so on) and where the sample came from (ask the user if unknown).',
+  '- Capabilities: mstrings rule hits and the Analyze MITRE ATT&CK matrix (mitre_matrix_<ts>.json / navigator_layer_<ts>.json in the case analyze folder). The template uses MBC behaviors; cite the ATT&CK technique IDs MalChela found in the Notes column. Treat a rule hit as evidence to corroborate, not a capability on its own — check the matched strings, and discount hits from a bundler bootloader or runtime (PyInstaller, NSIS) rather than the sample\'s own code.',
+  '- Indicators of Compromise: mstrings "Potential Network IOCs" (already defanged), hashes from fileanalyzer/hashit for every component, host artifacts from plist_analyzer and strings. Public DNS resolvers mstrings lists separately are not C2. List only indicators the sample actually uses.',
+  '- Analysis Details > Automated Analysis: name MalChela and its version, the tools Analyze ran, and the analysis depth (static only).',
+  '- Analysis Details > Static Properties Analysis: fileanalyzer (entropy, packing, imphash, signing), macho_info (section entropy, stripped symbols), codesign_check (ad-hoc vs. developer signing, Team ID, entitlements), unpack (packer verdict and whether properties describe the packed or unpacked form).',
+  '- Analysis Details > Behavioral / Memory Analysis: MalChela is static only — say these were not performed unless the user supplies results.',
+  '- Appendix: Analysis Environment: MalChela version (from this server), the host OS, and that samples were never executed.',
+  '- Save the finished report with save_report (it goes in the case report/ folder).',
+].join('\n');
+
+function reportTemplateText() {
+  const md = readFileSync(`${REPORT_TEMPLATE_DIR}/zeltser_malware_analysis_report.md`, 'utf8');
+  let meta = {};
+  try { meta = JSON.parse(readFileSync(`${REPORT_TEMPLATE_DIR}/zeltser_malware_analysis_report.json`, 'utf8')); } catch { /* optional */ }
+  const src = meta.source || {};
+  const conv = meta.optional_section_convention || {};
+  return [
+    `Malware Analysis Report Template v${src.sourceVersion || '?'} (${src.sourceDate || '?'}) — ${meta.attribution || 'Lenny Zeltser, CC BY 4.0'}`,
+    `Canonical, continuously updated source: ${src.fallbackArticleUrl || 'https://zeltser.com/malware-analysis-report'}`,
+    '',
+    'Optional sections: ' + (conv.principle ||
+      'Headings ending in "(Optional)" are conditional markers: include the section only when warranted, and remove the marker from the heading, the Contents entry, and every link to it.'),
+    '',
+    REPORT_FILL_GUIDE,
+    '',
+    `MalChela version: ${MALCHELA_VERSION}`,
+    '',
+    '──────── TEMPLATE ────────',
+    md,
+  ].join('\n');
+}
+
+function saveReport(args) {
+  let name = basename(String(args.filename || '').trim()).replace(/[^A-Za-z0-9._ -]+/g, '_').replace(/\s+/g, '_');
+  if (!name || name.startsWith('.')) throw new Error('A report file name is required.');
+  if (!name.toLowerCase().endsWith('.md')) name += '.md';
+  const content = String(args.content || '');
+  if (!content.trim()) throw new Error('The report content is empty.');
+  const dir = `${MALCHELA_DIR}/saved_output/cases/${currentCase}/report`;
+  mkdirSync(dir, { recursive: true });
+  const path = `${dir}/${name}`;
+  if (existsSync(path) && !args.overwrite) {
+    throw new Error(`${path} already exists. Pass overwrite: true to replace it, or use a different file name.`);
+  }
+  writeFileSync(path, content.endsWith('\n') ? content : content + '\n');
+  registerCaseOutput('report', currentCase, String(args.target || ''), path);
+  return path;
+}
 
 // ── Mac bundle resolution helpers ────────────────────────────────────────────
 function isAppBundle(p) {
@@ -530,6 +697,23 @@ function buildCommand(toolName, args) {
       if (currentCase) cmdArgs.push('--case', currentCase);
       return { bin: binary, args: cmdArgs };
     }
+    case 'unpack': {
+      const cmdArgs = [args.filepath];
+      if (Number.isInteger(args.max_depth)) cmdArgs.push('--max-depth', String(args.max_depth));
+      if (currentCase) cmdArgs.push('--case', currentCase, '-o', '-m');
+      return { bin: binary, args: cmdArgs };
+    }
+    case 'yara_scan': {
+      const cmdArgs = ['--output-format', 'ndjson', '--print-strings=60', '--print-meta', '--print-tags', '--print-namespace'];
+      if (args.recursive) cmdArgs.push('--recursive');
+      if (args.negate) cmdArgs.push('--negate');
+      if (args.tag) cmdArgs.push('--tag', String(args.tag));
+      for (const d of Array.isArray(args.defines) ? args.defines : []) cmdArgs.push('--define', String(d));
+      if (Number.isInteger(args.timeout) && args.timeout > 0) cmdArgs.push('--timeout', String(args.timeout));
+      if (currentCase) cmdArgs.push('--case', currentCase, '--save=md');
+      cmdArgs.push('--', args.rules_path, args.target_path);
+      return { bin: binary, args: cmdArgs };
+    }
     case 'hash': {
       const caseArgs = currentCase ? ['--case', currentCase, '-o', '-t'] : [];
       if (toolName === 'tiquery') {
@@ -610,7 +794,9 @@ function registerCaseOutput(tool, caseName, target, outputPath) {
         try {
           manifest = yamlLoad(readFileSync(yamlPath, 'utf8')) || {};
         } catch {
-          manifest = null;
+          // Never replace a manifest we can't parse (that used to wipe every
+          // registered file) — skip this registration instead.
+          return;
         }
       }
       if (!manifest) {
@@ -643,6 +829,7 @@ const ANALYZE_MAX_FILES = 25; // matches _ANALYZE_MAX_FILES in malchela_server.p
 const ANALYZE_TIMEOUT_MS = 90000;
 const FILEMINER_TIMEOUT_MS = 120000;
 const DPP_EXTRACT_TIMEOUT_MS = 180000;
+const UNPACK_TIMEOUT_MS = 300000;
 const ANALYZE_MAX_BUFFER = 50 * 1024 * 1024; // fileminer's JSON dump easily exceeds execFileSync's 1MB default
 
 function pathsMatch(candidate, resolvedTarget) {
@@ -694,7 +881,13 @@ function isTopLevelBinary(filepath, singleFileMode, resolvedTarget) {
 // raw CLI stdout. Picks the most-recently-modified report_*.md in the tool's
 // output dir; safe because dispatch is fully sequential — nothing else writes
 // there between this tool's run and this read.
-function readToolMarkdown(tool, caseName) {
+//
+// In a case, the report is then renamed from report_<ts>.md to
+// <file>_<ts>.md (as the server's _rename_case_report() does), and its
+// case.yaml entry follows. Without this, two runs of the same tool within one
+// second (three files' tiquery lookups, say) wrote the same report_<ts>.md,
+// each overwriting the last in the case folder.
+function readToolMarkdown(tool, caseName, displayName = '') {
   const toolDir = caseName
     ? `${MALCHELA_DIR}/saved_output/cases/${caseName}/${tool}`
     : `${MALCHELA_DIR}/saved_output/${tool}`;
@@ -703,7 +896,42 @@ function readToolMarkdown(tool, caseName) {
     .filter(f => f.startsWith('report_') && f.endsWith('.md'))
     .map(f => `${toolDir}/${f}`)
     .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
-  return mdFiles.length ? readFileSync(mdFiles[mdFiles.length - 1], 'utf8') : '';
+  if (!mdFiles.length) return '';
+  const latest = mdFiles[mdFiles.length - 1];
+  const md = readFileSync(latest, 'utf8');
+  if (caseName && displayName) renameCaseReport(tool, caseName, displayName, latest);
+  return md;
+}
+
+function renameCaseReport(tool, caseName, displayName, reportPath) {
+  try {
+    const name = basename(reportPath);
+    const ts = (/report_(\d{8}_\d{6})/.exec(name) || [])[1];
+    if (!ts) return;
+    const stem = basename(displayName).replace(/\.[^.]*$/, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'file';
+    const newPath = `${dirname(reportPath)}/${stem}_${ts}${extname(name)}`;
+    if (newPath === reportPath || existsSync(newPath)) return;
+    const caseDir = `${MALCHELA_DIR}/saved_output/cases/${caseName}`;
+    const lockPath = acquireCaseLock(caseDir);
+    try {
+      renameSync(reportPath, newPath);
+      const yamlPath = `${caseDir}/case.yaml`;
+      if (!existsSync(yamlPath)) return;
+      let manifest;
+      try { manifest = yamlLoad(readFileSync(yamlPath, 'utf8')) || {}; } catch { return; }
+      const oldRel = `${tool}/${name}`;
+      const newRel = `${tool}/${basename(newPath)}`;
+      let changed = false;
+      for (const f of manifest.files || []) {
+        if (f.path === oldRel) { f.path = newRel; f.filename = basename(newPath); changed = true; }
+      }
+      if (changed) writeFileSync(yamlPath, yamlDump(manifest));
+    } finally {
+      unlinkSync(lockPath);
+    }
+  } catch {
+    // A failed rename only costs the friendlier file name.
+  }
 }
 
 // Shift a tool's own ATX headings down 2 levels so its "# ... Report" nests
@@ -744,22 +972,29 @@ function flagVerdict(toolRuns) {
 // tactics (comma-separated) credits its count to each — that's how ATT&CK
 // tagging works — so tactics can sum to more than rawTotal; rawTotal is the
 // true per-file match count.
-const MD_MITRE_ROW = /^\|\s*(\d+)\s*\|[^|]*\|[^|]*\|\s*([^|]+?)\s*\|[^|]*\|[^|]*\|\s*$/gm;
+const MD_MITRE_ROW = /^\|\s*(\d+)\s*\|([^|]*)\|[^|]*\|\s*([^|]+?)\s*\|[^|]*\|[^|]*\|\s*$/gm;
+// mStrings' summary row for a table of encoded strings re-counts the same
+// strings its base64-blob rule already matched — a finding, not more strings.
+const MSTRINGS_SUMMARY_ROWS = ["Encoded string table"];
 
+// Tactic counts are per matched RULE, not per matched string: one rule that
+// fires on 1,164 encoded chunks (AMOS) is one finding. rawTotal keeps the
+// string count for context. Mirrors the server's _extract_mitre_tactics().
 function extractMitreTactics(markdown) {
   let rawTotal = 0;
+  let ruleHits = 0;
   const tactics = {};
   let m;
   MD_MITRE_ROW.lastIndex = 0;
   while ((m = MD_MITRE_ROW.exec(markdown)) !== null) {
-    const count = parseInt(m[1], 10);
-    rawTotal += count;
-    for (const tactic of m[2].split(',')) {
+    if (!MSTRINGS_SUMMARY_ROWS.some(p => m[2].trim().startsWith(p))) rawTotal += parseInt(m[1], 10);
+    ruleHits += 1;
+    for (const tactic of m[3].split(',')) {
       const t = tactic.trim();
-      if (t) tactics[t] = (tactics[t] || 0) + count;
+      if (t) tactics[t] = (tactics[t] || 0) + 1;
     }
   }
-  return { rawTotal, tactics };
+  return { rawTotal, ruleHits, tactics };
 }
 
 // Pull non-empty Family/Tags values from tiquery's markdown Results table
@@ -869,6 +1104,24 @@ function extractMstringsIocs(markdown) {
 // at >1 layer — a single decode is routine and not itself a tell — so any
 // nonzero result here is already meaningful: the malware deliberately
 // re-encoded its payload multiple times, not just used base64 for convenience.
+// mStrings' "IP Address Lists" section: runs of IPs stored together (often an
+// anti-analysis blocklist), kept out of its Network IOCs. Mirrors the server's
+// _extract_ip_lists().
+const MSTRINGS_IP_LIST_BLOCK = /## IP Address Lists[^\n]*\n\n(?:[^\n]*\n\n)?((?:- \*\*.+\n)+)/;
+const MSTRINGS_IP_LIST_ROW = /^- \*\*(\d+) addresses\*\* at (0x[0-9A-Fa-f]+)\S(0x[0-9A-Fa-f]+): (.+)$/gm;
+
+function extractIpLists(markdown) {
+  const m = MSTRINGS_IP_LIST_BLOCK.exec(markdown);
+  if (!m) return [];
+  const out = [];
+  MSTRINGS_IP_LIST_ROW.lastIndex = 0;
+  let r;
+  while ((r = MSTRINGS_IP_LIST_ROW.exec(m[1])) !== null) {
+    out.push({ count: parseInt(r[1], 10), range: `${r[2]}–${r[3]}`, ips: [...r[4].matchAll(/`([^`]+)`/g)].map(x => x[1]) });
+  }
+  return out;
+}
+
 const MD_OBFUSCATION_LAYERS = /found after (\d+) layers of base64 decoding/g;
 
 function extractMaxObfuscationLayers(markdown) {
@@ -887,7 +1140,238 @@ function extractMaxObfuscationLayers(markdown) {
 // write-up instead of the same tool output repeated verbatim per filename.
 // This only changes what's shown here — every path was still dispatched and
 // still has its own saved report and case.yaml entry.
-function buildAnalyzeRollup(target, perFileResults, extractionNote) {
+// unpack's markdown report carries a one-line "**Packer verdict:** ..." marker.
+const UNPACK_VERDICT = /^\*\*Packer verdict:\*\*\s*(.+?)\s*$/m;
+
+// ── Analyze summary, in the order of Lenny Zeltser's report template ─────────
+// Mirrors the server's _build_analyze_rollup(): Sample Snapshot, Component
+// Inventory, Capabilities, Indicators of Compromise, Analysis Details (every
+// tool's output, per file — same shape as before, so the server's case matrix
+// still parses MCP-saved summaries), and Analysis Environment. Sections that
+// need an analyst's judgment are left for the written report.
+const TIQUERY_FOUND_ROW = /^\|\s*([^\s|]+)\s*\|\s*FOUND\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|[^|]*\|\s*$/gm;
+const UNPACK_FORMAT = /^\*\*Format:\*\*\s*(.+?)\s*$/m;
+const IPV4_RE = /^\d{1,3}(?:\[?\.\]?\d{1,3}){3}$/;
+const SUMMARY_ROW_CAP = 25;
+// mStrings' Detections table: Count | Rule | Matched Strings | Tactic | Technique | ID
+const MSTRINGS_ROW = /^\|\s*(\d+)\s*\|\s*([^|]*?)\s*\|[^|]*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*(T\d{4}(?:\.\d{3})?)\s*\|\s*$/gm;
+// Unpack's MITRE ATT&CK table: ID | Technique | Tactic
+const UNPACK_MITRE_ROW = /^\|\s*(T\d{4}(?:\.\d{3})?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$/gm;
+
+let attackRef = null;
+// ATT&CK v20 reference (technique names and tactics, tactic order) from the
+// bundled assets, loaded once. Null if the assets can't be read — the table
+// then falls back to the names the tools printed.
+function attackReference() {
+  if (attackRef !== null) return attackRef || null;
+  try {
+    const techs = JSON.parse(readFileSync(`${MALCHELA_DIR}/assets/mitre_techniques.json`, 'utf8'));
+    const tactics = JSON.parse(readFileSync(`${MALCHELA_DIR}/assets/mitre_tactics.json`, 'utf8'));
+    const byId = new Map(techs.map(t => [t.id, t]));
+    const fullName = (id) => {
+      const t = byId.get(id);
+      if (!t) return '';
+      const parent = id.includes('.') ? byId.get(id.split('.')[0]) : null;
+      return parent ? `${parent.name}: ${t.name}` : t.name;
+    };
+    const resolve = (id) => {
+      let t = byId.get(id), hops = 0;
+      while (t && t.deprecated && t.revoked_by && hops++ < 10) { id = t.revoked_by; t = byId.get(id); }
+      return t ? id : null;
+    };
+    const tacticsOf = (id) => (byId.get(id)?.tactic || '').split(',').map(s => s.trim()).filter(Boolean);
+    const shortByName = new Map(tactics.map(t => [t.name.toLowerCase(), t.shortname]));
+    attackRef = { fullName, resolve, tacticsOf, tactics, shortByName };
+  } catch {
+    attackRef = false;
+  }
+  return attackRef || null;
+}
+
+let flagMapCache = null;
+function flagMap() {
+  if (flagMapCache) return flagMapCache;
+  flagMapCache = [];
+  try {
+    for (const e of yamlLoad(readFileSync(`${MALCHELA_DIR}/assets/flag_attack_map.yaml`, 'utf8')) || []) {
+      try { flagMapCache.push({ tool: e.tool, re: new RegExp(e.match, 'i'), technique: e.technique, confidence: e.confidence || 'low' }); } catch { /* bad regex: skip */ }
+    }
+  } catch { /* no map: no flag techniques */ }
+  return flagMapCache;
+}
+
+// Technique hits in one tool's report: { id, name, tactics[], tool, source, confidence }.
+function techniqueHits(tool, markdown) {
+  const ref = attackReference();
+  const hits = [];
+  const add = (id, name, tacticNames, source, confidence) => {
+    const rid = ref ? ref.resolve(id) : id;
+    if (!rid) return;
+    let tactics = [];
+    if (ref) {
+      const valid = ref.tacticsOf(rid);
+      tactics = tacticNames.map(n => ref.shortByName.get(n.toLowerCase())).filter(s => s && valid.includes(s));
+      if (!tactics.length) tactics = valid;
+    } else {
+      tactics = tacticNames;
+    }
+    hits.push({ id: rid, name: (ref && ref.fullName(rid)) || name || rid, tactics, tool, source, confidence });
+  };
+  let m;
+  if (tool === 'mstrings') {
+    MSTRINGS_ROW.lastIndex = 0;
+    while ((m = MSTRINGS_ROW.exec(markdown)) !== null) {
+      add(m[5], m[4], m[3].split(',').map(s => s.trim()).filter(Boolean), m[2], 'high');
+    }
+  } else if (tool === 'unpack') {
+    UNPACK_MITRE_ROW.lastIndex = 0;
+    while ((m = UNPACK_MITRE_ROW.exec(markdown)) !== null) add(m[1], m[2], [], m[2], 'high');
+  } else {
+    const entries = flagMap().filter(e => e.tool === tool);
+    const seen = new Set();
+    for (const line of markdown.split('\n')) {
+      let text = line.replace(/^\s*[-*]\s*(\*\*\[!\]\*\*\s*)?/, '').trim();
+      if (!text) continue;
+      for (const e of entries) {
+        if (!e.re.test(text)) continue;
+        if (text.startsWith('|')) text = text.replace(/^\||\|$/g, '').split('|').map(c => c.trim()).filter(Boolean).join(': ');
+        if (seen.has(e.technique + text)) continue;
+        seen.add(e.technique + text);
+        add(e.technique, '', [], text, e.confidence);
+      }
+    }
+  }
+  return hits;
+}
+
+function platformFor(filetype, fmt) {
+  const ft = (filetype || '').toLowerCase();
+  const f = fmt || '';
+  const am = /\(([^)]*)\)\s*$/.exec(f);
+  const arch = am ? am[1] : '';
+  let base;
+  if (ft.includes('portable-executable') || f.startsWith('PE')) base = 'Windows';
+  else if (ft.includes('mach') || f.startsWith('Mach-O')) base = 'macOS';
+  else if (ft.includes('x-executable') || f.startsWith('ELF')) base = 'Linux / Unix (ELF)';
+  else if (ft.startsWith('text/')) base = 'Script / text';
+  else return '';
+  return arch ? `${base} (${arch})` : base;
+}
+
+function mdCell(text) {
+  return String(text ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+}
+
+// The offline toggle file, or MALCHELA_OFFLINE=1 in the environment (which
+// the Rust tools also honor).
+function lookupsOffline() {
+  return isOfflineMode() || process.env.MALCHELA_OFFLINE === '1';
+}
+
+// ── IP reputation (capped) — mirrors the server's _lookup_ip_reputation() ────
+// At most MALCHELA_IP_LOOKUPS (default 5) standalone IP IOCs per run are
+// looked up through tiquery (VT, OTX, GreyNoise): a free VT key allows 4
+// lookups a minute. IP address lists and public DNS resolvers never are.
+const IP_LOOKUP_DEFAULT_CAP = 5;
+const IP_LOOKUP_TIMEOUT_MS = 90000;
+
+function ipLookupCap() {
+  const n = parseInt(process.env.MALCHELA_IP_LOOKUPS ?? IP_LOOKUP_DEFAULT_CAP, 10);
+  return Number.isFinite(n) && n >= 0 ? n : IP_LOOKUP_DEFAULT_CAP;
+}
+
+function isPublicIp(ip) {
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (v4) {
+    const [a, b] = [parseInt(v4[1], 10), parseInt(v4[2], 10)];
+    if ([v4[1], v4[2], v4[3], v4[4]].some(x => parseInt(x, 10) > 255)) return false;
+    return !(a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)
+      || ip.startsWith('192.0.2.') || ip.startsWith('198.51.100.') || ip.startsWith('203.0.113.') || (a === 198 && (b === 18 || b === 19)));
+  }
+  if (/^[0-9a-f:]+$/i.test(ip) && ip.includes(':')) {
+    const l = ip.toLowerCase();
+    return !(l === '::1' || l === '::' || /^f[cd]/.test(l) || /^fe[89ab]/.test(l) || l.startsWith('ff') || l.startsWith('2001:db8'));
+  }
+  return false;
+}
+
+function summarizeIpResults(results) {
+  const parts = [];
+  let flagged = false;
+  for (const r of results || []) {
+    const src = r.source || '?', st = r.status, fam = r.family || '', det = r.detections || '';
+    if (st === 'found') {
+      if (src === 'VT') {
+        const m = /^(\d+)\/(\d+)/.exec(det);
+        if (m && parseInt(m[1], 10) > 0) flagged = true;
+        parts.push(`VT ${det}` + (fam ? ` · ${fam}` : ''));
+      } else if (src === 'GN') {
+        if (det === 'malicious') flagged = true;
+        parts.push(`GreyNoise: ${fam}` + (det ? ` (${det})` : ''));
+      } else if (src === 'OTX') {
+        parts.push(`OTX ${det}` + (fam ? ` · ${fam}` : ''));
+      } else {
+        parts.push(`${src} ${det || 'found'}`);
+      }
+    } else if (st === 'not_found') {
+      parts.push({ GN: 'GreyNoise: not seen scanning, not a known service', OTX: 'OTX: no pulses' }[src] || `${src}: not found`);
+    } else if (st && typeof st === 'object' && st.error) {
+      parts.push(`${src}: ${st.error}`);
+    }
+  }
+  return { summary: parts.join('; '), flagged };
+}
+
+function lookupIpReputation(perFileResults) {
+  const out = { ips: new Map(), skipped: 0, cap: ipLookupCap(), offline: lookupsOffline() };
+  const candidates = [];
+  for (const f of perFileResults) {
+    for (const run of f.tool_runs || []) {
+      if (run.tool !== 'mstrings' || !run.success || !run.markdown) continue;
+      for (const ioc of extractMstringsIocs(run.markdown).net) {
+        const ip = ioc.trim().replace(/\[\.\]/g, '.').replace(/\[:\]/g, ':');
+        if (isPublicIp(ip) && !candidates.includes(ip)) candidates.push(ip);
+      }
+    }
+  }
+  if (out.offline || out.cap === 0 || !candidates.length) {
+    out.skipped = candidates.length;
+    return out;
+  }
+  const binary = `${RELEASE_DIR}/tiquery`;
+  candidates.forEach((ip, i) => {
+    if (i >= out.cap) { out.skipped = candidates.length - out.cap; return; }
+    const args = [ip, '--json'];
+    if (currentCase) args.push('--case', currentCase, '-o', '-m');
+    let results = [];
+    try {
+      const raw = execFileSync(binary, args, { cwd: MALCHELA_DIR, encoding: 'utf8', timeout: IP_LOOKUP_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER });
+      results = JSON.parse(raw || '[]');
+    } catch (err) {
+      const line = String(err.stderr || err.message || '').trim().split('\n').pop();
+      out.ips.set(ip, { summary: `lookup failed: ${line.slice(0, 80)}`, flagged: false });
+      return;
+    }
+    if (currentCase) readToolMarkdown('tiquery', currentCase, `ip_${ip.replace(/[.:]/g, '-')}`);
+    const s = summarizeIpResults(results);
+    out.ips.set(ip, results.length ? s : { summary: 'no IP reputation source configured (add a VT, OTX, or GreyNoise key)', flagged: false });
+  });
+  return out;
+}
+
+function ipRepNote(rep) {
+  if (!rep) return 'Not run';
+  const looked = rep.ips.size, skipped = rep.skipped;
+  if (rep.offline) return 'Off (offline mode)' + (skipped ? ` — ${skipped} standalone IP(s) not looked up` : '');
+  if (rep.cap === 0) return 'Off (MALCHELA_IP_LOOKUPS=0)';
+  if (!looked && !skipped) return 'No standalone public IPs to look up';
+  let s = `${looked} standalone IP(s) looked up via tiquery (VT, OTX, GreyNoise)`;
+  if (skipped) s += `; ${skipped} more not looked up (cap ${rep.cap}, set MALCHELA_IP_LOOKUPS to change)`;
+  return s + '; IP address lists and public DNS resolvers are never looked up';
+}
+
+function buildAnalyzeRollup(target, perFileResults, extractionNote, ipReputation = null) {
   const groups = new Map();
   const order = [];
   for (const f of perFileResults) {
@@ -895,142 +1379,271 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     if (!groups.has(key)) { groups.set(key, []); order.push(key); }
     groups.get(key).push(f);
   }
-
-  // Anchor ids keyed by the SHA256/filepath dedup key (not by filename) —
-  // avoids any ambiguity if two different files happen to share a bare
-  // filename in different subfolders. marked.js (the PWA's renderer) passes
-  // raw inline HTML through unsanitized, so an explicit <a id=...> works
-  // without needing a heading-slug algorithm to stay in sync between this
-  // generator and the renderer.
+  // Anchor ids keyed by the SHA256/filepath dedup key (not by filename), as
+  // explicit <a id=...> tags so no heading-slug algorithm has to match.
   const anchorByKey = new Map(order.map((key, idx) => [key, `file-${idx}`]));
+  const link = (name, anchor) => `[\`${name}\`](#${anchor})`;
 
-  const flagged = []; // { filename, anchor }
+  const flagged = [];
   const dupGroups = [];
-  const mitreTactics = {};
   let mitreTotal = 0;
-  const malwareTags = [];
-  const malwareTagsSeen = new Set();
-  const flagFindings = []; // { filename, tool, text, anchor }
-  const fsIocs = []; // { ioc, anchor } — anchor of the first file it was found in
-  const fsIocsSeen = new Set();
-  const netIocs = []; // { ioc, anchor } — anchor of the first file it was found in
-  const netIocsSeen = new Set();
-  const obfuscationFindings = []; // { filename, maxLayers }
-  const revokedCerts = []; // { filename, anchor }
+  let mitreStrings = 0;
+  const tiRows = []; const tiSeen = new Set();
+  const flagFindings = [];
+  const fsIocs = []; const fsIocsSeen = new Set();
+  const netIocs = []; const netIocsSeen = new Set();
+  const ipLists = []; // { count, range, ips, anchor, fname }
+  const obfuscationFindings = [];
+  const revokedCerts = [];
+  const packerFindings = [];
+  const fmtByKey = new Map();
+  const toolsRun = {};
+  const techs = new Map(); // id -> { id, name, tactics:Set, hits:[], files:[] , high:bool }
+
   for (const key of order) {
     const members = groups.get(key);
     const anchor = anchorByKey.get(key);
-    const isFlagged = flagVerdict(members[0].tool_runs).flagged;
-    if (isFlagged) flagged.push({ filename: members[0].filename, anchor });
+    const fname = members[0].filename;
+    if (flagVerdict(members[0].tool_runs).flagged) flagged.push({ filename: fname, anchor });
     if (members.length > 1) dupGroups.push(members);
     for (const run of members[0].tool_runs) {
-      if (run.tool === 'codesign_check' && run.success && run.markdown && extractRevokedCert(run.markdown)) {
-        revokedCerts.push({ filename: members[0].filename, anchor });
+      toolsRun[run.tool] = (toolsRun[run.tool] || 0) + 1;
+      const md = run.success ? (run.markdown || '') : '';
+      if (run.tool === 'unpack' && run.success) {
+        const m = UNPACK_VERDICT.exec(md);
+        packerFindings.push({ filename: fname, verdict: m ? m[1].trim() : run.output, anchor });
+        const fm = UNPACK_FORMAT.exec(md);
+        if (fm) fmtByKey.set(key, fm[1].trim());
       }
-      if (run.tool === 'mstrings' && run.success && run.markdown) {
-        const { rawTotal, tactics } = extractMitreTactics(run.markdown);
-        mitreTotal += rawTotal;
-        for (const [tactic, count] of Object.entries(tactics)) {
-          mitreTactics[tactic] = (mitreTactics[tactic] || 0) + count;
+      if (run.tool === 'codesign_check' && md && extractRevokedCert(md)) revokedCerts.push({ filename: fname, anchor });
+      if (run.tool === 'mstrings' && md) {
+        const { rawTotal, ruleHits } = extractMitreTactics(md);
+        mitreTotal += ruleHits;
+        mitreStrings += rawTotal;
+        const { fs, net } = extractMstringsIocs(md);
+        for (const l of extractIpLists(md)) ipLists.push({ ...l, anchor, fname });
+        for (const ioc of fs) if (!fsIocsSeen.has(ioc)) { fsIocsSeen.add(ioc); fsIocs.push({ ioc, anchor, fname }); }
+        for (const ioc of net) if (!netIocsSeen.has(ioc)) { netIocsSeen.add(ioc); netIocs.push({ ioc, anchor, fname }); }
+        const maxLayers = extractMaxObfuscationLayers(md);
+        if (maxLayers > 1) obfuscationFindings.push({ filename: fname, maxLayers });
+      }
+      if (run.tool === 'tiquery' && md) {
+        TIQUERY_FOUND_ROW.lastIndex = 0;
+        let m;
+        while ((m = TIQUERY_FOUND_ROW.exec(md)) !== null) {
+          const [src, fam, det] = [m[1], m[2], m[3]];
+          if (fam && !tiSeen.has(src + '\u0000' + fam)) { tiSeen.add(src + '\u0000' + fam); tiRows.push({ src, fam, det }); }
         }
-        const { fs, net } = extractMstringsIocs(run.markdown);
-        for (const ioc of fs) { if (!fsIocsSeen.has(ioc)) { fsIocsSeen.add(ioc); fsIocs.push({ ioc, anchor }); } }
-        for (const ioc of net) { if (!netIocsSeen.has(ioc)) { netIocsSeen.add(ioc); netIocs.push({ ioc, anchor }); } }
-        const maxLayers = extractMaxObfuscationLayers(run.markdown);
-        if (maxLayers > 1) obfuscationFindings.push({ filename: members[0].filename, maxLayers });
       }
-      if (isFlagged && run.tool === 'tiquery' && run.success && run.markdown) {
-        for (const tag of extractTiqueryTags(run.markdown)) {
-          if (!malwareTagsSeen.has(tag)) { malwareTagsSeen.add(tag); malwareTags.push(tag); }
-        }
+      if (md && ['macho_info', 'plist_analyzer', 'codesign_check'].includes(run.tool)) {
+        for (const text of extractFlags(run.tool, md)) flagFindings.push({ filename: fname, tool: run.tool, text, anchor });
       }
-      if (run.success && run.markdown && ['macho_info', 'plist_analyzer', 'codesign_check'].includes(run.tool)) {
-        for (const text of extractFlags(run.tool, run.markdown)) {
-          flagFindings.push({ filename: members[0].filename, tool: run.tool, text, anchor });
+      if (md) {
+        for (const h of techniqueHits(run.tool, md)) {
+          if (!techs.has(h.id)) techs.set(h.id, { id: h.id, name: h.name, tactics: new Set(), evidence: [], files: [], high: false });
+          const t = techs.get(h.id);
+          h.tactics.forEach(x => t.tactics.add(x));
+          const ev = `${h.tool}: ${h.source || ''}`.trim();
+          if (!t.evidence.includes(ev)) t.evidence.push(ev);
+          if (!t.files.some(f => f.anchor === anchor)) t.files.push({ name: fname, anchor });
+          if (h.confidence === 'high') t.high = true;
         }
       }
     }
   }
 
+  const topKeys = order.filter(k => !groups.get(k)[0].unpacked_from);
+  const single = topKeys.length === 1;
+  const offline = lookupsOffline();
+
+  // ── Header ──
   const lines = [
     `# MalChela Summary — ${target}`,
     '',
-    `Generated: ${new Date().toISOString()}`,
-    `Files analyzed: ${perFileResults.length}`,
+    `Generated: ${new Date().toISOString()}  `,
+    `Files analyzed: ${perFileResults.length}  `,
   ];
   if (extractionNote) lines.push(`_${extractionNote}_`);
   lines.push(
     '',
-    '## Triage Summary',
+    "_An evidence rollup in the order of Lenny Zeltser's Malware Analysis Report template. " +
+    "Sections that need an analyst's judgment (Executive Summary, family confidence, What We " +
+    "Don't Know, Infection Vector) are left for the written report. Links jump to that file's " +
+    'section below; network indicators are defanged (hxxp, `[.]`)._',
     '',
   );
-  if (order.length) {
-    lines.push(
-      "_Links below jump to that finding's section further down this report — " +
-      'they do not open the indicator itself. Network indicators are defanged ' +
-      '(hxxp, `[.]`)._'
-    );
-    lines.push('');
+
+  // ── Sample Snapshot ──
+  lines.push('## Sample Snapshot', '', '|  |  |', '|---|---|');
+  let ti;
+  if (tiRows.length) {
+    ti = tiRows.slice(0, 8).map(r => `${mdCell(r.fam)} — ${r.src}` + (r.det ? ` ${mdCell(r.det)}` : '')).join('; ');
+    if (tiRows.length > 8) ti += `; +${tiRows.length - 8} more`;
+  } else if (offline) ti = 'Not queried (offline mode)';
+  else if (toolsRun.tiquery) ti = 'No match in the queried sources';
+  else ti = 'Not queried';
+  lines.push(`| **Threat Intel Matches** | ${ti} |`);
+  if (flagged.length) {
+    lines.push(`| **VirusTotal** | ⚠ ${flagged.length} of ${order.length} file(s) flagged malicious: ` +
+      flagged.map(f => link(f.filename, f.anchor)).join(', ') + ' |');
+  } else if (offline) lines.push('| **VirusTotal** | Not queried (offline mode) |');
+  else if (toolsRun.tiquery || toolsRun.fileanalyzer) lines.push('| **VirusTotal** | No file flagged malicious |');
+  const platforms = [];
+  for (const k of topKeys) {
+    const pl = platformFor(groups.get(k)[0].filetype, fmtByKey.get(k));
+    if (pl && !platforms.includes(pl)) platforms.push(pl);
+  }
+  if (platforms.length) lines.push(`| **Target Platform** | ${mdCell(platforms.join(', '))} |`);
+  if (single) {
+    const p0 = groups.get(topKeys[0])[0];
+    lines.push(`| **Primary Artifact** | ${link(p0.filename, anchorByKey.get(topKeys[0]))}` + (p0.sha256 ? ` — SHA-256 \`${p0.sha256}\`` : '') + ' |');
+  }
+  const pk = packerFindings.map(p => `${link(p.filename, p.anchor)} — ${mdCell(p.verdict)}`)
+    .concat(obfuscationFindings.map(o => `\`${o.filename}\` — ${o.maxLayers} layers of base64 (mStrings)`));
+  lines.push(`| **Packing / Obfuscation** | ${pk.length ? pk.join('; ') : 'None detected'} |`);
+  if (revokedCerts.length) {
+    lines.push('| **Code Signing** | ⚠ certificate REVOKED (Apple OCSP): ' + revokedCerts.map(r => link(r.filename, r.anchor)).join(', ') + ' |');
   }
   if (order.length !== perFileResults.length) {
-    lines.push(
-      `- **${order.length} unique file(s)** across ${perFileResults.length} path(s) ` +
-      `(${perFileResults.length - order.length} duplicate instance(s) collapsed below)`
-    );
+    lines.push(`| **Files** | ${order.length} unique across ${perFileResults.length} paths (${perFileResults.length - order.length} duplicate instance(s) collapsed) |`);
   } else {
-    lines.push(`- **${order.length} file(s)** analyzed`);
-  }
-  if (flagged.length) {
-    lines.push(`- **⚠ ${flagged.length} flagged malicious** (VirusTotal): `
-      + flagged.map(({ filename, anchor }) => `[\`${filename}\`](#${anchor})`).join(', '));
-  } else {
-    lines.push('- No files flagged malicious by VirusTotal');
-  }
-  if (revokedCerts.length) {
-    lines.push(`- **⚠ ${revokedCerts.length} certificate(s) REVOKED** (Apple OCSP): `
-      + revokedCerts.map(({ filename, anchor }) => `[\`${filename}\`](#${anchor})`).join(', '));
-  }
-  if (malwareTags.length) {
-    lines.push('- **Malware tags** (tiquery): ' + malwareTags.map(t => `\`${t}\``).join(', '));
-  }
-  if (mitreTotal) {
-    const byTactic = Object.entries(mitreTactics).sort((a, b) => b[1] - a[1]);
-    const breakdown = byTactic.map(([t, c]) => `${t} (${c})`).join(', ');
-    lines.push(`- **${mitreTotal} MITRE ATT&CK finding(s)** (mstrings), by tactic: ${breakdown}`);
-  }
-  if (fsIocs.length) {
-    lines.push('- **Filesystem IOCs** (mstrings): ' + fsIocs.map(({ ioc, anchor }) => `[\`${ioc}\`](#${anchor})`).join(', '));
-  }
-  if (netIocs.length) {
-    lines.push('- **Network IOCs** (mstrings): ' + netIocs.map(({ ioc, anchor }) => `[\`${defang(ioc)}\`](#${anchor})`).join(', '));
-  }
-  if (obfuscationFindings.length) {
-    const detail = obfuscationFindings.map(({ filename, maxLayers }) => `\`${filename}\` (${maxLayers} layers)`).join(', ');
-    lines.push(`- **⚠ Multi-layer obfuscation detected** (mstrings): ${detail}`);
-  }
-  if (flagFindings.length) {
-    const flaggedFiles = new Set(flagFindings.map(f => f.filename)).size;
-    lines.push(`- **${flagFindings.length} flag(s)/indicator(s)** across ${flaggedFiles} file(s):`);
-    for (const { filename, tool, text, anchor } of flagFindings) {
-      lines.push(`  - [\`${filename}\`](#${anchor}) (${tool}): ${text}`);
-    }
-  }
-  for (const members of dupGroups) {
-    const names = members.map(m => `\`${m.filename}\``).join(', ');
-    lines.push(`- **Duplicate content:** ${names} share SHA256 \`${members[0].sha256}\``);
+    lines.push(`| **Files** | ${order.length} |`);
   }
   lines.push('');
+
+  // ── Component Inventory ──
+  lines.push('## Component Inventory', '', '| Role | File Name | File Type | Notes |', '|---|---|---|---|');
+  for (const key of order) {
+    const members = groups.get(key);
+    const pf = members[0];
+    const anchor = anchorByKey.get(key);
+    const role = pf.unpacked_from
+      ? 'Recovered payload' + (pf.unpack_source ? ` (${pf.unpack_source})` : '')
+      : (single ? 'Primary artifact' : 'Analyzed file');
+    const notes = [];
+    if (pf.unpacked_from) notes.push(`unpacked from \`${pf.unpacked_from}\``);
+    if (members.length > 1) notes.push('also found as ' + members.slice(1).map(m => `\`${m.filename}\``).join(', '));
+    const nflags = flagFindings.filter(f => f.anchor === anchor).length;
+    if (nflags) notes.push(`${nflags} tool flag(s)`);
+    lines.push(`| ${mdCell(role)} | ${link(pf.filename, anchor)} | ${mdCell(fmtByKey.get(key) || pf.filetype)} | ${mdCell(notes.join('; '))} |`);
+  }
+  lines.push('');
+
+  // ── Capabilities ──
+  lines.push(
+    '## Capabilities',
+    '',
+    '_ATT&CK techniques from mStrings rules, Unpack, and tool flags (`assets/flag_attack_map.yaml`). ' +
+    'These are rule hits: evidence to corroborate, not confirmed behavior. Hits from a bundler\'s ' +
+    'bootloader or runtime describe the wrapper, not the sample._',
+    '',
+    '- **MITRE ATT&CK matrix:** open this case in the MalChela PWA (Cases → ⊞ MITRE) for the interactive Enterprise matrix and an ATT&CK Navigator layer',
+  );
+  if (mitreTotal) lines.push(`- **${mitreTotal} MITRE ATT&CK rule hit(s)** (mstrings; ${mitreStrings} matched strings)`);
+  if (techs.size) {
+    const ref = attackReference();
+    const tacOrder = ref ? ref.tactics.map(t => t.shortname) : [];
+    const tacName = ref ? new Map(ref.tactics.map(t => [t.shortname, t.name])) : new Map();
+    const idx = (s) => { const i = tacOrder.indexOf(s); return i < 0 ? 99 : i; };
+    const rows = [...techs.values()].sort((a, b) =>
+      (Math.min(...[...a.tactics].map(idx), 99) - Math.min(...[...b.tactics].map(idx), 99)) || a.id.localeCompare(b.id));
+    lines.push('', '| Tactic | Technique | Evidence | Files |', '|---|---|---|---|');
+    for (const t of rows) {
+      const tacs = [...t.tactics].sort((a, b) => idx(a) - idx(b)).map(s => tacName.get(s) || s).join(', ');
+      const ev = t.evidence.slice(0, 3).join('; ') + (t.evidence.length > 3 ? `; +${t.evidence.length - 3} more` : '');
+      const low = t.high ? '' : ' _(low confidence)_';
+      lines.push(`| ${mdCell(tacs)} | ${t.id} ${mdCell(t.name)}${low} | ${mdCell(ev)} | ${t.files.map(f => link(f.name, f.anchor)).join(', ')} |`);
+    }
+  } else {
+    lines.push('', '_No ATT&CK techniques matched._');
+  }
+  lines.push('');
+
+  // ── Indicators of Compromise ──
+  lines.push(
+    '## Indicators of Compromise',
+    '',
+    '_Strings the tools extracted that match indicator patterns. Before listing one in a report, ' +
+    'confirm the sample uses it: strings from packed, encrypted, or anti-analysis data (a sandbox ' +
+    'IP blocklist, for example) are not indicators on their own. Public DNS resolvers are listed ' +
+    'separately in each mStrings report and are not C2._',
+    '',
+    '| Type | Indicator | Context |',
+    '|---|---|---|',
+  );
+  for (const key of order) {
+    const pf = groups.get(key)[0];
+    if (!pf.sha256) continue;
+    const role = pf.unpacked_from ? 'recovered payload' : (single ? 'primary artifact' : 'analyzed file');
+    lines.push(`| Hash Values | \`${pf.sha256}\` | ${role} — ${link(pf.filename, anchorByKey.get(key))}` + (pf.md5 ? `; MD5 \`${pf.md5}\`` : '') + ' |');
+  }
+  const ips = [], urls = [], domains = [];
+  for (const { ioc, anchor, fname } of netIocs) {
+    const d = defang(ioc);
+    if (IPV4_RE.test(ioc.trim())) ips.push({ ioc: d, anchor, fname });
+    else if (ioc.includes('://')) urls.push({ ioc: d, anchor, fname });
+    else domains.push({ ioc: d, anchor, fname });
+  }
+  const urlHosts = [];
+  for (const u of urls) {
+    const host = u.ioc.split('://').pop().split('/')[0].split(':')[0];
+    if (IPV4_RE.test(host)) continue; // an IP host is already under IP Addresses
+    if (host && !urlHosts.some(h => h.ioc === host) && !domains.some(d => d.ioc === host)) urlHosts.push({ ioc: host, anchor: u.anchor, fname: u.fname });
+  }
+  const iocRows = (kind, items, note = '') => {
+    items.some((it, i) => {
+      if (i >= SUMMARY_ROW_CAP) {
+        lines.push(`| ${kind} | _+${items.length - SUMMARY_ROW_CAP} more_ | see the mStrings reports below |`);
+        return true;
+      }
+      const rep = ipReputation && ipReputation.ips.get(it.ioc.replace(/\[\.\]/g, '.').replace(/\[:\]/g, ':'));
+      const repText = rep && rep.summary ? `; ${rep.flagged ? '⚠ ' : ''}${mdCell(rep.summary)}` : '';
+      lines.push(`| ${kind} | \`${mdCell(it.ioc)}\` | mStrings — ${link(it.fname, it.anchor)}${note ? `; ${note}` : ''}${repText} |`);
+      return false;
+    });
+  };
+  iocRows('IP Addresses', ips);
+  for (const l of ipLists) {
+    const shown = l.ips.slice(0, 3).map(x => `\`${mdCell(x)}\``).join(', ') + (l.ips.length > 3 ? ', …' : '');
+    lines.push(`| IP Address List | ${l.count} addresses stored together at ${l.range}: ${shown} | ` +
+      `possible anti-analysis blocklist or C2 pool, not counted as IP indicators — mStrings — ${link(l.fname, l.anchor)} |`);
+  }
+  iocRows('Domain Names', domains.concat(urlHosts));
+  iocRows('Network Artifacts', urls, 'URL');
+  iocRows('Host Artifacts', fsIocs);
+  if (!(ips.length || urls.length || domains.length || ipLists.length)) lines.push('| Network | _none extracted_ | |');
+  lines.push('');
+
+  // ── Analysis Details ──
+  lines.push(
+    '## Analysis Details',
+    '',
+    '_Static analysis only: MalChela never executes a sample, so behavioral, memory, and dynamic ' +
+    "code analysis were not performed. Every tool's full output follows, one section per file " +
+    '(Static Properties Analysis)._',
+    '',
+  );
+  if (flagFindings.length) {
+    lines.push(`**Tool flags:** ${flagFindings.length} across ${new Set(flagFindings.map(f => f.filename)).size} file(s)`, '');
+    for (const f of flagFindings) lines.push(`- ${link(f.filename, f.anchor)} (${f.tool}): ${f.text}`);
+    lines.push('');
+  }
+  for (const members of dupGroups) {
+    lines.push(`- **Duplicate content:** ${members.map(m => `\`${m.filename}\``).join(', ')} share SHA256 \`${members[0].sha256}\``);
+  }
+  if (dupGroups.length) lines.push('');
 
   for (const key of order) {
     const members = groups.get(key);
     const primary = members[0];
     lines.push(`<a id="${anchorByKey.get(key)}"></a>`, `## ${primary.filename}`, '');
     if (members.length > 1) {
-      const otherNames = members.slice(1).map(m => `\`${m.filename}\``).join(', ');
-      lines.push(`- **Also found as:** ${otherNames} — identical content, tool output shown once`);
+      lines.push(`- **Also found as:** ${members.slice(1).map(m => `\`${m.filename}\``).join(', ')} — identical content, tool output shown once`);
     }
-    lines.push(`- **Path:** \`${primary.filepath}\``);
-    lines.push(`- **Type:** ${primary.filetype}`);
+    if (primary.unpacked_from) {
+      lines.push(`- **Unpacked from:** \`${primary.unpacked_from}\`` + (primary.unpack_source ? ` (${primary.unpack_source})` : ''));
+    }
+    lines.push(`- **Path:** \`${primary.filepath}\``, `- **Type:** ${primary.filetype}`);
     if (primary.sha256) lines.push(`- **SHA256:** \`${primary.sha256}\``);
     if (primary.md5) lines.push(`- **MD5:** \`${primary.md5}\``);
     lines.push('');
@@ -1040,17 +1653,28 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote) {
     }
     for (const run of primary.tool_runs) {
       lines.push(`### ${run.success ? '✓' : '✕'} ${run.label} (\`${run.tool}\`)`, '');
-      if (run.success && run.markdown) {
-        lines.push(demoteMarkdownHeadings(run.markdown), '');
-      } else if (run.success) {
-        // Fallback for the rare case the .md read-back came up empty (tool
-        // didn't actually write one) — raw stdout, code-fenced.
-        lines.push('```', run.output || '(no output)', '```', '');
-      } else {
-        lines.push(`**Error:** ${run.error || 'Tool run failed.'}`, '');
-      }
+      if (run.success && run.markdown) lines.push(demoteMarkdownHeadings(run.markdown), '');
+      else if (run.success) lines.push('```', run.output || '(no output)', '```', '');
+      else lines.push(`**Error:** ${run.error || 'Tool run failed.'}`, '');
     }
   }
+
+  // ── Appendix: Analysis Environment ──
+  const ran = Object.entries(toolsRun).filter(([t]) => t).sort().map(([t, n]) => `${t} (${n})`).join(', ');
+  lines.push(
+    '## Appendix: Analysis Environment',
+    '',
+    '|  |  |',
+    '|---|---|',
+    `| **Toolkit** | MalChela v${MALCHELA_VERSION} — Analyze (MCP plugin) |`,
+    '| **Analysis Depth** | Static only — samples were never executed or emulated |',
+    `| **Tools Run** | ${mdCell(ran) || 'none'} |`,
+    `| **Network Lookups** | ${offline ? 'Off (offline mode)' : 'Threat intel and NSRL lookups by hash; samples are never uploaded'} |`,
+    `| **IP Reputation** | ${ipRepNote(ipReputation)} |`,
+    `| **Host** | ${mdCell(`${process.platform} ${process.arch}`)} |`,
+    `| **Generated** | ${new Date().toISOString().slice(0, 19)} |`,
+    '',
+  );
   return lines.join('\n');
 }
 
@@ -1251,6 +1875,75 @@ function expandNestedContainers(scanResults) {
   return notes;
 }
 
+// Run unpack once against every executable fileminer suggested it for, and
+// fold each recovered payload back into scanResults as its own file so the
+// per-file dispatch analyses the real payload, not just the packer stub.
+// unpack recurses internally (depth/size capped there), so payloads it
+// returns are not re-unpacked. Only runs that found something are kept
+// (--only-if-found keeps clean binaries from leaving case reports). Mirrors
+// server/malchela_server.py's _expand_packed_executables().
+const UNPACK_MAX_CANDIDATES = 25;
+// Tools still run on a universal binary after it is split into slices (hash
+// lookups describe the distributed file; content tools run on the slices).
+const CONTAINER_TOOLS = new Set(['tiquery', 'nsrlquery']);
+
+function expandPackedExecutables(scanResults) {
+  const notes = [];
+  const runs = new Map(); // original filepath -> Unpack tool_run
+  const binary = `${RELEASE_DIR}/unpack`;
+  if (!existsSync(binary)) return { notes, runs };
+  const candidates = scanResults
+    .filter(r => (r.suggested_tools || []).some(p => Array.isArray(p) && p[1] === 'unpack'))
+    .slice(0, UNPACK_MAX_CANDIDATES);
+
+  for (const res of candidates) {
+    const cmdArgs = [res.filepath, '--json', '-o', '-m', '--only-if-found'];
+    if (currentCase) cmdArgs.push('--case', currentCase);
+    let summary;
+    try {
+      const out = execFileSync(binary, cmdArgs, {
+        cwd: MALCHELA_DIR, encoding: 'utf8', timeout: UNPACK_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER,
+      });
+      summary = JSON.parse(out);
+    } catch {
+      continue;
+    }
+    if (!summary.success || !summary.significant) continue;
+
+    runs.set(res.filepath, {
+      label: 'Unpack', tool: 'unpack', success: true,
+      output: summary.verdict || '', error: '', markdown: readToolMarkdown('unpack', currentCase, res.filepath),
+      // Universal Mach-O split into slices: the slices get the full tool run,
+      // the container only its hash lookups (see the dispatch loop).
+      splitContainer: ((summary.tree || {}).verdicts || []).some(v => v.id === 'fat_macho'),
+    });
+    notes.push(`Unpacked \`${res.filename}\`: ${summary.verdict}.`);
+
+    for (const p of summary.payloads || []) {
+      if (!p.path || !existsSync(p.path)) continue;
+      const fmArgs = [p.path, '--no-prompt'];
+      if (currentCase) fmArgs.push('--case', currentCase);
+      let fmData;
+      try {
+        fmData = JSON.parse(execFileSync(`${RELEASE_DIR}/fileminer`, fmArgs, {
+          cwd: MALCHELA_DIR, encoding: 'utf8', timeout: FILEMINER_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER,
+        }));
+      } catch {
+        continue;
+      }
+      const resolved = realpathSync(p.path);
+      for (const nr of fmData.results || []) {
+        if (pathsMatch(nr.filepath, resolved)) {
+          nr.unpacked_from = res.filename;
+          nr.unpack_source = p.source || '';
+          scanResults.push(nr);
+        }
+      }
+    }
+  }
+  return { notes, runs };
+}
+
 function runAnalyze(rawTargetPath) {
   if (!existsSync(rawTargetPath)) {
     throw new Error(`Path does not exist: ${rawTargetPath}`);
@@ -1311,6 +2004,11 @@ function runAnalyze(rawTargetPath) {
     }
   }
 
+  const { notes: unpackNotes, runs: unpackRuns } = expandPackedExecutables(scanResults);
+  if (unpackNotes.length) {
+    finalExtractionNote = [finalExtractionNote, ...unpackNotes].filter(Boolean).join(' ');
+  }
+
   if (scanResults.length > ANALYZE_MAX_FILES) {
     // Too many files to auto-run every suggested tool on every one — routine
     // for a dpp-extracted PKG payload (a trojanized installer commonly
@@ -1333,9 +2031,12 @@ function runAnalyze(rawTargetPath) {
     const suggested = res.suggested_tools || [];
 
     const toolRuns = [];
+    if (unpackRuns.has(filepath)) toolRuns.push(unpackRuns.get(filepath));
     for (const pair of suggested) {
       if (!Array.isArray(pair) || pair.length !== 2) continue;
       const [label, slug] = pair;
+      if (slug === 'unpack') continue; // already run (once, recursively) by expandPackedExecutables
+      if (unpackRuns.get(filepath)?.splitContainer && !CONTAINER_TOOLS.has(slug)) continue; // analysed per-slice
 
       const arg = slug === 'tiquery' ? sha256 : slug === 'nsrlquery' ? md5 : filepath;
       if (!arg) {
@@ -1367,7 +2068,7 @@ function runAnalyze(rawTargetPath) {
         const output = execFileSync(binary, cmdArgs, {
           cwd: MALCHELA_DIR, encoding: 'utf8', timeout: ANALYZE_TIMEOUT_MS, maxBuffer: ANALYZE_MAX_BUFFER,
         }).trim();
-        const markdown = readToolMarkdown(slug, currentCase);
+        const markdown = readToolMarkdown(slug, currentCase, filepath);
         toolRuns.push({ label, tool: slug, success: true, output, error: '', markdown });
       } catch (err) {
         const detail = err.stdout
@@ -1380,10 +2081,12 @@ function runAnalyze(rawTargetPath) {
     perFileResults.push({
       filename: res.filename || '', filepath, filetype: res.filetype || '',
       sha256, md5, tool_runs: toolRuns,
+      unpacked_from: res.unpacked_from || '', unpack_source: res.unpack_source || '',
     });
   }
 
-  const rollup = buildAnalyzeRollup(targetPath, perFileResults, finalExtractionNote);
+  const ipReputation = lookupIpReputation(perFileResults);
+  const rollup = buildAnalyzeRollup(targetPath, perFileResults, finalExtractionNote, ipReputation);
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '_');
   // The "analyze" subfolder matters, not just cosmetically: registerCaseOutput
   // below records the entry's path as "analyze/<filename>", so the file has
@@ -1416,7 +2119,7 @@ function runAnalyze(rawTargetPath) {
 
 // ── Server ────────────────────────────────────────────────────────────────────
 const server = new Server(
-  { name: 'malchela', version: '1.0.0' },
+  { name: 'malchela', version: MALCHELA_VERSION },
   { capabilities: { tools: {} } }
 );
 
@@ -1460,6 +2163,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
+  // The report template needs no case.
+  if (name === 'report_template') {
+    try {
+      return { content: [{ type: 'text', text: reportTemplateText() }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Report template not found in ${REPORT_TEMPLATE_DIR}: ${err.message}` }], isError: true };
+    }
+  }
+
   // First analysis tool call — no case selected yet, prompt for selection
   if (currentCase === null) {
     const casesDir = `${MALCHELA_DIR}/saved_output/cases`;
@@ -1487,6 +2199,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
+  if (name === 'save_report') {
+    try {
+      const path = saveReport(args || {});
+      return { content: [{ type: 'text', text: `Report saved to ${path} and registered in case "${currentCase}".` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error saving report: ${err.message}` }], isError: true };
+    }
+  }
+
   // Handle analyze — custom orchestration (fileminer scan + auto-dispatch +
   // rollup), not a single binary invocation, so it bypasses buildCommand.
   if (name === 'analyze') {
@@ -1506,7 +2227,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const result = execFileSync(bin, cmdArgs, {
       cwd: MALCHELA_DIR,
       encoding: 'utf8',
-      timeout: TIMEOUT_MS,
+      timeout: name === 'unpack' ? UNPACK_TIMEOUT_MS : TIMEOUT_MS,
       env: {
         ...process.env,
       },

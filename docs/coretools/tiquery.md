@@ -1,6 +1,6 @@
-Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash or URL is known, what family/category it belongs to, and how widely it has been detected.
+Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool. It queries multiple threat intelligence platforms in parallel and presents results in a unified table — giving analysts a fast, consolidated view of whether a hash, IP address, or URL is known, what family/category it belongs to, and how widely it has been detected.
 
-`tiquery` accepts a **file hash** (MD5/SHA1/SHA256), an **http/https URL**, or a **QR code image** as input and automatically routes the query to the appropriate set of sources. In the web interface, the Single Hash tab also includes a **Browse** button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).
+`tiquery` accepts a **file hash** (MD5/SHA1/SHA256), an **IP address** (IPv4 or IPv6, defanged forms like `1[.]2[.]3[.]4` accepted), an **http/https URL**, or a **QR code image** as input and automatically routes the query to the appropriate set of sources. In the web interface, the Single Hash tab also includes a **Browse** button — pick any file and the SHA256 is computed and submitted automatically (the file itself is never uploaded, only its hash).
 
 ![TIQuery Hash Lookup](../images/tiquery_hash.png)
 
@@ -34,7 +34,17 @@ Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool
 | urlscan | urlscan.io              | Optional (raises rate limits) |
 | gsb     | Google Safe Browsing    | Yes          |
 
-All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL, only URL-capable sources are queried. Pass `--sources` to restrict the query to specific sources.
+### Supported Sources — IP Lookups
+
+| ID  | Source           | Key Required | What it adds |
+|-----|------------------|--------------|--------------|
+| vt  | VirusTotal (IP API) | Yes | Engine detections, community reputation, AS owner, and country |
+| otx | AlienVault OTX   | Yes          | Pulse count, AS, and country |
+| gn  | GreyNoise (Community API) | Yes (free key works) | Whether the IP is a known internet scanner ("noise") or a known benign business service ("RIOT": cloud, CDN, public DNS), and GreyNoise's classification.  IPv4 only |
+
+Private, loopback, link-local, multicast, documentation, and other non-routable addresses are refused before any source is queried, so they never spend rate-limited quota.  A free VirusTotal key allows 4 lookups a minute and 500 a day.
+
+All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL or an IP address, only the sources for that input type are queried. Pass `--sources` to restrict the query to specific sources.
 
 ---
 
@@ -46,6 +56,10 @@ tiquery <hash>
 
 # URL lookup — queries VirusTotal (URL), urlscan.io, and Google Safe Browsing
 tiquery https://example.com/path
+
+# IP lookup — queries VirusTotal (IP), AlienVault OTX, and GreyNoise
+tiquery 185.220.101.4
+tiquery 185[.]220[.]101[.]4
 
 # Restrict to specific sources
 tiquery <hash> --sources mb,vt,md,ha,fs
@@ -139,6 +153,7 @@ api/ms-api.txt        # Malshare
 api/tr-api.txt        # Triage
 api/url-api.txt       # urlscan.io (optional — raises rate limits)
 api/gsb-api.txt       # Google Safe Browsing
+api/gn-api.txt        # GreyNoise (IP lookups; a free Community key works)
 ```
 
 Keys can be managed via the **API Keys** panel in the MalChela web interface (Configuration menu → API Keys) or by placing the key directly in the appropriate file.
@@ -161,11 +176,12 @@ Bulk lookup processes a `.txt` or `.csv` file containing hashes (one per line, o
 
 ### Web Interface Input Modes
 
-The MalChela web interface's Threat Intel Query panel offers four input modes, selected via tabs at the top of the panel:
+The MalChela web interface's Threat Intel Query panel offers five input modes, selected via tabs at the top of the panel:
 
 - **Single Hash** — paste a hash or click **Browse…** to pick a file; the web interface computes the file's SHA256 and populates the hash field automatically.
 - **Bulk Lookup** — as described above, for batches of hashes in a file.
 - **URL** — paste an `http://` or `https://` URL to query VirusTotal, urlscan.io, and Google Safe Browsing in parallel.
+- **IP** — paste an IPv4 or IPv6 address (defanged is fine: `1.2.3[.]4`) to query VirusTotal, AlienVault OTX, and GreyNoise.  Because an IP being *known* to a source isn't a verdict (8.8.8.8 is in every one), each row shows what that source concluded instead of FOUND: **FLAGGED** (VirusTotal engines or a GreyNoise malicious scanner), **IN *N* PULSES** (OTX: discussed, which is context), or **CLEAN** / **KNOWN BENIGN** (no engine detections, or a GreyNoise RIOT business service such as a CDN or public DNS).
 - **QR Code** — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the web interface decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.
 
-In URL and QR modes, source checkboxes auto-enable based on which API keys are configured, exactly as in hash mode.
+In URL, IP, and QR modes, source checkboxes auto-enable based on which API keys are configured, exactly as in hash mode.

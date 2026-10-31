@@ -10,7 +10,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, Read, Write};
 use std::path::Path;
 use walkdir::WalkDir;
-use yara::{Compiler, Rules};
+use yara_backend::YaraBackend as Rules;
 use sha2::{Digest, Sha256};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Instant;
@@ -46,10 +46,22 @@ rule zip_header {
 
 /// Compiles YARA rules from a string.
 fn compile_yara_rules() -> Result<Rules, Box<dyn std::error::Error>> {
-    let compiler = Compiler::new()?;
-    let compiler = compiler.add_rules_str(YARA_RULES)?;
-    let rules = compiler.compile_rules()?;
-    Ok(rules)
+    Ok(Rules::from_inline_sources(&[("xmzhash", YARA_RULES)])?)
+}
+
+/// Every rule in this tool tests a magic number `at 0`, so scanning a file's
+/// first 4 KiB is equivalent to scanning all of it — and much faster, with no
+/// need to read multi-GB files (yara-backend caps full scans at 256 MiB).
+fn header_matches(rules: &Rules, path: &Path, timeout_secs: u64) -> Result<Vec<String>, String> {
+    use std::io::Read as _;
+    let mut head = Vec::with_capacity(4096);
+    std::fs::File::open(path)
+        .and_then(|f| f.take(4096).read_to_end(&mut head))
+        .map_err(|e| e.to_string())?;
+    rules
+        .scan_bytes(&head, std::time::Duration::from_secs(timeout_secs))
+        .map(|r| r.rule_names_sorted())
+        .map_err(|e| e.to_string())
 }
 
 fn calculate_md5(file_path: &Path) -> Option<String> {
@@ -93,7 +105,7 @@ fn calculate_sha256(file_path: &Path) -> Option<String> {
 }
 
 /// Recursively scans a directory for files that do not match YARA rules and calculates their SHA256 hashes.
-fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, algorithms: &[String]) -> io::Result<(usize, usize, Vec<String>)> {
+fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path, algorithms: &[String]) -> io::Result<(usize, usize, Vec<String>)> {
     let start_time = Instant::now();
 
     if let Some(parent) = output_file.parent() {
@@ -154,15 +166,7 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
 
             // Removed verbose "Scanning: ..." output
 
-            let rules = match compile_yara_rules() {
-                Ok(r) => r,
-                Err(e) => {
-                    println!("[THREAD ERROR] Failed to compile YARA rules: {}", e);
-                    continue;
-                }
-            };
-
-            match rules.scan_file(path, 15) {
+            match header_matches(rules, path, 15) {
                 Ok(matches) => {
                     if matches.is_empty() {
                         if let Ok(mut count) = file_count.lock() {
@@ -198,7 +202,7 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
                     }
                 }
                 Err(e) => {
-                    if e.to_string().contains("Timeouted") {
+                    if e.contains("timed out") {
                         if let Ok(mut log) = timeout_log.lock() {
                             writeln!(log, "[TIMEOUT] {:?}: {}", path, e).ok();
                         }
@@ -217,16 +221,7 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
 
             // Removed verbose "Scanning: ..." output
 
-            // Compile fresh rules per thread
-            let rules = match compile_yara_rules() {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("[THREAD ERROR] Failed to compile YARA rules: {}", e);
-                    return;
-                }
-            };
-
-            match rules.scan_file(path, 15) {
+            match header_matches(rules, path, 15) {
                 Ok(matches) => {
                     if matches.is_empty() {
                         if let Ok(mut count) = file_count.lock() {
@@ -262,7 +257,7 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
                     }
                 }
                 Err(e) => {
-                    if e.to_string().contains("Timeouted") {
+                    if e.contains("timed out") {
                         if let Ok(mut log) = timeout_log.lock() {
                             writeln!(log, "[TIMEOUT] {:?}: {}", path, e).ok();
                         }

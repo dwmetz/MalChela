@@ -1,0 +1,61 @@
+# Maps tool flags/indicators (not mStrings rules) to MITRE ATT&CK techniques
+# for the Analyze MITRE matrix and Navigator layer.  Read by both the PWA
+# server (server/malchela_server.py) and the MCP plugin (.claude-plugin/mcp/index.js).
+#
+# Each entry: tool, a case-insensitive regex matched against the flag text,
+# the technique ID, and a confidence:
+#   high — the flag is direct evidence of the technique
+#   low  — consistent with the technique but common in benign software too
+#          (shown with a dashed border in the matrix, scored lower in the layer)
+#
+# Deliberately NOT mapped (they describe a weakness or a config, not adversary
+# behavior, and would inflate the matrix): RPATH entries, NSAllowsArbitraryLoads,
+# custom URL schemes, CFBundleSignature '????', deprecated crypto libraries,
+# missing _CodeSignature/, no Team ID, get-task-allow.
+#
+# Technique names and tactics are looked up from assets/mitre_techniques.json,
+# so only the ID is needed here.  Keep IDs valid for the bundled ATT&CK version.
+
+- tool: macho_info
+  match: "High entropy .* possible packed/encrypted"
+  technique: T1027.002
+  confidence: low
+- tool: macho_info
+  match: "Symbol table stripped"
+  technique: T1027.008
+  confidence: low
+- tool: macho_info
+  match: "__PAGEZERO is zero-sized"
+  technique: T1068
+  confidence: high
+- tool: macho_info
+  match: "Dylib triad"
+  technique: T1071
+  confidence: low
+- tool: macho_info
+  match: "Imports (system|popen|exec|posix_spawn)"
+  technique: T1059.004
+  confidence: low
+
+- tool: codesign_check
+  match: "Certificate REVOKED"
+  technique: T1553.002
+  confidence: high
+- tool: codesign_check
+  match: "Ad-hoc signature|CS_ADHOC"
+  technique: T1553.002
+  confidence: low
+
+- tool: plist_analyzer
+  match: "LSUIElement=true|LSBackgroundOnly=true"
+  technique: T1564.003
+  confidence: low
+- tool: plist_analyzer
+  match: "LSEnvironment present"
+  technique: T1574.006
+  confidence: high
+
+- tool: fileanalyzer
+  match: "Packed \\| Possibly"
+  technique: T1027.002
+  confidence: low

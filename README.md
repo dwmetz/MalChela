@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
-  MalChela v4.3.1
+  MalChela v4.4.0
  </h1>
   <h4>
       A YARA &amp; Malware Analysis Toolkit written in Rust.
@@ -51,7 +51,9 @@
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
 | nsrlquery           | Queries an MD5 hash against the NSRL database to determine if it's known-good |
 | strings_to_yara     | Prompts for metadata and a string list to generate a YARA rule |
+| Unpack              | Detects packers, protectors, installers, and bundlers in PE/ELF/Mach-O and statically recovers the payload — UPX (including tampered headers), PyInstaller, .NET/Costura resources, NSIS, Inno Setup, fat Mach-O, overlays, and embedded executables — recursing into each layer. Never executes the sample |
 | xmzhash             | Recursively hashes files that are *not* MZ, ZIP, or PDF — ideal for non-Windows malware corpus |
+| YARA Scan           | Scans a file or folder with YARA rules on the embedded YARA-X engine. Flags and output follow VirusTotal's `yr scan` |
 
 **Mac Analysis** *(v4.2+)*
 
@@ -71,21 +73,19 @@ Code Sign Check, Mach-O Info, mStrings, and Plist Analyzer auto-resolve a `.app`
 
 <h3>Dependencies:</h3>
 
+MalChela's YARA engine is [YARA-X](https://virustotal.github.io/yara-x/), compiled in as a Rust crate, so there is no system YARA library to install or point the build at.  The build only needs a C compiler and `make`, for the few bundled C libraries (ssdeep, bzip2, LZFSE, and xz).
+
 Linux
 ```
-sudo apt install openssl libssl-dev clang yara libyara-dev libjansson-dev pkg-config build-essential libglib2.0-dev libgtk-3-dev
+sudo apt install build-essential pkg-config
 ```
 
 Mac
 ```
-brew install openssl yara pkg-config gtk+3 glib
+xcode-select --install
 ```
-Note: YARA 4.2> required.
-Before building, point the build to to Homebrew's YARA prefix
-```
-export YARA_LIBRARY_PATH=$(brew --prefix yara)/lib
-export BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix yara)/include"
-```
+
+Third-party integrations (TShark, Volatility 3, the YARA-X CLI, and others in `tools.yaml`) are optional and installed separately.
 
 ---
 
@@ -164,7 +164,7 @@ Point Analyze at a file, folder, or `.app` bundle and it classifies everything w
 - Available in both the PWA and as an `analyze` tool in the MCP server, so AI agents can run the same triage workflow directly.
 - **Save to Case** is opt-in, matching every other tool panel's checkbox-and-dropdown pattern.
 - **Concise Output** (on by default) renders the rollup inline instead of the full expanded per-tool output.
-- Every run produces a `malchela_summary_<timestamp>.md` rollup report, saved alongside the individual tool reports it summarizes. It leads with a Triage Summary banner: file counts (with automatic duplicate-content grouping by SHA256), flagged-malicious verdicts cross-referenced from FileAnalyzer and Threat Intel Query, malware family/tag names, MITRE ATT&CK findings by tactic, filesystem/network IOCs, and structural flags/indicators from the Mac Analysis tools.
+- Every run produces a `malchela_summary_<timestamp>.md` rollup report, saved alongside the individual tool reports it summarizes. It follows the evidence sections of Lenny Zeltser's Malware Analysis Report template: a Sample Snapshot (threat intel families, VirusTotal verdicts, platform, packing), a Component Inventory of every recovered payload, Capabilities (ATT&CK techniques with the rules behind them), tiered Indicators of Compromise, every tool's full output per file, and the analysis environment.
 
 ---
 
@@ -242,7 +242,7 @@ These enhancements make working with memory images, PCAPs, and YARA rules more s
 
 Successfully tested on macOS (Apple Silicon), Ubuntu, and Raspberry Pi.  
 
-YARA version 4.2 or greater is required.
+No system YARA install is required: as of v4.4, every tool uses the embedded YARA-X engine.
 
 **Windows:** As of October 2025, both MalChela CLI and GUI operate on Windows under WSL2. MalChelaGUI improvements for WSL included in v3.1.1.
 

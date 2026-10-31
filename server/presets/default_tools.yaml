@@ -76,6 +76,13 @@ tools:
   category: "File Analysis"
   exec_type: cargo
 
+- name: Unpack
+  description: "Detects packers and statically unpacks UPX (incl. tampered), PyInstaller, .NET/Costura, NSIS, Inno Setup, fat Mach-O, overlays"
+  command: ["unpack"]
+  input_type: file
+  category: "Utilities"
+  exec_type: cargo
+
 - name: Hash It
   description: "Generates multiple hashes for a single file"
   command: ["hashit"]

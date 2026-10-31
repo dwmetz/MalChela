@@ -15,7 +15,7 @@ plugins:
   - search
   - with-pdf:
       output_path: "pdf/user-guide.pdf"
-      cover_subtitle: "4.3"
+      cover_subtitle: "4.4"
       cover_logo: "images/malchela_steampunk.png"
       exclude_pages:
         - "^$"
@@ -50,15 +50,15 @@ nav:
       - MZHash: coretools/mzhash.md
       - NSRLQuery: coretools/nsrlquery.md
       - StringsToYARA: coretools/strings_to_yara.md
+      - Unpack: coretools/unpack.md
       - XMZHash: coretools/xmzhash.md
+      - YARA Scan: coretools/yara_scan.md
 
   - Mac Analysis:
       - Overview: mac/index.md
-      - Analyze: coretools/analyze.md
       - Code Sign Check: mac/codesign_check.md
       - dppExtract: mac/dpp_extract.md
       - Mach-O Info: mac/macho_info.md
-      - MStrings: coretools/mstrings.md
       - Plist Analyzer: mac/plist_analyzer.md
 
   - Third-Party Tools:

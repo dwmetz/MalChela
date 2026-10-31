@@ -31,7 +31,7 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use yara::{Rules, Compiler};
+use yara_backend::YaraBackend as Rules;
 use common_config::get_output_dir;
 use common_ui::styled_line;
 
@@ -51,10 +51,22 @@ const TARGET_EXTENSIONS: &[&str] = &[
 ];
 
 fn compile_yara_rules() -> Result<Rules, Box<dyn std::error::Error>> {
-    let compiler = Compiler::new()?;
-    let compiler = compiler.add_rules_str(YARA_RULES)?;
-    let rules = compiler.compile_rules()?;
-    Ok(rules)
+    Ok(Rules::from_inline_sources(&[("mismatchminer", YARA_RULES)])?)
+}
+
+/// Every rule in this tool tests a magic number `at 0`, so scanning a file's
+/// first 4 KiB is equivalent to scanning all of it — and much faster, with no
+/// need to read multi-GB files (yara-backend caps full scans at 256 MiB).
+fn header_matches(rules: &Rules, path: &Path, timeout_secs: u64) -> Result<Vec<String>, String> {
+    use std::io::Read as _;
+    let mut head = Vec::with_capacity(4096);
+    std::fs::File::open(path)
+        .and_then(|f| f.take(4096).read_to_end(&mut head))
+        .map_err(|e| e.to_string())?;
+    rules
+        .scan_bytes(&head, std::time::Duration::from_secs(timeout_secs))
+        .map(|r| r.rule_names_sorted())
+        .map_err(|e| e.to_string())
 }
 
 fn calculate_sha256(file_path: &Path) -> Option<String> {
@@ -88,7 +100,6 @@ fn scan_and_hash_matches(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut match_count = 0;
     let mut output: Option<File> = None;
-    let mut scanner = rules.scanner()?;
 
     let mut matches: Vec<(String, String, String)> = Vec::new();
     let save_output = output_file.is_some();
@@ -101,7 +112,7 @@ fn scan_and_hash_matches(
         let path = entry.path();
 
         if path.is_file() && is_target_extension(path) {
-            match scanner.scan_file(path) {
+            match header_matches(rules, path, 10) {
                 Ok(yara_matches) => {
                     if !yara_matches.is_empty() {
                         if let Some(sha256_hash) = calculate_sha256(path) {

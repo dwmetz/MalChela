@@ -10,9 +10,19 @@ Alongside the Sigma-style detection matches, mStrings pulls out well-formed **Po
 
 **Network IOCs are shown defanged** (`http://` → `hxxp://`, every `.` → `[.]`) everywhere mStrings displays them — CLI output, saved reports, and the [Analyze](analyze.md) rollup that embeds them. This is deliberate: a raw URL rendered as clickable-looking text is the wrong thing to put in front of an analyst repeatedly. If you need the real string back — to build a YARA rule, for example — [Strings to YARA](strings_to_yara.md) automatically refangs any defanged line before it becomes a rule.
 
+### IP Address Lists
+
+When ten or more IP addresses are stored together, each as a string of its own, within a few hundred bytes of each other (a tuple in a Python stealer, a table in a binary's data section), mStrings reports them as one **IP Address List** instead of as individual Network IOCs.  Such a run is most often an anti-analysis blocklist of sandbox and analysis-host IPs the sample checks for before it runs (Luna Grabber carries 59), and sometimes a pool of C2 servers.  Either way, it isn't 59 separate C2 indicators.  The list keeps every address (defanged) and its offset range, so you can look the addresses up or check the code around them.  An IP inside a longer string, such as a command line, always stays a standalone Network IOC.
+
+Public DNS resolvers (Google, Cloudflare, Quad9, and others) are also listed separately, as **Public DNS Resolvers Referenced (not C2)**.
+
 ### Multi-Layer Obfuscation
 
 mStrings recursively decodes base64 content it finds — including base64 nested inside base64, up to 12 layers deep — and re-runs detection against whatever it unwraps to. When a detection only fires after peeling **more than one** layer, that's flagged directly on the finding (`⚠ found after N layers of base64 decoding` in the summary table, `Base64×N` in the detail table's encoding column) — a single decode is routine, but deliberate re-encoding multiple times over is itself an evasion signal worth noting.
+
+### Encoded String Tables
+
+Some malware keeps its entire payload as hundreds or thousands of encrypted, base64-alphabet strings and decodes them at runtime — the AMOS stealer stores its whole AppleScript this way, about 1,900 strings in one section.  Per-string matches are noise at that scale, and the real behavior never appears as plaintext, so no other rule fires.  When the large-base64-blob rule matches 25 or more distinct strings, mStrings adds one **Encoded string table** row instead: how many strings, their total size, their share of the file, and the offset range they span, mapped to T1027.013 (Encrypted/Encoded File).  Treat it as a pointer to dynamic analysis or a family-specific decoder rather than a dead end.
 
 ![MStrings](../images/mstrings.png)
 

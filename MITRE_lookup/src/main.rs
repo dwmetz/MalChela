@@ -60,6 +60,140 @@ struct Technique {
     malware: Vec<RelatedItem>,
     tools: Vec<RelatedItem>,
     intrusion_sets: Vec<RelatedItem>,
+    // Added with the ATT&CK v20 dataset (scripts/build_mitre_techniques.py);
+    // defaulted so an older mitre_techniques.json still loads.
+    #[serde(default)]
+    deprecated: bool,
+    #[serde(default)]
+    revoked_by: Option<String>,
+    #[serde(default)]
+    attack_version: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct TacticTechnique {
+    id: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct Tactic {
+    id: String,
+    name: String,
+    shortname: String,
+    description: String,
+    techniques: Vec<TacticTechnique>,
+    #[serde(default)]
+    attack_version: Option<String>,
+}
+
+/// Tactic entries (assets/mitre_tactics.json, written by
+/// scripts/build_mitre_techniques.py). Optional: absent on older datasets.
+fn load_tactics(assets: &std::path::Path) -> Vec<Tactic> {
+    File::open(assets.join("mitre_tactics.json"))
+        .ok()
+        .and_then(|f| serde_json::from_reader(BufReader::new(f)).ok())
+        .unwrap_or_default()
+}
+
+/// Which tactics a query names: a TA ID, a tactic name or shortname, the
+/// retired "Defense Evasion", or "tactics" for the whole list.
+fn tactic_hits<'a>(tactics: &'a [Tactic], query: &str, nquery: &str) -> (Vec<&'a Tactic>, bool) {
+    if nquery == "tactics" || nquery == "tactic" {
+        return (tactics.iter().collect(), true);
+    }
+    if nquery == "defense evasion" {
+        return (tactics.iter().filter(|t| t.id == "TA0005" || t.id == "TA0112").collect(), false);
+    }
+    let hits: Vec<&Tactic> = tactics
+        .iter()
+        .filter(|t| t.id.to_lowercase() == query || norm(&t.name) == nquery || norm(&t.shortname) == nquery)
+        .collect();
+    // TA0005 was Defense Evasion before v20: show its successor alongside it.
+    if query == "ta0005" {
+        return (tactics.iter().filter(|t| t.id == "TA0005" || t.id == "TA0112").collect(), false);
+    }
+    (hits, false)
+}
+
+fn print_tactics(hits: &[&Tactic], list_only: bool, full: bool, nquery: &str, query: &str) {
+    if let Some(v) = hits.iter().find_map(|t| t.attack_version.clone()) {
+        println!("{}", format!("MITRE ATT&CK Enterprise v{}", v).truecolor(200, 200, 200));
+    }
+    if nquery == "defense evasion" || query == "ta0005" {
+        println!(
+            "{}",
+            "Note: ATT&CK v20 retired the Defense Evasion tactic. TA0005 is now Stealth (hiding and obfuscation), and Defense Impairment (TA0112) is new (disabling or tampering with defenses)."
+                .truecolor(255, 165, 0)
+        );
+    }
+    println!();
+    if list_only {
+        println!("{}", "Enterprise tactics (matrix order):".truecolor(255, 165, 0).bold());
+        for t in hits {
+            let top = t.techniques.iter().filter(|x| !x.id.contains('.')).count();
+            println!(
+                "  {}  {:<22} {} techniques, {} sub-techniques",
+                t.id.bright_blue().bold(),
+                t.name,
+                top,
+                t.techniques.len() - top
+            );
+        }
+        println!("\nLook up a tactic (e.g. TA0002 or \"execution\") for its description and techniques.");
+        return;
+    }
+    for t in hits {
+        println!("{}", format!("{} - {} (tactic)", t.id, t.name).bright_blue().bold());
+        println!();
+        println!("{} {}", "Shortname:".truecolor(255, 165, 0).bold(), t.shortname);
+        println!();
+        println!("{} {}", "Description:".truecolor(255, 165, 0).bold(), t.description);
+        println!();
+        let top: Vec<&TacticTechnique> = t.techniques.iter().filter(|x| !x.id.contains('.')).collect();
+        println!(
+            "{}",
+            format!("Techniques ({} techniques, {} sub-techniques):", top.len(), t.techniques.len() - top.len())
+                .truecolor(255, 165, 0)
+                .bold()
+        );
+        for tech in &top {
+            let subs: Vec<&TacticTechnique> =
+                t.techniques.iter().filter(|x| x.id.starts_with(&format!("{}.", tech.id))).collect();
+            if subs.is_empty() || full {
+                println!("- {} {}", tech.id.cyan().bold(), tech.name);
+            } else {
+                println!("- {} {} {}", tech.id.cyan().bold(), tech.name, format!("(+{} sub-techniques)", subs.len()).truecolor(200, 200, 200));
+            }
+            if full {
+                for sub in subs {
+                    println!("    - {} {}", sub.id.cyan(), sub.name);
+                }
+            }
+        }
+        // Sub-techniques listed under a tactic whose parent belongs to a different one.
+        let orphans: Vec<&TacticTechnique> = t
+            .techniques
+            .iter()
+            .filter(|x| x.id.contains('.') && !top.iter().any(|p| x.id.starts_with(&format!("{}.", p.id))))
+            .collect();
+        if !orphans.is_empty() {
+            println!("{}", "Sub-techniques (parent technique is under another tactic):".truecolor(200, 200, 200));
+            for o in orphans {
+                println!("- {} {}", o.id.cyan().bold(), o.name);
+            }
+        }
+        if !full {
+            println!("\n{}", "Use --full to list every sub-technique; look up any technique ID for details.".truecolor(200, 200, 200));
+        }
+        println!("\n{}", "-".repeat(60));
+    }
+}
+
+/// Tactic shortnames are hyphenated ("defense-impairment"); let "defense
+/// impairment" match too.
+fn norm(s: &str) -> String {
+    s.to_lowercase().replace('-', " ")
 }
 
 fn main() {
@@ -88,17 +222,45 @@ fn main() {
     let techniques: Vec<Technique> =
         serde_json::from_reader(reader).expect("Failed to parse JSON");
 
-    let query = query.to_lowercase();
+    let query = query.trim().to_lowercase();
+    let nquery = norm(&query);
+
+    // Tactics first: a TA ID or tactic name gets a tactic card (description
+    // and its techniques) instead of a keyword match across techniques.
+    let tactics = load_tactics(json_path.parent().unwrap_or(&workspace_root));
+    let (tac_hits, list_only) = tactic_hits(&tactics, &query, &nquery);
+    if !tac_hits.is_empty() {
+        print_tactics(&tac_hits, list_only, args.full, &nquery, &query);
+        return;
+    }
+
+    // ATT&CK v20 retired "Defense Evasion": TA0005 is now Stealth and the
+    // new TA0112 Defense Impairment took the defense-tampering techniques.
+    // Searching the old name returns both successors instead of nothing.
+    let legacy_defense_evasion = nquery == "defense evasion" || query == "ta0005";
+    if legacy_defense_evasion {
+        println!(
+            "{}",
+            "Note: ATT&CK v20 retired the Defense Evasion tactic. TA0005 is now Stealth, and Defense Impairment (TA0112) is new — showing techniques from both."
+                .truecolor(255, 165, 0)
+        );
+    }
+    let attack_version = techniques.iter().find_map(|t| t.attack_version.clone());
+    let names: std::collections::HashMap<String, String> =
+        techniques.iter().map(|t| (t.id.clone(), t.name.clone())).collect();
 
     let highlight_re = RegexBuilder::new(&regex::escape(&query))
         .case_insensitive(true)
         .build()
         .unwrap();
 
-    let matches: Vec<_> = techniques
+    let mut matches: Vec<_> = techniques
         .into_iter()
         .filter(|tech| {
-            tech.id.to_lowercase().contains(&query)
+            (legacy_defense_evasion
+                && (tech.tactic.contains("stealth") || tech.tactic.contains("defense-impairment") || tech.tactic.contains("defense-evasion")))
+                || tech.id.to_lowercase().contains(&query)
+                || norm(&tech.tactic).contains(&nquery)
                 || tech.name.to_lowercase().contains(&query)
                 || tech.tactic.to_lowercase().contains(&query)
                 || tech.description.to_lowercase().contains(&query)
@@ -111,17 +273,34 @@ fn main() {
                 || tech.intrusion_sets.iter().any(|g| g.name.to_lowercase().contains(&query) || g.description.to_lowercase().contains(&query))
         })
         .collect();
+    // Current techniques first; deprecated ones (kept so old IDs still
+    // resolve) after them.
+    matches.sort_by_key(|t| t.deprecated);
 
     if matches.is_empty() {
         println!("No results found for query: {}", query);
     } else {
         let show_full = args.full;
         let max_items = if args.full { usize::MAX } else { 3 };
+        if let Some(v) = &attack_version {
+            println!("{}", format!("MITRE ATT&CK Enterprise v{}", v).truecolor(200, 200, 200));
+        }
         println!();
         for t in matches {
             let id = highlight_re.replace_all(&t.id, |caps: &regex::Captures| caps[0].yellow().bold().to_string()).to_string();
             let name = highlight_re.replace_all(&t.name, |caps: &regex::Captures| caps[0].yellow().bold().to_string()).to_string();
             println!("{}", format!("{} - {}", id, name).bright_blue().bold());
+            if t.deprecated {
+                let note = match &t.revoked_by {
+                    Some(r) => format!(
+                        "Deprecated in ATT&CK — superseded by {}{}",
+                        r,
+                        names.get(r).map(|n| format!(" ({})", n)).unwrap_or_default()
+                    ),
+                    None => "Deprecated in ATT&CK — no direct replacement".to_string(),
+                };
+                println!("{}", note.red().bold());
+            }
             println!();
             let tactic = highlight_re.replace_all(&t.tactic, |caps: &regex::Captures| caps[0].yellow().bold().to_string()).to_string();
             println!("{} {}", "Tactic(s):".truecolor(255, 165, 0).bold(), tactic);

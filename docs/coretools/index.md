@@ -36,8 +36,10 @@
     <tr><td>MZcount</td><td>Recurse a directory, uses YARA to count MZ, Zip, PDF, other</td></tr>
     <tr><td>NSRL Query</td><td>Query a MD5 or SHA1 hash against NSRL</td></tr>
     <tr><td>Strings to YARA</td><td>Prompts for metadata and strings (text file) to create a YARA rule</td></tr>
+    <tr><td>Unpack</td><td>Detects packers and installers in PE, ELF, and Mach-O and statically recovers the payload — UPX (including tampered headers), PyInstaller, .NET/Costura, NSIS, Inno Setup, fat Mach-O, overlays, embedded executables</td></tr>
     <tr><td>Threat Intel Query</td><td>Multi-source hash and URL lookup. Hash: VT, MB, OTX, HA, FileScan, Malshare, MetaDefender, ObjectiveSee. URL: VT, urlscan.io, Google Safe Browsing. Web interface supports file-to-hash and QR code decode.*</td></tr>
     <tr><td>XMZHash</td><td>Recurse a directory, for files without MZ, Zip or PDF header, create hash list and lookup table</td></tr>
+    <tr><td>YARA Scan</td><td>Scan a file or folder with YARA rules on the embedded YARA-X engine; flags follow <code>yr scan</code></td></tr>
   </tbody>
 </table>
 

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub mod fs;
+pub mod gn;
 pub mod gsb;
 pub mod ha;
 pub mod mb;
@@ -16,6 +17,7 @@ pub mod urlscan;
 pub mod vt;
 
 pub use fs::FileScan;
+pub use gn::GreyNoise;
 pub use gsb::GoogleSafeBrowsing;
 pub use ha::HybridAnalysis;
 pub use mb::MalwareBazaar;

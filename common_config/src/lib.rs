@@ -179,30 +179,73 @@ pub fn migrate_api_keys() {
 // It's idempotent (dedupes by `path`) and lock-guarded, so it's safe to run
 // even if the Python registrar also fires for the same file.
 
+// case.yaml is shared by three YAML implementations: this crate
+// (serde_yaml, YAML 1.2), the web server (PyYAML, YAML 1.1), and the MCP
+// plugin (js-yaml). serde_yaml writes `20261029_203020` or an ISO timestamp
+// as a plain scalar; YAML 1.1 reads those back as an int / a datetime, so a
+// value could come back from another tool as a number or date instead of a
+// string. Every field here therefore accepts any scalar and keeps it as
+// text, so a manifest touched by another tool never fails to parse (which
+// previously reset case.yaml to an empty manifest — see register below).
+
+fn scalar_to_string(v: serde_yaml::Value) -> String {
+    match v {
+        serde_yaml::Value::String(s) => s,
+        serde_yaml::Value::Number(n) => n.to_string(),
+        serde_yaml::Value::Bool(b) => b.to_string(),
+        serde_yaml::Value::Null => String::new(),
+        other => serde_yaml::to_string(&other).unwrap_or_default().trim().to_string(),
+    }
+}
+
+fn lenient_string<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    Ok(scalar_to_string(serde_yaml::Value::deserialize(d)?))
+}
+
+fn lenient_string_vec<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    Ok(match serde_yaml::Value::deserialize(d)? {
+        serde_yaml::Value::Sequence(items) => items.into_iter().map(scalar_to_string).collect(),
+        serde_yaml::Value::Null => Vec::new(),
+        single => vec![scalar_to_string(single)],
+    })
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct CaseFileEntry {
+    #[serde(default, deserialize_with = "lenient_string")]
     filename: String,
+    #[serde(default, deserialize_with = "lenient_string")]
     path: String,
+    #[serde(default, deserialize_with = "lenient_string")]
     target: String,
+    #[serde(default, deserialize_with = "lenient_string")]
     timestamp: String,
+    #[serde(default, deserialize_with = "lenient_string")]
     tool: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CaseManifest {
+    #[serde(default, deserialize_with = "lenient_string")]
     created: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient_string")]
     description: String,
     #[serde(default)]
     files: Vec<CaseFileEntry>,
+    #[serde(default, deserialize_with = "lenient_string")]
     modified: String,
+    #[serde(default, deserialize_with = "lenient_string")]
     name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient_string")]
     notes: String,
-    #[serde(default = "default_case_status")]
+    #[serde(default = "default_case_status", deserialize_with = "lenient_string")]
     status: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient_string_vec")]
     tags: Vec<String>,
+    /// Keys this crate doesn't know about (added by the web UI or a future
+    /// version) are carried through untouched instead of being dropped.
+    #[serde(flatten)]
+    extra: std::collections::BTreeMap<String, serde_yaml::Value>,
 }
 
 fn default_case_status() -> String {
@@ -220,6 +263,7 @@ impl CaseManifest {
             notes: String::new(),
             status: default_case_status(),
             tags: Vec::new(),
+            extra: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -310,7 +354,10 @@ fn register_case_output_inner(
     let yaml_path = case_dir.join("case.yaml");
     let mut manifest: CaseManifest = if yaml_path.exists() {
         let content = fs::read_to_string(&yaml_path)?;
-        serde_yaml::from_str(&content).unwrap_or_else(|_| CaseManifest::new(case_name, &timestamp))
+        // Never replace an existing manifest we can't parse — that used to
+        // silently wipe every registered file. Skip this registration instead.
+        serde_yaml::from_str(&content)
+            .map_err(|e| format!("case.yaml unreadable, not modified: {}", e))?
     } else {
         CaseManifest::new(case_name, &timestamp)
     };
@@ -334,4 +381,41 @@ fn register_case_output_inner(
     fs::rename(&tmp_path, &yaml_path)?;
 
     Ok(())
+}
+#[cfg(test)]
+mod case_manifest_tests {
+    use super::*;
+
+    /// A manifest as PyYAML wrote it before the fix: an int timestamp, a
+    /// space-separated datetime, and a key this crate doesn't model. All of
+    /// it must parse, survive a round-trip, and keep the unknown key.
+    #[test]
+    fn manifest_from_other_yaml_writers_parses_and_round_trips() {
+        let src = "created: 2026-10-29 20:30:12.961241\n\
+                   description: ''\n\
+                   files:\n\
+                   - filename: r.md\n  path: tiquery/r.md\n  target: abc\n  timestamp: 20261029203020\n  tool: tiquery\n\
+                   modified: 2026-10-29 20:36:47\n\
+                   name: Mirai\n\
+                   notes:\n\
+                   status: open\n\
+                   tags:\n- packed\n\
+                   custom_field: keep-me\n";
+        let m: CaseManifest = serde_yaml::from_str(src).expect("lenient parse");
+        assert_eq!(m.files[0].timestamp, "20261029203020");
+        assert_eq!(m.created, "2026-10-29 20:30:12.961241");
+        assert_eq!(m.notes, "");
+        assert_eq!(m.tags, vec!["packed".to_string()]);
+        let out = serde_yaml::to_string(&m).unwrap();
+        assert!(out.contains("custom_field: keep-me"));
+        let again: CaseManifest = serde_yaml::from_str(&out).unwrap();
+        assert_eq!(again.files[0].timestamp, "20261029203020");
+    }
+
+    #[test]
+    fn quoted_underscore_timestamp_is_kept_verbatim() {
+        let src = "created: '2026-10-29T20:30:12'\nmodified: x\nname: c\nfiles:\n- filename: a\n  path: a/a\n  target: t\n  timestamp: '20261029_203020'\n  tool: a\n";
+        let m: CaseManifest = serde_yaml::from_str(src).unwrap();
+        assert_eq!(m.files[0].timestamp, "20261029_203020");
+    }
 }

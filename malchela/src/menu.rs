@@ -28,6 +28,7 @@ pub fn generate_tool_menu() -> Vec<ToolEntry> {
         ("Code Sign Check", "cs"),
         ("About", "ab"),
         ("MITRE Lookup", "ml"),
+        ("Unpack", "up"),
     ].iter().cloned().collect();
 
     let entries = vec![
@@ -48,6 +49,7 @@ pub fn generate_tool_menu() -> Vec<ToolEntry> {
         ("Plist Analyzer", "plist_analyzer"),
         ("Code Sign Check", "codesign_check"),
         ("Strings to YARA", "strings_to_yara"),
+        ("Unpack", "unpack"),
         ("XMZHash", "xmzhash"),
     ];
 

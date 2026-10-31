@@ -1,6 +1,6 @@
 [package]
 name = "codesign_check"
-version = "4.3.1"
+version.workspace = true
 edition = "2021"
 
 [[bin]]

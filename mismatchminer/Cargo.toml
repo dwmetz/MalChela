@@ -1,11 +1,11 @@
 [package]
 name = "mismatchminer"
-version = "4.3.1"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
 walkdir = "2.5.0"
-yara = "0.30.0"
+yara-backend = { path = "../yara-backend" }
 colored = "2.2"
 common_config = { path = "../common_config" }
 sha2 = "0.10.9"

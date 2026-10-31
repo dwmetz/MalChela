@@ -7,9 +7,9 @@ Some tools within MalChela rely on external services. In order to use these inte
 | Tool          | Service               | Key File          | Purpose                                       |
 |---------------|-----------------------|-------------------|-----------------------------------------------|
 | `fileanalyzer`| VirusTotal            | `vt-api.txt`      | Hash lookup                                   |
-| `tiquery`     | VirusTotal            | `vt-api.txt`      | Hash and URL lookup (Tier 1)                  |
+| `tiquery`     | VirusTotal            | `vt-api.txt`      | Hash, IP, and URL lookup (Tier 1)             |
 | `tiquery`     | MalwareBazaar         | `mb-api.txt`      | Multi-source hash lookup (Tier 1)             |
-| `tiquery`     | AlienVault OTX        | `otx-api.txt`     | Multi-source hash lookup (Tier 1)             |
+| `tiquery`     | AlienVault OTX        | `otx-api.txt`     | Multi-source hash and IP lookup (Tier 1)      |
 | `tiquery`     | MetaDefender          | `md-api.txt`      | Multi-source hash lookup (Tier 1)             |
 | `tiquery`     | Hybrid Analysis       | `ha-api.txt`      | Multi-source hash lookup (Tier 2)             |
 | `tiquery`     | FileScan.IO           | `fs-api.txt`      | Multi-source hash lookup (Tier 2)             |
@@ -17,6 +17,7 @@ Some tools within MalChela rely on external services. In order to use these inte
 | `tiquery`     | Triage                | `tr-api.txt`      | Multi-source hash lookup (Tier 2)             |
 | `tiquery`     | urlscan.io            | `url-api.txt`     | URL lookup (optional — raises rate limits)    |
 | `tiquery`     | Google Safe Browsing  | `gsb-api.txt`     | URL lookup                                    |
+| `tiquery`     | GreyNoise             | `gn-api.txt`      | IP lookup (scanner / known-benign-service context; free Community key works) |
 
 ---
 

@@ -40,3 +40,9 @@ __pycache__/
 
 
 server/__pycache__/
+
+# Large generated / third-party artifacts that must never be committed
+# (Volatility symbol packs alone added ~780 MB to history in 2025)
+/symbols/
+*.pdb
+/pdf/

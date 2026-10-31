@@ -10,7 +10,7 @@ use hash::HashType;
 use sources::{
     AlienVaultOTX, FileScan, GoogleSafeBrowsing, HybridAnalysis, MalwareBazaar, Malshare,
     MetaDefender, ObjectiveSee, SourceResult, SourceStatus, StubSource, ThreatSource, Triage,
-    UrlScan, VirusTotal,
+    GreyNoise, UrlScan, VirusTotal,
 };
 use std::io::Write as _;
 use std::sync::Arc;
@@ -18,12 +18,13 @@ use std::sync::Arc;
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
 #[derive(Parser)]
-#[command(name = "tiquery", about = "Multi-source threat intel lookup (hashes and URLs)")]
+#[command(name = "tiquery", about = "Multi-source threat intel lookup (hashes, IP addresses, and URLs)")]
 struct Args {
-    /// Hash (MD5/SHA1/SHA256) or URL to query
+    /// Hash (MD5/SHA1/SHA256), IP address, or URL to query
     hash: Option<String>,
 
-    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms,tr,urlscan,gsb
+    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms,tr,urlscan,gsb,gn
+    /// (IPs default to vt,otx,gn; URLs to vt,urlscan,gsb)
     /// Default: all sources with a configured API key
     #[arg(short, long, value_delimiter = ',', value_name = "SRC")]
     sources: Option<Vec<String>>,
@@ -86,6 +87,14 @@ const ALL_SOURCE_IDS: &[(&str, bool)] = &[
     ("os",  false),
 ];
 
+/// Source IDs used when the input is an IP address.
+const IP_SOURCE_IDS: &[(&str, bool)] = &[
+    // (id, needs_key)
+    ("vt",  true),
+    ("otx", true),
+    ("gn",  true),
+];
+
 /// Source IDs used when the input is a URL.
 const URL_SOURCE_IDS: &[(&str, bool)] = &[
     // (id, needs_key)
@@ -107,6 +116,48 @@ fn default_source_ids() -> Vec<String> {
         })
         .map(|(id, _)| id.to_string())
         .collect()
+}
+
+fn default_ip_source_ids() -> Vec<String> {
+    let cfg = config::TiQueryConfig::load().unwrap_or_default();
+    IP_SOURCE_IDS
+        .iter()
+        .filter(|(id, needs_key)| {
+            if !cfg.source_enabled(id) { return false; }
+            if !needs_key { return true; }
+            cfg.source_api_key(id)
+                .or_else(|| common_config::resolve_api_key(id))
+                .is_some()
+        })
+        .map(|(id, _)| id.to_string())
+        .collect()
+}
+
+/// An IP address from user input, accepting defanged forms ("1[.]2[.]3[.]4",
+/// "1.2.3[.]4"). None if it isn't one.
+fn parse_ip_input(s: &str) -> Option<std::net::IpAddr> {
+    s.trim().replace("[.]", ".").replace("[:]", ":").parse().ok()
+}
+
+/// Loopback, private, link-local, multicast, documentation, and other
+/// non-routable addresses: no reputation source has anything on them, and a
+/// lookup would spend rate-limited quota for nothing.
+fn is_non_public_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_private() || v4.is_loopback() || v4.is_link_local() || v4.is_multicast()
+                || v4.is_broadcast() || v4.is_unspecified() || v4.is_documentation()
+                || o[0] == 0 || (o[0] == 100 && (64..128).contains(&o[1])) // CGNAT
+                || o[0] >= 240
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback() || v6.is_unspecified() || v6.is_multicast()
+                || (v6.segments()[0] & 0xfe00) == 0xfc00 // unique local
+                || (v6.segments()[0] & 0xffc0) == 0xfe80 // link local
+                || (v6.segments()[0] == 0x2001 && v6.segments()[1] == 0x0db8) // documentation
+        }
+    }
 }
 
 fn default_url_source_ids() -> Vec<String> {
@@ -156,6 +207,7 @@ fn build_sources(ids: &[String], _hash_type: HashType, verbose_vt: bool) -> Vec<
             "os"  => Arc::new(ObjectiveSee::new()),
             "urlscan" => Arc::new(UrlScan::new(resolve("url"))),
             "gsb"     => Arc::new(GoogleSafeBrowsing::new(resolve("gsb"))),
+            "gn"      => Arc::new(GreyNoise::new(resolve("gn"))),
             other => Arc::new(StubSource::new(other)),
         };
         out.push(src);
@@ -170,20 +222,38 @@ const COL_SRC: usize = 8;
 const COL_STATUS: usize = 12;
 const COL_FAMILY: usize = 22;
 const COL_DET: usize = 13;
+/// The family column grows to fit its longest value up to this width: hash
+/// families fit in 22, but IP context ("AS15169 Google LLC (US)") does not.
+const COL_FAMILY_MAX: usize = 40;
 
 fn separator() -> String {
+    separator_w(COL_FAMILY)
+}
+
+fn separator_w(family_w: usize) -> String {
     format!(
-        "  {:<COL_SRC$}  {:<COL_STATUS$}  {:<COL_FAMILY$}  {:<COL_DET$}  {}",
+        "  {:<COL_SRC$}  {:<COL_STATUS$}  {:<family_w$}  {:<COL_DET$}  {}",
         "─".repeat(COL_SRC),
         "─".repeat(COL_STATUS),
-        "─".repeat(COL_FAMILY),
+        "─".repeat(family_w),
         "─".repeat(COL_DET),
         "─".repeat(40),
         COL_SRC = COL_SRC,
         COL_STATUS = COL_STATUS,
-        COL_FAMILY = COL_FAMILY,
+        family_w = family_w,
         COL_DET = COL_DET,
     )
+}
+
+/// The "Family / Tags" cell before truncation.
+fn family_cell(result: &SourceResult) -> String {
+    let f = result.family.as_deref().unwrap_or("");
+    let t = result.tags.join(", ");
+    match (f.is_empty(), t.is_empty()) {
+        (false, false) => format!("{} [{}]", f, t),
+        (false, true) => f.to_string(),
+        _ => t,
+    }
 }
 
 fn status_colored(s: &SourceStatus) -> colored::ColoredString {
@@ -206,20 +276,31 @@ fn status_label(s: &SourceStatus) -> String {
     }
 }
 
+/// Truncate to `max` characters. Counts and cuts on characters, not bytes:
+/// slicing bytes panicked on a non-ASCII value (an AS owner like
+/// "Telefónica" or a Cyrillic family name) cut mid-character.
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max.saturating_sub(1)])
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
     }
 }
 
 fn output_matrix(hash: &str, input_label: &str, results: &[(String, SourceResult)]) {
     println!();
     println!("  {} {} ({})", "tiquery".cyan().bold(), hash.white(), input_label.dimmed());
-    println!("{}", separator());
+    let family_w = results
+        .iter()
+        .map(|(_, r)| family_cell(r).chars().count())
+        .max()
+        .unwrap_or(0)
+        .clamp(COL_FAMILY, COL_FAMILY_MAX);
+    println!("{}", separator_w(family_w));
     println!(
-        "  {:<COL_SRC$}  {:<COL_STATUS$}  {:<COL_FAMILY$}  {:<COL_DET$}  {}",
+        "  {:<COL_SRC$}  {:<COL_STATUS$}  {:<family_w$}  {:<COL_DET$}  {}",
         "Source".bold(),
         "Status".bold(),
         "Family / Tags".bold(),
@@ -227,30 +308,15 @@ fn output_matrix(hash: &str, input_label: &str, results: &[(String, SourceResult
         "Reference".bold(),
         COL_SRC = COL_SRC,
         COL_STATUS = COL_STATUS,
-        COL_FAMILY = COL_FAMILY,
+        family_w = family_w,
         COL_DET = COL_DET,
     );
-    println!("{}", separator());
+    println!("{}", separator_w(family_w));
 
     for (name, result) in results {
         let status = result.status.as_ref().map(status_colored).unwrap_or("?".normal());
 
-        let family_str = {
-            let f = result.family.as_deref().unwrap_or("");
-            let t = if !result.tags.is_empty() {
-                result.tags.join(", ")
-            } else {
-                String::new()
-            };
-            let combined = if !f.is_empty() && !t.is_empty() {
-                format!("{} [{}]", f, t)
-            } else if !f.is_empty() {
-                f.to_string()
-            } else {
-                t
-            };
-            truncate(&combined, COL_FAMILY)
-        };
+        let family_str = truncate(&family_cell(result), family_w);
 
         let det_str = result
             .detections
@@ -269,7 +335,7 @@ fn output_matrix(hash: &str, input_label: &str, results: &[(String, SourceResult
         };
 
         println!(
-            "  {:<COL_SRC$}  {:<COL_STATUS$}  {:<COL_FAMILY$}  {:<COL_DET$}  {}",
+            "  {:<COL_SRC$}  {:<COL_STATUS$}  {:<family_w$}  {:<COL_DET$}  {}",
             src_colored,
             status,
             family_str,
@@ -277,12 +343,12 @@ fn output_matrix(hash: &str, input_label: &str, results: &[(String, SourceResult
             link.dimmed(),
             COL_SRC = COL_SRC,
             COL_STATUS = COL_STATUS,
-            COL_FAMILY = COL_FAMILY,
+            family_w = family_w,
             COL_DET = COL_DET,
         );
     }
 
-    println!("{}", separator());
+    println!("{}", separator_w(family_w));
     println!();
 }
 
@@ -331,6 +397,14 @@ fn output_text(hash: &str, input_label: &str, results: &[(String, SourceResult)]
     out
 }
 
+/// Make a value safe for a Markdown table cell. Source text can contain '|'
+/// (OTX pulse names like "Unknown | Oct 29, 2026"), which would split the
+/// row into extra columns. '/' is used rather than an escaped "\\|" so the
+/// Analyze rollup's simple column parsers keep working.
+fn md_cell(s: &str) -> String {
+    s.replace('|', "/").replace(['\n', '\r'], " ")
+}
+
 fn output_markdown(hash: &str, input_label: &str, results: &[(String, SourceResult)]) -> String {
     let mut md = String::new();
     md.push_str("# TI Query Report\n\n");
@@ -354,7 +428,7 @@ fn output_markdown(hash: &str, input_label: &str, results: &[(String, SourceResu
         let link_cell = if link != "-" { format!("[link]({})", link) } else { "-".to_string() };
         md.push_str(&format!(
             "| {} | {} | {} | {} | {} |\n",
-            name, status, family, det, link_cell
+            md_cell(name), md_cell(&status), md_cell(&family), md_cell(det), link_cell
         ));
     }
     md.push('\n');
@@ -531,15 +605,24 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Detect whether the input is a URL or a hash
+    // Detect whether the input is a URL, an IP address, or a hash
     let is_url = raw_input.starts_with("http://") || raw_input.starts_with("https://");
+    let ip_input = if is_url { None } else { parse_ip_input(&raw_input) };
+    if let Some(ip) = ip_input {
+        if is_non_public_ip(&ip) {
+            eprintln!("Error: {} is not a public IP address (private, loopback, reserved, or documentation range) — nothing to look up", ip);
+            std::process::exit(1);
+        }
+    }
     let (hash, hash_type, input_label) = if is_url {
         (raw_input.clone(), HashType::Unknown, "URL".to_string())
+    } else if let Some(ip) = ip_input {
+        (ip.to_string(), HashType::Unknown, if ip.is_ipv4() { "IPv4".to_string() } else { "IPv6".to_string() })
     } else {
         let lower = raw_input.to_lowercase();
         let ht = HashType::detect(&lower);
         if ht == HashType::Unknown {
-            eprintln!("Error: unrecognized input (expected MD5/SHA1/SHA256 hash or http/https URL)");
+            eprintln!("Error: unrecognized input (expected MD5/SHA1/SHA256 hash, IP address, or http/https URL)");
             std::process::exit(1);
         }
         let label = ht.label().to_string();
@@ -550,7 +633,7 @@ async fn main() -> Result<()> {
     let source_ids: Vec<String> = args
         .sources
         .unwrap_or_else(|| {
-            if is_url { default_url_source_ids() } else { default_source_ids() }
+            if is_url { default_url_source_ids() } else if ip_input.is_some() { default_ip_source_ids() } else { default_source_ids() }
         });
 
     // If ObjectiveSee is requested and hash is SHA256, warm the cache sequentially first
@@ -701,4 +784,29 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod md_tests {
+    use super::md_cell;
+
+    #[test]
+    fn pipes_in_source_text_do_not_split_the_row() {
+        assert_eq!(md_cell("Unknown | Oct 29, 2026, Malicious_File"), "Unknown / Oct 29, 2026, Malicious_File");
+        assert_eq!(md_cell("a\nb"), "a b");
+    }
+}
+
+#[cfg(test)]
+mod truncate_tests {
+    use super::truncate;
+
+    #[test]
+    fn cuts_on_characters_not_bytes() {
+        // Byte slicing panicked when the cut fell inside "ó".
+        assert_eq!(truncate("AS3352 Telefónica de España", 11), "AS3352 Tel…");
+        assert_eq!(truncate("AS3352 Telefónica", 13), "AS3352 Telef…");
+        assert_eq!(truncate("Ростелеком", 4), "Рос…");
+        assert_eq!(truncate("short", 22), "short");
+    }
 }

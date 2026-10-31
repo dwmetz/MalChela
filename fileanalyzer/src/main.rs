@@ -213,18 +213,18 @@ async fn main() {
     }
 
     match packed::detect_packing(&file_path) {
-        Ok(true) => {
-            let line = styled_line("yellow", "File may be packed");
+        Ok(Some(name)) => {
+            let line = styled_line("yellow", &format!("File may be packed ({}) — run Unpack to recover the payload", name));
             println!("{}", line);
             writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
-        Ok(false) => {
+        Ok(None) => {
             let line = styled_line("yellow", "File is not packed");
             println!("{}", line);
             writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
         Err(e) => {
-            let line = styled_line("yellow", &format!("Error during UPX detection: {}", e));
+            let line = styled_line("yellow", &format!("Error during packer detection: {}", e));
             println!("{}", line);
             writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
@@ -486,12 +486,12 @@ async fn main() {
     }
 
     match packed::detect_packing(&file_path) {
-        Ok(true) => {
-            let line = styled_line("yellow", "- Packed: Possibly");
+        Ok(Some(name)) => {
+            let line = styled_line("yellow", &format!("- Packed: Possibly ({})", name));
             println!("{}", line);
             writeln!(temp_file, "{}", plain_text(&line)).ok();
         }
-        Ok(false) => {
+        Ok(None) => {
             let line = styled_line("stone", "- Packed: Unlikely");
             println!("{}", line);
             writeln!(temp_file, "{}", plain_text(&line)).ok();
@@ -568,8 +568,8 @@ let yara_matches: Vec<String> = match yara_scan::scan_file_with_yara_rules(&file
             sha256: hash.clone(),
             entropy: entropy_value,
             packed: match packed::detect_packing(&file_path) {
-                Ok(true) => "Possibly".to_string(),
-                Ok(false) => "Unlikely".to_string(),
+                Ok(Some(name)) => format!("Possibly ({})", name),
+                Ok(None) => "Unlikely".to_string(),
                 Err(_) => "Unknown".to_string(),
             },
             compile_time: Some(pe_info.compile_time.clone()),

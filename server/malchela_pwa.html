@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MalChela">
 <meta name="theme-color" content="#1a1a1a">
-<title>MalChela Analysis Toolkit v4.3.1</title>
+<title>MalChela Analysis Toolkit</title>
 <link rel="manifest" href="manifest.json">
 <script src="marked.min.js"></script>
 <link rel="icon" type="image/png" href="/icons/malchela_icon.png">
@@ -1083,7 +1083,7 @@
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.6);
-    z-index: 100;
+    z-index: 120;
     align-items: flex-start;
     justify-content: center;
     padding-top: 60px;
@@ -1165,6 +1165,95 @@
   .mitre-tactic  { color: var(--cyan); }
   .mitre-label   { color: var(--text-dim); }
   .mitre-section { color: var(--orange); font-weight: 600; margin-top: 6px; }
+
+  /* ── MITRE ATT&CK matrix (Analyze / case) ── */
+  #mx-overlay {
+    display: none; position: fixed; inset: 0; z-index: 110;
+    background: rgba(0,0,0,0.7); padding: 24px;
+  }
+  #mx-overlay.open { display: flex; }
+  #mx-modal {
+    background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 6px;
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.7); overflow: hidden;
+  }
+  #mx-header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #mx-header h3 { font-size: 13px; color: var(--orange); font-weight: 600; }
+  #mx-sub { font-size: 11px; color: var(--text-dim); margin-right: auto; }
+  #mx-header label { font-size: 11px; color: var(--text-dim); display: flex; gap: 4px; align-items: center; cursor: pointer; }
+  #mx-header label input { accent-color: var(--orange); }
+  #mx-filter {
+    background: var(--bg-input); border: 1px solid var(--border-light); border-radius: 3px;
+    color: var(--text-bright); font-family: var(--font-mono); font-size: 11px; padding: 4px 7px; width: 160px; outline: none;
+  }
+  #mx-body { flex: 1; display: flex; min-height: 0; }
+  #mx-grid { flex: 1; overflow: auto; padding: 10px; display: flex; gap: 6px; align-items: flex-start; }
+  #mx-grid::-webkit-scrollbar { width: 6px; height: 6px; }
+  #mx-grid::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+  .mx-col { flex: 0 0 150px; display: flex; flex-direction: column; gap: 3px; }
+  .mx-col.hit-col { flex-basis: 170px; }
+  .mx-tac {
+    position: sticky; top: -10px; z-index: 2; background: var(--bg-hover);
+    border: 1px solid var(--border-light); border-radius: 3px; padding: 6px 6px 5px;
+    font-size: 11px; font-weight: 600; color: var(--text-bright); text-align: center;
+  }
+  .mx-tac .mx-tac-meta { display: block; font-weight: 400; font-size: 9.5px; color: var(--text-dim); margin-top: 2px; }
+  .mx-tac.has-hits { border-color: var(--orange-dim); }
+  .mx-tac.has-hits .mx-tac-meta { color: var(--orange); }
+  .mx-cell {
+    border: 1px solid var(--border); border-radius: 3px; padding: 4px 6px; font-size: 10px; line-height: 1.3;
+    color: var(--text-dim); background: var(--bg-panel); cursor: default; word-break: break-word;
+  }
+  .mx-cell .mx-id { font-family: var(--font-mono); font-size: 9px; opacity: 0.7; display: block; }
+  /* Heat is carried by a translucent fill plus a solid left bar (colours set
+     inline from mxColor), so text keeps the theme's normal contrast. */
+  .mx-cell.hit { color: var(--text-bright); cursor: pointer; border-left-width: 3px; font-weight: 500; }
+  .mx-cell.hit .mx-id { opacity: 0.75; }
+  .mx-cell.hit .mx-badge { color: #1a0f08; font-weight: 600; }
+  .mx-cell.hit:hover, .mx-cell.sel { outline: 2px solid var(--cyan); outline-offset: -1px; }
+  .mx-cell.low { border-style: dashed; border-left-style: solid; }
+  .mx-cell.subhit { border-left: 3px solid var(--orange); color: var(--text-primary); cursor: pointer; }
+  .mx-cell .mx-badge {
+    float: right; font-family: var(--font-mono); font-size: 9px; background: rgba(0,0,0,0.25);
+    border-radius: 8px; padding: 0 5px; margin-left: 4px;
+  }
+  .mx-sub { margin-left: 10px; }
+  .mx-cell.dim { opacity: 0.25; }
+  #mx-detail {
+    width: 340px; flex-shrink: 0; border-left: 1px solid var(--border); overflow-y: auto;
+    padding: 12px 14px; font-size: 11.5px; line-height: 1.5; display: none;
+  }
+  #mx-detail.open { display: block; }
+  #mx-detail h4 { color: var(--orange); font-size: 12.5px; margin: 0 0 2px; }
+  #mx-detail .mx-dmeta { color: var(--text-dim); font-size: 10.5px; margin-bottom: 8px; }
+  #mx-detail .mx-dfile { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+  #mx-detail .mx-dfile-name { color: var(--text-bright); font-family: var(--font-mono); font-size: 10.5px; word-break: break-all; }
+  #mx-detail ul { margin: 4px 0 0 16px; padding: 0; }
+  #mx-detail li { margin: 2px 0; color: var(--text-primary); }
+  #mx-detail .mx-tool { color: var(--cyan); font-family: var(--font-mono); font-size: 10px; }
+  #mx-detail .mx-conf-low { color: var(--yellow); font-size: 10px; }
+  #mx-detail .mx-strs { margin: 4px 0 2px; display: flex; flex-direction: column; gap: 2px; }
+  #mx-detail .mx-strs code {
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-primary); background: var(--bg-panel);
+    border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; word-break: break-all; white-space: pre-wrap;
+  }
+  #mx-detail .mx-strs-more, #mx-detail .mx-strs-note { color: var(--text-dim); font-size: 10px; }
+  #mx-legend { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-dim); }
+  #mx-legend .sw { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+  .mx-launch {
+    display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 6px 10px;
+    background: var(--bg-hover); border: 1px solid var(--orange-dim); border-radius: 4px;
+    color: var(--orange); font-family: var(--font-mono); font-size: 11.5px; cursor: pointer;
+  }
+  .mx-launch:hover { background: var(--orange-dim); color: #fff; }
+  @media (max-width: 700px) {
+    #mx-overlay { padding: 0; }
+    #mx-detail { position: absolute; right: 0; top: 0; bottom: 0; width: 88vw; background: var(--bg-secondary); z-index: 3; }
+    #mx-body { position: relative; }
+  }
 
   /* ── Upload drop zone ── */
   #upload-overlay {
@@ -1330,7 +1419,7 @@
 
   <!-- Header -->
   <div id="header">
-    <h1>MalChela <span>Analysis Toolkit</span> <span style="color:var(--text-dim);font-weight:300">v4.3.1</span></h1>
+    <h1>MalChela <span>Analysis Toolkit</span> <span id="app-version" style="color:var(--text-dim);font-weight:300"></span></h1>
 
     <div id="header-toolbar">
       <button class="tb-btn" onclick="showHome(event)" title="Home"><img src="/icons/home.svg"></button>
@@ -1573,6 +1662,25 @@
   </div>
 </div>
 
+<!-- MITRE ATT&CK Matrix Modal -->
+<div id="mx-overlay" onclick="if(event.target===this)closeMitreMatrix()">
+  <div id="mx-modal">
+    <div id="mx-header">
+      <h3>⊞ MITRE ATT&amp;CK Matrix</h3>
+      <span id="mx-sub"></span>
+      <span id="mx-legend"></span>
+      <input id="mx-filter" type="text" placeholder="Filter techniques…" spellcheck="false" oninput="renderMitreMatrix()">
+      <label><input type="checkbox" id="mx-hits-only" checked onchange="renderMitreMatrix()"> Hits only</label>
+      <button class="output-action-btn" onclick="downloadMitreLayer()" title="ATT&CK Navigator layer (v4.5)">⬇ Navigator layer</button>
+      <button id="mitre-close-btn" onclick="closeMitreMatrix()">✕</button>
+    </div>
+    <div id="mx-body">
+      <div id="mx-grid"></div>
+      <div id="mx-detail"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Upload Modal -->
 <div id="upload-overlay">
   <div id="upload-modal">
@@ -1651,7 +1759,7 @@ let fmLaunchedFrom  = null; // { toolId, filePath } — set when a subtool is la
 let lastReSaveBody = null; // Last run body for CLI tools (used by manual save-to-case)
 
 // Tools whose server endpoints accept case_name/save_format and invoke CLI-native saves
-const CLI_SAVE_TOOLS = new Set(['fileanalyzer','hashit','hashcheck','mstrings','nsrlquery','mzcount']);
+const CLI_SAVE_TOOLS = new Set(['fileanalyzer','hashit','hashcheck','mstrings','nsrlquery','mzcount','unpack']);
 let activeCase  = localStorage.getItem('malchela_active_case') || null;
 let browserCallback = null;
 let browserSelected = null;
@@ -1684,6 +1792,7 @@ const SPECIAL_PANELS = {
   tshark:         { input: 'tshark',         endpoint: '/tools/tshark' },
   vol3:           { input: 'vol3',           endpoint: '/tools/vol3' },
   yr:             { input: 'yarax',          endpoint: '/tools/yarax' },
+  yara_scan:      { input: 'yara_scan',      endpoint: '/tools/yara_scan' },
 };
 
 // Cargo tools have native endpoints — map binary name to endpoint
@@ -1694,10 +1803,12 @@ const CARGO_ENDPOINTS = {
   mstrings: '/tools/mstrings', nsrlquery: '/tools/nsrlquery',
   tiquery: '/tools/tiquery', malhash: '/tools/malhash',
   extract_samples: '/tools/extract_samples', dpp_extract: '/tools/dpp_extract',
+  unpack: '/tools/unpack',
   combine_yara: '/tools/combine_yara',
   strings_to_yara: '/tools/strings_to_yara',
   plist_analyzer: '/tools/plist_analyzer', macho_info: '/tools/macho_info',
   codesign_check: '/tools/codesign_check',
+  yara_scan: '/tools/yara_scan',
 };
 
 // Runtime tool registry — populated from tools.yaml
@@ -1850,6 +1961,12 @@ async function checkHealth() {
     const data = await api('/health');
     if (data.status === 'ok') {
       setStatus('ok', serverUrl.replace('http://', ''));
+      // Version comes from the workspace Cargo.toml via the server — never hardcoded here.
+      if (data.version) {
+        const v = document.getElementById('app-version');
+        if (v) v.textContent = 'v' + data.version;
+        document.title = 'MalChela Analysis Toolkit v' + data.version;
+      }
     } else {
       setStatus('err', 'server error');
     }
@@ -2014,6 +2131,7 @@ function renderInputPanel(id, tool) {
         <button class="ti-tab active" onclick="setTiTab('hash', this)">Single Hash</button>
         <button class="ti-tab" onclick="setTiTab('bulk', this)">Bulk Lookup</button>
         <button class="ti-tab" onclick="setTiTab('url', this)">URL</button>
+        <button class="ti-tab" onclick="setTiTab('ip', this)">IP</button>
         <button class="ti-tab" onclick="setTiTab('qr', this)">QR Code</button>
       </div>
       <div id="ti-hash-panel">
@@ -2031,6 +2149,15 @@ function renderInputPanel(id, tool) {
           <input class="input-field" id="ti-url-input" type="text" placeholder="https://example.com/path" spellcheck="false">
           <button class="run-btn" style="margin-left:4px" onclick="runTool(this)">Run Query</button>
         </div>
+      </div>
+      <div id="ti-ip-panel" style="display:none">
+        <div class="input-row">
+          <span class="input-label">IP:</span>
+          <input class="input-field" id="ti-ip-input" type="text" placeholder="IPv4 or IPv6 (defanged is fine: 1.2.3[.]4)" spellcheck="false"
+            onkeydown="if(event.key==='Enter')runTool(this.parentElement.querySelector('.run-btn'))">
+          <button class="run-btn" style="margin-left:4px" onclick="runTool(this)">Run Query</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);padding-left:78px">Public addresses only. Being known to a source isn't a verdict: rows are colored by what each source says.</div>
       </div>
       <div id="ti-bulk-panel" style="display:none">
         <div class="input-row">
@@ -2086,6 +2213,16 @@ function renderInputPanel(id, tool) {
             ${tiSourceChk('vt-url', 'VirusTotal')}
             ${tiSourceChk('urlscan', 'urlscan.io', '(no key required)')}
             ${tiSourceChk('gsb', 'Google Safe Browsing')}
+          </div>
+        </div>
+        <div id="ti-ip-sources-section" style="display:none">
+          <div style="font-size:9px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">
+            IP Sources
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+            ${tiSourceChk('vt-ip', 'VirusTotal', 'reputation · ASN')}
+            ${tiSourceChk('otx-ip', 'AlienVault OTX', 'pulses')}
+            ${tiSourceChk('gn', 'GreyNoise', 'scanner / known-benign')}
           </div>
         </div>
         <div id="ti-hash-options">
@@ -2225,6 +2362,44 @@ function renderInputPanel(id, tool) {
         <span class="input-label">Arguments:</span>
         <input class="input-field" id="tshark-extra-args" type="text" placeholder="Optional extra arguments" spellcheck="false">
       </div>
+      ${caseSelector()}
+      <button class="run-btn" id="run-btn" onclick="runTool()">Run</button>
+    `;
+  } else if (tool.input === 'yara_scan') {
+    const opt = (id, label, title) => `<label title="${title}" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer">
+          <input type="checkbox" id="ys-${id}"> ${label}</label>`;
+    panel.innerHTML = `
+      <div style="font-size:10px;color:var(--cyan);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">YARA Scan — embedded YARA-X engine</div>
+      <div class="input-row">
+        <span class="input-label">Rules:</span>
+        <input class="input-field" id="ys-rules" type="text" placeholder=".yar / .yara file, or a folder of rules" spellcheck="false">
+        <button class="browse-btn" onclick="openBrowser('ys-rules','file')">Browse File</button>
+        <button class="browse-btn" onclick="openBrowser('ys-rules','folder')" style="margin-left:4px">Browse Folder</button>
+      </div>
+      <div class="input-row">
+        <span class="input-label">Target:</span>
+        <input class="input-field" id="ys-target" type="text" placeholder="File or folder to scan" spellcheck="false">
+        <button class="browse-btn" onclick="openBrowser('ys-target','file')">Browse File</button>
+        <button class="browse-btn" onclick="openBrowser('ys-target','folder')" style="margin-left:4px">Browse Folder</button>
+      </div>
+      <div class="input-row" style="gap:16px;flex-wrap:wrap">
+        ${opt('recursive', 'Recursive', '-r: scan subfolders of the target')}
+        ${opt('strings', 'Show strings', '-s: print each matching string with its offset')}
+        ${opt('meta', 'Show meta', '-m: print rule metadata')}
+        ${opt('tags', 'Show tags', '-g: print rule tags')}
+        ${opt('namespace', 'Show namespace', '-e: print rule namespace')}
+        ${opt('count', 'Count only', '-c: number of matching rules per file')}
+        ${opt('negate', 'Non-matching', '-n: list rules that did NOT match')}
+      </div>
+      <div class="input-row">
+        <span class="input-label">Tag filter:</span>
+        <input class="input-field" id="ys-tag" type="text" placeholder="Optional: only rules with this tag (-t)" spellcheck="false">
+      </div>
+      <div class="input-row">
+        <span class="input-label">Arguments:</span>
+        <input class="input-field" id="ys-args" type="text" placeholder="Optional yr-style flags, e.g. -d filename=&quot;x.exe&quot; -a 30 --ignore-invalid-rules" spellcheck="false">
+      </div>
+      <div style="font-size:10px;color:var(--text-dim);margin:-2px 0 8px">Flags follow <code>yr scan</code>. For compiled rules, module data, or profiling, use the YARA-X (<code>yr</code>) integration.</div>
       ${caseSelector()}
       <button class="run-btn" id="run-btn" onclick="runTool()">Run</button>
     `;
@@ -2408,7 +2583,8 @@ async function loadTiSourceStatus() {
     if (!data.success) return;
     for (const key of data.keys) {
       const ids = [key.id];
-      if (key.id === 'vt') ids.push('vt-url'); // VT appears in both hash and URL panels
+      if (key.id === 'vt') ids.push('vt-url', 'vt-ip'); // VT appears in the hash, URL, and IP panels
+      if (key.id === 'otx') ids.push('otx-ip');
       for (const id of ids) {
         const chk = document.getElementById(`ti-src-${id}`);
         const lbl = document.getElementById(`ti-src-label-${id}`);
@@ -2518,11 +2694,14 @@ function setTiTab(mode, btn) {
   document.getElementById('ti-url-panel').style.display  = mode === 'url'  ? '' : 'none';
   document.getElementById('ti-bulk-panel').style.display = mode === 'bulk' ? '' : 'none';
   document.getElementById('ti-qr-panel').style.display   = mode === 'qr'   ? '' : 'none';
+  document.getElementById('ti-ip-panel').style.display   = mode === 'ip'   ? '' : 'none';
 
   const isUrlMode = mode === 'url' || mode === 'qr';
-  document.getElementById('ti-hash-sources').style.display    = isUrlMode ? 'none' : '';
-  document.getElementById('ti-hash-options').style.display    = isUrlMode ? 'none' : '';
+  const isIpMode  = mode === 'ip';
+  document.getElementById('ti-hash-sources').style.display    = (isUrlMode || isIpMode) ? 'none' : '';
+  document.getElementById('ti-hash-options').style.display    = (isUrlMode || isIpMode) ? 'none' : '';
   document.getElementById('ti-url-sources-section').style.display = isUrlMode ? '' : 'none';
+  document.getElementById('ti-ip-sources-section').style.display  = isIpMode ? '' : 'none';
   loadTiSourceStatus();
 }
 
@@ -2612,6 +2791,8 @@ async function runTool(btnEl) {
     const isUrlMode = tiMode === 'url' || tiMode === 'qr';
     const sourceDefs = isUrlMode
       ? [['vt','vt-url'], ['urlscan','urlscan'], ['gsb','gsb']]
+      : tiMode === 'ip'
+      ? [['vt','vt-ip'], ['otx','otx-ip'], ['gn','gn']]
       : ['mb','vt','otx','md','mp','ha','mw','tr','fs','ms','os'].map(id => [id, id]);
     const sources = sourceDefs.filter(([, domId]) => {
       const chk = document.getElementById(`ti-src-${domId}`);
@@ -2627,6 +2808,12 @@ async function runTool(btnEl) {
       if (!url) { showToast('Enter a URL first', 'error'); return; }
       body = { url, download, verbose_vt, sources };
       target = url;
+    } else if (tiMode === 'ip') {
+      const ip = document.getElementById('ti-ip-input')?.value.trim();
+      if (!ip) { showToast('Enter an IP address first', 'error'); return; }
+      if (!sources) { showToast('No IP source has an API key: add one under API Keys', 'error'); return; }
+      body = { ip, sources };
+      target = ip;
     } else if (tiMode === 'bulk') {
       const bulk = document.getElementById('ti-bulk-input')?.value.trim();
       if (!bulk) { showToast('Select a bulk hashes file', 'error'); return; }
@@ -2692,6 +2879,23 @@ async function runTool(btnEl) {
     const extra_args = document.getElementById('tshark-extra-args')?.value.trim() || '';
     body = { pcap_path, display_filter, output_type, fields, include_headers, export_objects, export_protocol, case_name, extra_args };
     target = pcap_path;
+  } else if (tool.input === 'yara_scan') {
+    const rules_path  = document.getElementById('ys-rules')?.value.trim();
+    const target_path = document.getElementById('ys-target')?.value.trim();
+    if (!rules_path)  { showToast('Rules path required', 'error'); return; }
+    if (!target_path) { showToast('Target path required', 'error'); return; }
+    const chk = id => document.getElementById('ys-' + id)?.checked || false;
+    const saveCase = document.getElementById('chk-save-case')?.checked;
+    body = {
+      rules_path, target_path,
+      recursive: chk('recursive'), print_strings: chk('strings'), print_meta: chk('meta'),
+      print_tags: chk('tags'), print_namespace: chk('namespace'), count: chk('count'), negate: chk('negate'),
+      tag: document.getElementById('ys-tag')?.value.trim() || '',
+      extra_args: document.getElementById('ys-args')?.value.trim() || '',
+      case_name: saveCase ? (document.getElementById('case-dropdown')?.value || '') : '',
+      save_format: document.getElementById('case-format-select')?.value || 'md',
+    };
+    target = target_path;
   } else if (tool.input === 'yarax') {
     const rules_path = document.getElementById('yarax-rules')?.value.trim();
     const target_path = document.getElementById('yarax-target')?.value.trim();
@@ -2731,6 +2935,7 @@ async function runTool(btnEl) {
   }
 
   // Update UI
+  const btnLabel = btn?.textContent;
   if (btn) { btn.textContent = 'Running…'; btn.classList.add('running'); btn.disabled = true; }
   setOutput('<span class="out-dim">Running ' + tool.title + '…</span>\n');
   lastTarget = target;
@@ -2808,7 +3013,9 @@ async function runTool(btnEl) {
   }
 
   if (btn) {
-    btn.textContent = btn.textContent.includes('Query') ? 'Run Query' : 'Run';
+    // Restore the button's own label (it read 'Running…' by now, so the
+    // old includes('Query') check always fell through to 'Run').
+    btn.textContent = btnLabel || 'Run';
     btn.classList.remove('running');
     btn.disabled = false;
   }
@@ -2827,6 +3034,7 @@ function renderFileminerTable(rows) {
     'mach-o info':      'macho_info',
     'plist analyzer':   'plist_analyzer',
     'code sign check':  'codesign_check',
+    'unpack':           'unpack',
   };
 
   const mismatchOnly = document.getElementById('chk-mismatch-only')?.checked;
@@ -3036,7 +3244,15 @@ function renderTiqueryOutput(text, stderr) {
   }
   if (current) blocks.push(current);
 
-  if (!blocks.length) { renderColorizedOutput(text); return; }
+  if (!blocks.length) {
+    // e.g. "not a public IP address": the CLI prints only to stderr.
+    if (!text.trim() && stderr && stderr.trim()) {
+      setOutput(`<span class="out-red" style="white-space:pre-wrap">${escHtml(stderr.trim())}</span>`);
+    } else {
+      renderColorizedOutput(text);
+    }
+    return;
+  }
 
   let html = '';
 
@@ -3057,7 +3273,37 @@ function renderTiqueryOutput(text, stderr) {
 
     // Main results table
     const tableRows = parseTiqueryRows(block.mainLines);
-    if (tableRows.length) {
+    const isIpBlock = /^IPv[46]$/i.test(type);
+    if (tableRows.length && isIpBlock) {
+      // For an IP, being FOUND means only that a source knows the address
+      // (8.8.8.8 is in every source). Color by each source's verdict.
+      const verdicts = tableRows.map(tiIpVerdict);
+      const n = k => verdicts.filter(v => v.kind === k).length;
+      html += `<div style="padding:5px 12px;background:var(--bg-panel);display:flex;gap:12px;font-size:10px;border-bottom:1px solid var(--border)">
+        ${n('bad')    ? `<span style="color:var(--red)">● FLAGGED: ${n('bad')}</span>` : ''}
+        ${n('note')   ? `<span style="color:var(--orange)">◐ MENTIONED: ${n('note')}</span>` : ''}
+        ${n('good')   ? `<span style="color:var(--green)">✓ BENIGN / CLEAN: ${n('good')}</span>` : ''}
+        ${n('none')   ? `<span style="color:var(--text-dim)">○ NO DATA: ${n('none')}</span>` : ''}
+        ${n('error')  ? `<span style="color:var(--yellow)">⚠ ERROR: ${n('error')}</span>` : ''}
+      </div>`;
+      const th = t => `<th style="padding:5px 10px;text-align:left;color:var(--cyan);font-weight:600;border-bottom:1px solid var(--border-light);white-space:nowrap">${t}</th>`;
+      html += `<table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--bg-secondary)">${th('Source')}${th('Verdict')}${th('Network / Context')}${th('Detail')}${th('Reference')}</tr></thead><tbody>`;
+      html += tableRows.map((row, i) => {
+        const v = verdicts[i];
+        const refHtml = row.reference && row.reference !== '-'
+          ? `<a href="${escHtml(row.reference)}" target="_blank" style="color:var(--cyan-dim);font-size:10px;text-decoration:none;font-family:var(--font-mono)" title="${escHtml(row.reference)}">⇗ open</a>`
+          : '<span style="color:var(--border-light)">—</span>';
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 10px;font-weight:600;color:var(--text-bright);white-space:nowrap">${escHtml(row.source)}</td>
+          <td style="padding:5px 10px;color:${v.color};font-weight:600;white-space:nowrap">${escHtml(v.label)}</td>
+          <td style="padding:5px 10px;color:var(--text-primary);max-width:280px;word-break:break-word">${escHtml(row.family)}</td>
+          <td style="padding:5px 10px;color:var(--text-dim);white-space:nowrap">${escHtml(row.detections)}</td>
+          <td style="padding:5px 10px">${refHtml}</td>
+        </tr>`;
+      }).join('');
+      html += `</tbody></table>`;
+    } else if (tableRows.length) {
       const found    = tableRows.filter(r => r.status === 'FOUND').length;
       const notFound = tableRows.filter(r => r.status === 'NOT FOUND').length;
       const errors   = tableRows.filter(r => r.status === 'ERROR').length;
@@ -3147,6 +3393,36 @@ function renderTiqueryOutput(text, stderr) {
   document.getElementById('output-content').scrollTop = 0;
 }
 
+// The verdict a single IP result row carries, by source:
+//   VT  — "bad/total" engines (malicious + suspicious)
+//   OTX — "N pulses": the address is discussed, which is context, not a verdict
+//   GN  — classification (benign / malicious / unknown); RIOT = known benign service
+function tiIpVerdict(row) {
+  const st  = (row.status || '').toUpperCase();
+  const det = (row.detections || '').trim();
+  const fam = (row.family || '').trim();
+  if (st === 'ERROR') return { kind: 'error', label: 'ERROR', color: 'var(--yellow)' };
+  if (st !== 'FOUND') return { kind: 'none', label: st || 'NOT FOUND', color: 'var(--text-dim)' };
+  const src = (row.source || '').toUpperCase();
+  if (src === 'VT') {
+    const m = det.match(/^(\d+)\s*\/\s*(\d+)/);
+    if (m && +m[1] > 0) return { kind: 'bad', label: `FLAGGED ${m[1]}/${m[2]}`, color: 'var(--red)' };
+    return { kind: 'good', label: m ? `CLEAN 0/${m[2]}` : 'NO VERDICT', color: m ? 'var(--green)' : 'var(--text-dim)' };
+  }
+  if (src === 'GN') {
+    if (/^RIOT/i.test(fam) || /^benign$/i.test(det)) return { kind: 'good', label: /^RIOT/i.test(fam) ? 'KNOWN BENIGN' : 'BENIGN SCANNER', color: 'var(--green)' };
+    if (/^malicious$/i.test(det)) return { kind: 'bad', label: 'MALICIOUS SCANNER', color: 'var(--red)' };
+    return { kind: 'note', label: 'SCANNER', color: 'var(--orange)' };
+  }
+  if (src === 'OTX') {
+    const m = det.match(/^(\d+)/);
+    return m && +m[1] > 0
+      ? { kind: 'note', label: `IN ${m[1]} PULSE${+m[1] === 1 ? '' : 'S'}`, color: 'var(--orange)' }
+      : { kind: 'none', label: 'NO PULSES', color: 'var(--text-dim)' };
+  }
+  return { kind: 'note', label: st, color: 'var(--text-primary)' };
+}
+
 function parseTiqueryRows(lines) {
   const rows = [];
   let colPositions = [];
@@ -3167,7 +3443,7 @@ function parseTiqueryRows(lines) {
   // Fallback: regex match on known source IDs
   if (!colPositions.length) {
     for (const line of lines) {
-      const m = line.match(/^\s*(MB|VT|OTX|MD|HA|FS|MS|TR|OS|URLSCAN|GSB)\s+(\S+)\s+(.*?)\s{2,}(\S.*?)\s{2,}(https?:\S+|-)\s*$/);
+      const m = line.match(/^\s*(MB|VT|OTX|MD|HA|FS|MS|TR|OS|URLSCAN|GSB|GN)\s+(\S+)\s+(.*?)\s{2,}(\S.*?)\s{2,}(https?:\S+|-)\s*$/);
       if (m) rows.push({ source: m[1], status: m[2], family: m[3].trim(), detections: m[4].trim(), reference: m[5].trim() });
     }
     return rows;
@@ -3218,14 +3494,26 @@ function parseVtPerEngineRows(lines) {
 }
 // ── mStrings Table Renderer ────────────────────────────────────────────────
 
+// A technique ID opens the built-in MITRE Lookup. The href stays the ATT&CK
+// page, so Cmd/Ctrl-click or middle-click still opens it in a new tab, and ↗
+// goes there directly. (Saved reports keep plain attack.mitre.org links.)
 function buildIdHtml(id) {
   if (!id) return '';
+  const safe = escHtml(id);
   const url = 'https://attack.mitre.org/techniques/' + id.replace('.', '/') + '/';
-  return `<a class="ms-technique-id" href="${url}" target="_blank"
-             style="text-decoration:none;margin-right:4px">${escHtml(id)}</a>` +
-         `<button onclick="openMitreLookup('${escHtml(id)}')"
-             style="background:none;border:none;color:var(--cyan-dim);font-size:9px;cursor:pointer;padding:0"
-             title="Look up in MITRE panel">⊛</button>`;
+  return `<span style="white-space:nowrap"><a class="ms-technique-id" href="${url}" target="_blank" rel="noopener"
+             onclick="return mitreIdClick(event, '${safe}')"
+             style="text-decoration:none;margin-right:4px" title="Open in MITRE Lookup (Cmd/Ctrl-click for attack.mitre.org)">${safe}</a>` +
+         `<a href="${url}" target="_blank" rel="noopener"
+             style="color:var(--cyan-dim);font-size:9px;text-decoration:none"
+             title="Open on attack.mitre.org">↗</a></span>`;
+}
+
+function mitreIdClick(ev, id) {
+  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button === 1) return true; // let the browser open the link
+  ev.preventDefault();
+  openMitreLookup(id);
+  return false;
 }
 
 function toggleMsDetail(showDetail) {
@@ -3341,6 +3629,7 @@ function tacticClass(tactic) {
   if (t.includes('execution'))        return 'ms-tactic-execution';
   if (t.includes('defense'))          return 'ms-tactic-defense';
   if (t.includes('evasion'))          return 'ms-tactic-defense';
+  if (t.includes('stealth'))          return 'ms-tactic-defense';  // ATT&CK v20: Defense Evasion → Stealth + Defense Impairment
   if (t.includes('discovery'))        return 'ms-tactic-discovery';
   if (t.includes('persist'))          return 'ms-tactic-persistence';
   if (t.includes('collection'))       return 'ms-tactic-collection';
@@ -3989,6 +4278,9 @@ async function runAnalyze(path) {
       } else {
         renderAnalyzeResults(data);
       }
+      lastAnalyzeMatrix = data.mitre_matrix || null;
+      lastAnalyzeMatrixCase = selectedCase || '';
+      addMitreLaunchButton(lastAnalyzeMatrix);
       showToast(
         `Analyze complete — ${data.file_count} file(s)` + (selectedCase ? ` — saved to case: ${selectedCase}` : ''),
         'success'
@@ -4310,6 +4602,8 @@ function renderCaseList(cases, query = '') {
         <span class="case-status-badge case-status-${escHtml(c.status || 'open')}">${escHtml(c.status || 'open')}</span>
         <button class="output-action-btn" onclick="openCaseEdit('${escHtml(c.name)}');event.stopPropagation()"
           style="font-size:10px;padding:2px 6px;opacity:0.7">Edit</button>
+        <button class="output-action-btn" onclick="openCaseMitreMatrix('${escHtml(c.name)}', event)"
+          style="font-size:10px;padding:2px 6px;opacity:0.85;color:var(--orange)" title="Combined MITRE ATT&CK matrix for every Analyze run in this case">⊞ MITRE</button>
         <button class="output-action-btn" onclick="archiveCase('${escHtml(c.name)}');event.stopPropagation()"
           style="font-size:10px;padding:2px 6px;opacity:0.7" title="Download zip archive">⬇ Archive</button>
         <button class="output-action-btn" onclick="deleteCase('${escHtml(c.name)}');event.stopPropagation()"
@@ -4760,6 +5054,7 @@ function renderApiKeys(keys) {
     { id: 1,     label: 'HASH SOURCES — TIER 1' },
     { id: 2,     label: 'HASH SOURCES — TIER 2' },
     { id: 'url', label: 'URL SOURCES' },
+    { id: 'ip',  label: 'IP SOURCES — VirusTotal and OTX keys also cover IPs' },
   ];
 
   let html = '';
@@ -5373,6 +5668,242 @@ function notebookToStringsYara() {
     }, 50);
   }, 100);
 }
+
+// ── MITRE ATT&CK Matrix (Analyze results / saved cases) ─────────────────────
+// Data comes from server/mitre_matrix.py: an Analyze response carries
+// `mitre_matrix`; a saved case's combined matrix (every Analyze run in it)
+// comes from GET /cases/<name>/mitre. The full Enterprise skeleton (all
+// tactics and techniques, for "Hits only" off) is fetched once from
+// /mitre/matrix/template.
+
+let lastAnalyzeMatrix = null;
+let lastAnalyzeMatrixCase = '';
+let mxState = { matrix: null, caseName: '', title: '', selected: null };
+let mxTemplate = null;
+
+function addMitreLaunchButton(matrix) {
+  if (!matrix || !matrix.techniques || !matrix.techniques.length) return;
+  const el = document.getElementById('output-content');
+  if (!el) return;
+  const tacs = new Set(matrix.techniques.flatMap(t => t.tactics));
+  const btn = document.createElement('button');
+  btn.className = 'mx-launch';
+  btn.innerHTML = `⊞ MITRE ATT&amp;CK matrix — ${matrix.techniques.length} technique(s) across ${tacs.size} tactic(s)`;
+  btn.onclick = () => openMitreMatrix(lastAnalyzeMatrix, lastAnalyzeMatrixCase, 'Analyze run');
+  el.prepend(btn);
+}
+
+async function openCaseMitreMatrix(caseName, e) {
+  if (e) e.stopPropagation();
+  try {
+    const data = await api(`/cases/${encodeURIComponent(caseName)}/mitre`);
+    if (!data.success) { showToast(data.error || 'Could not load matrix', 'error'); return; }
+    if (!data.matrix.techniques.length) {
+      showToast(`No ATT&CK findings in case "${caseName}" yet — run Analyze with Save to Case`, 'error');
+      return;
+    }
+    openMitreMatrix(data.matrix, caseName, `Case: ${caseName}`);
+  } catch (err) { showToast('Could not load matrix: ' + err.message, 'error'); }
+}
+
+async function openMitreMatrix(matrix, caseName, title) {
+  if (!matrix) return;
+  mxState = { matrix, caseName: caseName || '', title: title || '', selected: null };
+  document.getElementById('mx-overlay').classList.add('open');
+  document.getElementById('mx-detail').classList.remove('open');
+  if (!mxTemplate) {
+    try {
+      const t = await api('/mitre/matrix/template');
+      if (t.success) mxTemplate = t;
+    } catch (_) { /* hits-only still works without it */ }
+  }
+  renderMitreMatrix();
+}
+
+function closeMitreMatrix() {
+  document.getElementById('mx-overlay').classList.remove('open');
+}
+
+function mxColor(score, max) {
+  // Yellow → orange → red, by share of the busiest technique's score.
+  const r = max > 0 ? Math.min(1, score / max) : 1;
+  const stops = [[255, 231, 102], [255, 158, 74], [255, 102, 102]];
+  const seg = r < 0.5 ? 0 : 1, f = r < 0.5 ? r / 0.5 : (r - 0.5) / 0.5;
+  const c = stops[seg].map((v, i) => Math.round(v + (stops[seg + 1][i] - v) * f));
+  return `rgb(${c.join(',')})`;
+}
+
+// Cell style for a hit: translucent heat fill (a little denser for hotter
+// cells) with a solid heat-coloured edge and badge.
+function mxCellStyle(score, max) {
+  const solid = mxColor(score, max);
+  const r = max > 0 ? Math.min(1, score / max) : 1;
+  const fill = solid.replace('rgb(', 'rgba(').replace(')', `,${(0.16 + 0.14 * r).toFixed(2)})`);
+  return { fill, solid, css: `background:${fill};border-color:${solid.replace('rgb(', 'rgba(').replace(')', ',0.45)')};border-left-color:${solid}` };
+}
+
+function renderMitreMatrix() {
+  const { matrix, title } = mxState;
+  if (!matrix) return;
+  const hitsOnly = document.getElementById('mx-hits-only').checked || !mxTemplate;
+  const q = (document.getElementById('mx-filter').value || '').trim().toLowerCase();
+  const byId = Object.fromEntries(matrix.techniques.map(t => [t.id, t]));
+  const maxScore = Math.max(1, ...matrix.techniques.map(t => t.score));
+  const nFiles = matrix.file_count || 0;
+  const runs = (matrix.runs || []).length;
+
+  document.getElementById('mx-sub').textContent =
+    `${title} · ATT&CK v${matrix.attack_version} · ${matrix.techniques.length} technique(s) · ` +
+    `${nFiles} file(s)` + (runs > 1 ? ` · ${runs} Analyze runs` : '') +
+    (matrix.reports ? ` · ${matrix.reports} tool report(s)` : '');
+  document.getElementById('mx-legend').innerHTML =
+    `<span class="sw" style="${mxCellStyle(1, maxScore).css};border:1px solid;border-left-width:3px"></span>1 file` +
+    (maxScore > 1 ? ` <span class="sw" style="${mxCellStyle(maxScore, maxScore).css};border:1px solid;border-left-width:3px"></span>${maxScore} files` : '') +
+    ` <span class="sw" style="border:1px dashed var(--text-dim)"></span>flag-only (low confidence)`;
+
+  const matchesQ = (id, name) => !q || id.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+
+  // Columns: the template's tactics when available, else the matrix's own.
+  const cols = (mxTemplate ? mxTemplate.tactics : matrix.tactics.map(t => ({ ...t, techniques: [] })));
+  let html = '';
+  for (const tac of cols) {
+    const hitsHere = matrix.techniques.filter(t => t.tactics.includes(tac.shortname));
+    const hitParents = new Set(hitsHere.map(t => t.id.split('.')[0]));
+    // Rows for this column: template parents (full view) or just hit parents.
+    let parents;
+    if (!hitsOnly) {
+      parents = tac.techniques;
+    } else {
+      parents = [...hitParents].map(pid => {
+        const fromTpl = mxTemplate?.tactics.find(x => x.shortname === tac.shortname)?.techniques.find(p => p.id === pid);
+        return fromTpl || { id: pid, name: (byId[pid]?.name || hitsHere.find(t => t.id.startsWith(pid + '.'))?.name.split(':')[0] || pid), subs: [] };
+      }).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (hitsOnly && !parents.length) continue;
+    const nHit = hitsHere.length;
+    html += `<div class="mx-col${nHit ? ' hit-col' : ''}">`;
+    html += `<div class="mx-tac${nHit ? ' has-hits' : ''}" title="${escHtml(tac.id)}">${escHtml(tac.name)}`
+          + `<span class="mx-tac-meta">${nHit ? nHit + ' hit' + (nHit > 1 ? 's' : '') : (tac.techniques.length ? tac.techniques.length + ' techniques' : '')}</span></div>`;
+    for (const p of parents) {
+      const hit = hitsHere.find(t => t.id === p.id);
+      const subHits = hitsHere.filter(t => t.id.startsWith(p.id + '.'));
+      if (q && !matchesQ(p.id, p.name) && !subHits.some(s => matchesQ(s.id, s.name)) && !(hit && matchesQ(hit.id, hit.name))) {
+        if (!hitsOnly) html += `<div class="mx-cell dim"><span class="mx-id">${escHtml(p.id)}</span>${escHtml(p.name)}</div>`;
+        continue;
+      }
+      html += mxCellHtml(p.id, p.name, hit, subHits.length, maxScore, tac.shortname);
+      for (const s of subHits) {
+        const sname = (s.name.split(': ')[1] || s.name);
+        html += `<div class="mx-sub">${mxCellHtml(s.id, sname, s, 0, maxScore, tac.shortname)}</div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  if (!html) html = `<div style="color:var(--text-dim);font-size:12px;padding:20px">No techniques match.</div>`;
+  document.getElementById('mx-grid').innerHTML = html;
+  if (mxState.selected) showMitreDetail(mxState.selected.id, mxState.selected.tactic, true);
+}
+
+function mxCellHtml(id, name, hit, nSub, maxScore, tactic) {
+  const sel = mxState.selected && mxState.selected.id === id && mxState.selected.tactic === tactic ? ' sel' : '';
+  const click = `onclick="showMitreDetail('${escHtml(id)}','${escHtml(tactic)}')"`;
+  if (hit) {
+    const files = hit.files.length;
+    const st = mxCellStyle(hit.score, maxScore);
+    return `<div class="mx-cell hit${hit.confidence === 'low' ? ' low' : ''}${sel}" style="${st.css}" ${click}
+              title="${escHtml(hit.name)} — ${files} file(s), ${hit.tools.join(', ')}">
+              <span class="mx-badge" style="background:${st.solid}">${files}</span><span class="mx-id">${escHtml(id)}</span>${escHtml(name)}</div>`;
+  }
+  if (nSub) {
+    return `<div class="mx-cell subhit${sel}" title="${nSub} sub-technique hit(s)"><span class="mx-badge" style="background:var(--orange-dim);color:#fff">${nSub}</span><span class="mx-id">${escHtml(id)}</span>${escHtml(name)}</div>`;
+  }
+  return `<div class="mx-cell"><span class="mx-id">${escHtml(id)}</span>${escHtml(name)}</div>`;
+}
+
+function showMitreDetail(id, tactic, keep) {
+  const t = mxState.matrix.techniques.find(x => x.id === id);
+  if (!t) return;
+  mxState.selected = { id, tactic };
+  if (!keep) {
+    document.querySelectorAll('.mx-cell.sel').forEach(c => c.classList.remove('sel'));
+    renderMitreMatrix();
+    return;
+  }
+  const tacNames = t.tactics.map(s => (mxState.matrix.tactics.find(x => x.shortname === s) || {}).name || s);
+  const byFile = {};
+  for (const h of t.hits) {
+    const k = h.sha256 || h.file;
+    (byFile[k] = byFile[k] || { file: h.file, sha256: h.sha256, hits: [] }).hits.push(h);
+  }
+  const url = `https://attack.mitre.org/techniques/${id.replace('.', '/')}/`;
+  let html = `<h4>${escHtml(t.name)}</h4>`
+    + `<div class="mx-dmeta"><span class="mitre-technique-id">${escHtml(id)}</span> · ${escHtml(tacNames.join(', '))}`
+    + (t.confidence === 'low' ? ` · <span class="mx-conf-low">flag-only (low confidence)</span>` : '') + `</div>`
+    + `<div style="display:flex;gap:6px;flex-wrap:wrap">`
+    + `<button class="output-action-btn" onclick="openMitreLookup('${escHtml(id)}')">⊛ MITRE Lookup</button>`
+    + `<a class="output-action-btn" href="${url}" target="_blank" rel="noopener" style="text-decoration:none">attack.mitre.org ↗</a>`
+    + `<button class="output-action-btn" onclick="document.getElementById('mx-detail').classList.remove('open');mxState.selected=null;renderMitreMatrix()">✕</button>`
+    + `</div>`;
+  for (const f of Object.values(byFile)) {
+    html += `<div class="mx-dfile"><div class="mx-dfile-name">${escHtml(f.file || '?')}</div>`;
+    if (f.sha256) html += `<div style="color:var(--text-dim);font-family:var(--font-mono);font-size:9.5px;word-break:break-all">${escHtml(f.sha256)}</div>`;
+    html += `<ul>`;
+    for (const h of f.hits) {
+      const cnt = h.tool === 'mstrings' && h.count > 1 ? ` <span style="color:var(--text-dim)">(${h.count} matched strings)</span>` : '';
+      const low = h.confidence === 'low' ? ` <span class="mx-conf-low">low</span>` : '';
+      // Which run or standalone report the hit came from (only worth showing
+      // when the matrix spans more than one source).
+      const multi = (mxState.matrix.runs || []).length > 1 || mxState.matrix.reports;
+      const run = multi && h.run ? ` <span style="color:var(--text-dim);font-size:9.5px">· ${escHtml(h.report ? h.report : h.run)}</span>` : '';
+      html += `<li><span class="mx-tool">${escHtml(h.tool)}</span> ${escHtml(h.source || '')}${cnt}${low}${run}${mxStringsHtml(h)}</li>`;
+    }
+    html += `</ul></div>`;
+  }
+  const d = document.getElementById('mx-detail');
+  d.innerHTML = html;
+  d.classList.add('open');
+}
+
+// The matched strings behind an mStrings hit (as shown in its report: up to
+// 8 per rule, each cut to 50 chars). URLs and IPs are defanged.
+function mxStringsHtml(h) {
+  const strs = h.strings || [];
+  if (!strs.length && !h.note) return '';
+  const defang = s => s.replace(/^(h)tt(ps?):\/\//i, '$1xx$2://').replace(/(\w)\.(?=\w)/g, (m, c, off, str) =>
+    /^hxxps?:\/\//i.test(str) || /^\d{1,3}(\.\d{1,3}){3}/.test(str) ? `${c}[.]` : m);
+  let out = '<div class="mx-strs">' + strs.map(s => `<code>${escHtml(defang(s))}</code>`).join('');
+  if (h.more) out += `<span class="mx-strs-more">+${h.more} more — see the mStrings report for the full list</span>`;
+  if (h.note) out += `<span class="mx-strs-note">${escHtml(h.note)}</span>`;
+  return out + '</div>';
+}
+
+async function downloadMitreLayer() {
+  const { matrix, caseName, title } = mxState;
+  if (!matrix) return;
+  try {
+    let res;
+    if (caseName && title.startsWith('Case:')) {
+      res = await fetch(serverUrl + `/cases/${encodeURIComponent(caseName)}/mitre/layer`);
+    } else {
+      res = await fetch(serverUrl + '/mitre/layer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matrix, name: `MalChela — ${(matrix.target || '').split('/').pop() || 'Analyze'}` }),
+      });
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (caseName ? caseName.replace(/[^\w.-]+/g, '_') + '_' : '') + 'navigator_layer.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    showToast('Layer saved — open it in ATT&CK Navigator (Open Existing Layer → Upload from local)', 'success');
+  } catch (e) { showToast('Layer download failed: ' + e.message, 'error'); }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('mx-overlay')?.classList.contains('open')) closeMitreMatrix();
+});
 
 // ── MITRE Lookup ───────────────────────────────────────────────────────────
 

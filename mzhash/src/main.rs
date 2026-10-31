@@ -8,7 +8,7 @@ use std::process;
 use sha2::{Sha256, Digest};
 use md5::Md5;
 use sha1::Sha1;
-use yara::{Compiler, Rules};
+use yara_backend::YaraBackend as Rules;
 use walkdir::WalkDir;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -16,7 +16,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use clap::{Arg, Command};
 
 /// Compile YARA rules for detecting MZ headers.
-fn compile_yara_rules() -> Result<Rules, yara::Error> {
+fn compile_yara_rules() -> Result<Rules, String> {
     let rule = r#"
 rule mz_header {
     meta:
@@ -28,12 +28,22 @@ rule mz_header {
 }
 "#;
 
-    Compiler::new()
-        .map_err(|e| yara::Error::from(e))?
-        .add_rules_str(rule)
-        .map_err(|e| yara::Error::from(e))?
-        .compile_rules()
-        .map_err(|e| yara::Error::from(e))
+    Rules::from_inline_sources(&[("mzhash", rule)]).map_err(|e| e.to_string())
+}
+
+/// Every rule in this tool tests a magic number `at 0`, so scanning a file's
+/// first 4 KiB is equivalent to scanning all of it — and much faster, with no
+/// need to read multi-GB files (yara-backend caps full scans at 256 MiB).
+fn header_matches(rules: &Rules, path: &Path, timeout_secs: u64) -> Result<Vec<String>, String> {
+    use std::io::Read as _;
+    let mut head = Vec::with_capacity(4096);
+    std::fs::File::open(path)
+        .and_then(|f| f.take(4096).read_to_end(&mut head))
+        .map_err(|e| e.to_string())?;
+    rules
+        .scan_bytes(&head, std::time::Duration::from_secs(timeout_secs))
+        .map(|r| r.rule_names_sorted())
+        .map_err(|e| e.to_string())
 }
 
 /// Calculate the SHA256 hash of a file.
@@ -88,7 +98,7 @@ fn calculate_sha1(file_path: &Path) -> Option<String> {
 }
 
 /// Scan files in a directory using YARA rules and write results to output files.
-fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, algorithms: &[String]) -> (usize, usize, Vec<String>) {
+fn scan_and_hash_files(directory: &Path, rules: &Rules, output_file: &Path, algorithms: &[String]) -> (usize, usize, Vec<String>) {
     let entries: Vec<_> = WalkDir::new(directory)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -140,17 +150,9 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
     entries.par_iter().for_each(|entry| {
         let path = entry.path();
 
-        let rules = match compile_yara_rules() {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("Thread error: failed to compile rules: {}", e);
-                return;
-            }
-        };
-
-        match rules.scan_file(path, 0) {
+        match header_matches(rules, path, 0) {
             Ok(matches) => {
-                if matches.iter().any(|m| m.identifier == "mz_header") {
+                if matches.iter().any(|m| m == "mz_header") {
                     if let Ok(mut count) = file_count.lock() {
                         *count += 1;
                     }
@@ -188,7 +190,7 @@ fn scan_and_hash_files(directory: &Path, _rules: &Rules, output_file: &Path, alg
                 }
             }
             Err(e) => {
-                if e.to_string().contains("Timeouted") {
+                if e.contains("timed out") {
                     if let Ok(mut log) = timeout_log.lock() {
                         writeln!(log, "[TIMEOUT] {:?}: {}", path, e).ok();
                     }

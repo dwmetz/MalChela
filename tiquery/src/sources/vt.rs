@@ -116,6 +116,38 @@ impl VirusTotal {
         }
     }
 
+    /// IP address report: detections, community reputation, AS owner, and
+    /// country — enough to tell a flagged C2 from a cloud or CDN address.
+    async fn query_ip(&self, ip: &str, key: &str) -> SourceResult {
+        let client = match reqwest::Client::builder().build() {
+            Ok(c) => c,
+            Err(e) => return SourceResult::error(self.short_name(), e.to_string()),
+        };
+        let api_url = format!("https://www.virustotal.com/api/v3/ip_addresses/{}", ip);
+        let resp = match client.get(&api_url).header("x-apikey", key).send().await {
+            Ok(r) => r,
+            Err(e) => return SourceResult::error(self.short_name(), e.to_string()),
+        };
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return SourceResult::not_found(self.short_name());
+        }
+        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return SourceResult::error(self.short_name(), "rate limited (VT public API: 4/min)");
+        }
+        let body: Value = match resp.json().await {
+            Ok(v) => v,
+            Err(e) => return SourceResult::error(self.short_name(), e.to_string()),
+        };
+        if let Some(err) = body.get("error") {
+            let code = err.get("code").and_then(|v| v.as_str()).unwrap_or("unknown");
+            if code == "NotFoundError" {
+                return SourceResult::not_found(self.short_name());
+            }
+            return SourceResult::error(self.short_name(), code.to_string());
+        }
+        ip_result(self.short_name(), ip, &body["data"]["attributes"])
+    }
+
     async fn query_url(&self, url_input: &str, key: &str) -> SourceResult {
         let url_id = URL_SAFE_NO_PAD.encode(url_input.as_bytes());
 
@@ -228,8 +260,62 @@ impl ThreatSource for VirusTotal {
 
         if input.starts_with("http://") || input.starts_with("https://") {
             self.query_url(input, &key).await
+        } else if input.parse::<std::net::IpAddr>().is_ok() {
+            self.query_ip(input, &key).await
         } else {
             self.query_hash(input, &key).await
         }
+    }
+}
+
+/// VT IP-address attributes -> result (split out for tests).
+fn ip_result(short: &str, ip: &str, attrs: &Value) -> SourceResult {
+    let stats = &attrs["last_analysis_stats"];
+    let bad = stats["malicious"].as_u64().unwrap_or(0) + stats["suspicious"].as_u64().unwrap_or(0);
+    let total: u64 = ["malicious", "suspicious", "undetected", "harmless", "timeout"]
+        .iter()
+        .filter_map(|k| stats[k].as_u64())
+        .sum();
+    let owner = attrs["as_owner"].as_str().unwrap_or("");
+    let asn = attrs["asn"].as_u64().map(|a| format!("AS{} ", a)).unwrap_or_default();
+    let country = attrs["country"].as_str().map(|c| format!(" ({})", c)).unwrap_or_default();
+    let family = format!("{}{}{}", asn, owner, country).trim().to_string();
+    let mut tags: Vec<String> = attrs["tags"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    let mut extra = std::collections::HashMap::new();
+    if let Some(rep) = attrs["reputation"].as_i64() {
+        extra.insert("reputation".to_string(), Value::from(rep));
+        if rep != 0 {
+            tags.push(format!("reputation {}", rep));
+        }
+    }
+    SourceResult {
+        source: short.to_string(),
+        status: Some(SourceStatus::Found),
+        family: if family.is_empty() { None } else { Some(family) },
+        detections: if total > 0 { Some(format!("{}/{}", bad, total)) } else { None },
+        tags,
+        link: Some(format!("https://www.virustotal.com/gui/ip-address/{}", ip)),
+        extra,
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod ip_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn ip_attributes() {
+        let a = json!({"last_analysis_stats":{"malicious":3,"suspicious":1,"undetected":20,"harmless":70,"timeout":0},
+                       "as_owner":"Example Hosting","asn":64500,"country":"NL","reputation":-12,"tags":["tor"]});
+        let r = ip_result("VT", "198.51.100.7", &a);
+        assert_eq!(r.detections.as_deref(), Some("4/94"));
+        assert_eq!(r.family.as_deref(), Some("AS64500 Example Hosting (NL)"));
+        assert!(r.tags.contains(&"tor".to_string()) && r.tags.contains(&"reputation -12".to_string()));
+        assert_eq!(r.link.as_deref(), Some("https://www.virustotal.com/gui/ip-address/198.51.100.7"));
     }
 }

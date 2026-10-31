@@ -36,6 +36,7 @@ Per-section entropy table. Sections above 7.0 are flagged as potentially packed 
 | Zero-sized `__PAGEZERO` | Classic privilege escalation technique in older macOS malware |
 | High-entropy section (> 7.0) | Possible packed or encrypted payload |
 | RPATH entries | Potential dylib hijacking surface |
+| Imports `system()`, `popen()`, `exec*()`, or `posix_spawn()` | Can launch a shell or other programs (osascript, curl, …) with arguments built at runtime — common in stealers that hide their commands as encrypted strings |
 | Deprecated crypto library | `libcrypto.0.9.8` / `libssl.0.9.8` — EOL OpenSSL with numerous known CVEs |
 | C2 dylib triad | CoreFoundation + SystemConfiguration + Security with minimal other imports — common implant pattern |
 

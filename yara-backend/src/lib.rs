@@ -19,3 +19,7 @@ mod compile;
 mod error;
 mod match_types;
 mod scan;
+
+/// Whole-rules scanning (several rule paths, externals, negate, per-match
+/// detail) for the `yara_scan` tool.
+pub mod rules_scan;

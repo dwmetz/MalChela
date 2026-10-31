@@ -33,9 +33,16 @@ impl ThreatSource for AlienVaultOTX {
             Err(e) => return SourceResult::error(self.short_name(), e.to_string()),
         };
 
+        // IPs use the IPv4/IPv6 indicator endpoints; everything else is a file hash.
+        let ip = hash.parse::<std::net::IpAddr>().ok();
+        let kind = match ip {
+            Some(std::net::IpAddr::V4(_)) => "IPv4",
+            Some(std::net::IpAddr::V6(_)) => "IPv6",
+            None => "file",
+        };
         let url = format!(
-            "https://otx.alienvault.com/api/v1/indicators/file/{}/general",
-            hash
+            "https://otx.alienvault.com/api/v1/indicators/{}/{}/general",
+            kind, hash
         );
 
         let resp = match client
@@ -101,8 +108,18 @@ impl ThreatSource for AlienVaultOTX {
             status: Some(SourceStatus::Found),
             detections: Some(format!("{} pulse{}", pulse_count, if pulse_count == 1 { "" } else { "s" })),
             tags,
-            link: Some(format!("https://otx.alienvault.com/indicator/file/{}", hash)),
-            family: None,
+            link: Some(format!(
+                "https://otx.alienvault.com/indicator/{}/{}",
+                if ip.is_some() { "ip" } else { "file" },
+                hash
+            )),
+            // For IPs: AS and country, so the row says whose address it is.
+            family: ip.and_then(|_| {
+                let asn = body.get("asn").and_then(|v| v.as_str()).unwrap_or("");
+                let cc = body.get("country_name").and_then(|v| v.as_str()).unwrap_or("");
+                let f = format!("{}{}", asn, if cc.is_empty() { String::new() } else { format!(" ({})", cc) });
+                (!f.trim().is_empty()).then(|| f.trim().to_string())
+            }),
             file_name: None,
             file_type: None,
             first_seen: None,

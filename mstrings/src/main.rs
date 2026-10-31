@@ -25,6 +25,19 @@ const RUST_ORANGE: (u8, u8, u8) = (215, 100, 40); // Use this constant for color
 // Function to handle printing IOCs (unified CLI/GUI logic and formatting).
 // is_network gates defanging — filesystem IOCs are never defanged, only URLs/
 // domains/IPs (see defang_network_ioc's doc comment for why).
+/// Network IOCs, with public DNS resolvers listed separately (not C2).
+fn print_net_iocs(iocs: &BTreeSet<String>) {
+    let (net, resolvers) = split_resolvers(iocs);
+    print_iocs("POTENTIAL NETWORK IOCs:", &net, true);
+    if !resolvers.is_empty() {
+        println!(
+            "{} {}",
+            "PUBLIC DNS RESOLVERS REFERENCED (not C2):".truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2),
+            resolvers.iter().cloned().collect::<Vec<_>>().join(", ")
+        );
+    }
+}
+
 fn print_iocs(title: &str, iocs: &std::collections::BTreeSet<String>, is_network: bool) {
     if !iocs.is_empty() {
         println!("{}", title.truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2));
@@ -76,7 +89,14 @@ struct Match {
 struct Detection {
     title: String,
     detection: DetectionStrings,
+    #[serde(default)]
     mitre: Vec<MitreMapping>,
+    /// An IOC-only rule reports its matches (and feeds IOC extraction) but
+    /// claims no ATT&CK technique: e.g. a private IP address, which is worth
+    /// listing but is not evidence of C2 by itself. Without this flag a rule
+    /// with no `mitre` entry never fires.
+    #[serde(default)]
+    ioc_only: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +143,58 @@ fn sanitize_table_cell(s: &str) -> String {
 // Found needed on IPStorm (TAOMM Ch1): 0.0.0.0 and 10.0.0.0 — both from
 // libp2p's own bogon/CIDR-filter constant list — leaked through here even
 // after the rule itself was fixed, since this is a separate code path.
+/// Well-known public DNS resolvers. Malware hardcodes these for name
+/// resolution or connectivity checks (Mirai-family bots use 8.8.8.8 to learn
+/// their own local IP) — worth reporting, but they are not C2, so they get
+/// their own report section instead of the Network IOC list.
+const PUBLIC_DNS_RESOLVERS: &[&str] = &[
+    "8.8.8.8", "8.8.4.4",                  // Google
+    "1.1.1.1", "1.0.0.1",                  // Cloudflare
+    "9.9.9.9", "149.112.112.112",          // Quad9
+    "208.67.222.222", "208.67.220.220",    // OpenDNS
+    "4.2.2.1", "4.2.2.2", "4.2.2.3", "4.2.2.4", "4.2.2.5", "4.2.2.6", // Level3
+    "64.6.64.6", "64.6.65.6",              // Verisign
+    "94.140.14.14", "94.140.15.15",        // AdGuard
+    "114.114.114.114", "114.114.115.115",  // 114DNS
+    "223.5.5.5", "223.6.6.6",              // AliDNS
+    "119.29.29.29", "180.76.76.76",        // DNSPod, Baidu
+    "77.88.8.8", "77.88.8.1",              // Yandex
+];
+
+/// Split resolver IPs out of a network IOC set: (iocs, resolvers).
+fn split_resolvers(net_iocs: &BTreeSet<String>) -> (BTreeSet<String>, BTreeSet<String>) {
+    net_iocs.iter().cloned().partition(|ioc| !PUBLIC_DNS_RESOLVERS.contains(&ioc.as_str()))
+}
+
+/// Pull well-formed URLs out of a string. Go (and some C) binaries store
+/// strings back to back with no separator, so a URL can be glued to a comma
+/// list, a closing parenthesis, or a following hex constant — the old
+/// "everything up to whitespace or a quote" match swallowed all of that
+/// (XorDDoS: four C2 config URLs reported as one IOC). Stop at characters
+/// that don't occur in malware URLs in practice, trim trailing punctuation,
+/// and drop Go toolchain documentation links present in every Go binary.
+fn extract_urls(s: &str) -> Vec<String> {
+    use std::sync::OnceLock;
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        Regex::new(r"(?i)https?://[a-z0-9](?:[a-z0-9.\-]*[a-z0-9])?(?::\d{1,5})?(?:[/?#][a-z0-9._~%!$&*+=:@/?#\-]*)?").unwrap()
+    });
+    let mut out = Vec::new();
+    for m in re.find_iter(s).flatten() {
+        let url = m.as_str().trim_end_matches(['.', ':', '?', '#', '-']);
+        let lower = url.to_ascii_lowercase();
+        let host = lower.split("://").nth(1).unwrap_or("").split(['/', '?', '#', ':']).next().unwrap_or("");
+        if !host.contains('.') || host.len() < 4 || url.len() > 300 {
+            continue;
+        }
+        if matches!(host, "go.dev" | "golang.org" | "www.golang.org" | "pkg.go.dev") {
+            continue;
+        }
+        out.push(url.to_string());
+    }
+    out
+}
+
 fn is_boring_ip(ip: &str) -> bool {
     if ip == "127.0.0.1" || ip == "255.255.255.255" || ip == "239.255.255.250" {
         return true;
@@ -392,6 +464,9 @@ impl Mstrings {
         for (_key, det) in &raw_rules {
             for pattern in &det.detection.strings {
                 if let Ok(regex) = Regex::new(pattern) {
+                    if det.ioc_only && det.mitre.is_empty() {
+                        compiled_rules.push((regex.clone(), det.title.clone(), String::new(), String::new(), String::new()));
+                    }
                     for mitre in &det.mitre {
                         compiled_rules.push((
                             regex.clone(),
@@ -433,9 +508,9 @@ impl Mstrings {
                             display_str: found.as_str().to_string(),
                             decode_layers: m.decode_layers,
                             rule_name: Some(rule_name.clone()),
-                            tactic: Some(tactic.clone()),
-                            technique: Some(technique.clone()),
-                            technique_id: Some(technique_id.clone()),
+                            tactic: Some(tactic.clone()).filter(|t| !t.is_empty()),
+                            technique: Some(technique.clone()).filter(|t| !t.is_empty()),
+                            technique_id: Some(technique_id.clone()).filter(|t| !t.is_empty()),
                         });
                         any_match = true;
                     }
@@ -507,10 +582,53 @@ fn tactic_priority(tactic: &str) -> u8 {
     else if t.contains("privilege escalation") { 6 }
     else if t.contains("credential")      { 7 }
     else if t.contains("lateral movement") { 8 }
+    // ATT&CK v20 split Defense Evasion into Defense Impairment (TA0112) and
+    // Stealth (TA0005); "defense evasion" stays for custom/older rule files.
+    else if t.contains("defense impairment") { 9 }
+    else if t.contains("stealth")         { 9 }
     else if t.contains("defense evasion") { 9 }
     else if t.contains("discovery")       { 10 }
     else if t.contains("resource development") { 11 }
     else { 12 }
+}
+
+/// Title of the detections.yaml rule for long base64-alphabet strings.
+const B64_BLOB_RULE: &str = "Large embedded base64 blob";
+/// How many distinct blob strings it takes to call it a string table.
+const ENCODED_TABLE_MIN: usize = 25;
+
+/// One summary row for a binary whose payload is stored as a table of many
+/// encoded strings (AMOS keeps its whole AppleScript stealer as ~2,000
+/// encrypted, base64-alphabet C strings decoded at runtime). Per-string
+/// matches say nothing useful at that scale; the shape itself is the finding,
+/// and it explains why no other rule fires — the behavior isn't in plaintext.
+fn encoded_string_table_row(matches: &[Match], file_len: usize) -> Option<DisplayMatch> {
+    let mut seen = std::collections::BTreeSet::new();
+    let (mut bytes, mut lo, mut hi) = (0usize, usize::MAX, 0usize);
+    for m in matches.iter().filter(|m| m.rule_name.as_deref() == Some(B64_BLOB_RULE) && m.decode_layers == 0) {
+        if seen.insert(m.offset) {
+            bytes += m.matched_str.len();
+            lo = lo.min(m.offset);
+            hi = hi.max(m.offset + m.matched_str.len());
+        }
+    }
+    let n = seen.len();
+    if n < ENCODED_TABLE_MIN {
+        return None;
+    }
+    let kb = bytes as f64 / 1024.0;
+    let share = if file_len > 0 { bytes as f64 * 100.0 / file_len as f64 } else { 0.0 };
+    Some(DisplayMatch {
+        count: n.to_string(),
+        rule_name: "Encoded string table (likely encrypted payload)".to_string(),
+        matched_strings: format!(
+            "{n} base64-alphabet strings, {kb:.0} KB ({share:.0}% of file) at 0x{lo:X}–0x{hi:X}; \
+             decoded at runtime, so the real behavior isn't visible as plaintext strings"
+        ),
+        tactic: "Stealth".to_string(),
+        technique: "Obfuscated Files or Information: Encrypted/Encoded File".to_string(),
+        technique_id: "T1027.013".to_string(),
+    })
 }
 
 // ── Per-file scan result ──────────────────────────────────────────────────────
@@ -522,7 +640,64 @@ struct FileScanResult {
     flat_matches: Vec<FlatMatch>,
     fs_iocs: BTreeSet<String>,
     net_iocs: BTreeSet<String>,
+    /// Runs of IPs stored together (see `split_ip_lists`), kept out of net_iocs.
+    ip_lists: Vec<IpList>,
     matches: Vec<Match>,
+}
+
+/// Ten or more IP addresses stored within a few hundred bytes of each other:
+/// an embedded list, most often an anti-analysis blocklist of sandbox and
+/// analysis-host IPs (Luna Grabber's blackListedIPS), sometimes a C2 pool.
+/// Either way, not ten separate C2 indicators.
+#[derive(Debug, Clone)]
+struct IpList {
+    start: usize,
+    end: usize,
+    ips: Vec<String>,
+}
+
+const IP_LIST_MIN: usize = 10;
+const IP_LIST_GAP: usize = 256;
+
+/// Move IPs that sit in a dense run (>= IP_LIST_MIN within IP_LIST_GAP bytes
+/// of each other) out of `net_iocs` into lists. `ip_offsets` holds only IPs
+/// stored as whole strings (or whole lines of a decoded blob), with each one's
+/// first offset: an IP inside a command line ("curl http://1.2.3.4/x") is a
+/// standalone indicator however close it sits to a list.
+fn split_ip_lists(net_iocs: &mut BTreeSet<String>, ip_offsets: &HashMap<String, usize>) -> Vec<IpList> {
+    let mut by_off: Vec<(usize, &String)> = ip_offsets
+        .iter()
+        .filter(|(ip, _)| net_iocs.contains(*ip))
+        .map(|(ip, off)| (*off, ip))
+        .collect();
+    by_off.sort();
+    let mut lists = Vec::new();
+    let mut run: Vec<(usize, &String)> = Vec::new();
+    let flush = |run: &mut Vec<(usize, &String)>, lists: &mut Vec<IpList>| {
+        if run.len() >= IP_LIST_MIN {
+            lists.push(IpList {
+                start: run[0].0,
+                end: run[run.len() - 1].0,
+                ips: run.iter().map(|(_, ip)| (*ip).clone()).collect(),
+            });
+        }
+        run.clear();
+    };
+    for (off, ip) in by_off {
+        if let Some(&(last, _)) = run.last() {
+            if off.saturating_sub(last) > IP_LIST_GAP {
+                flush(&mut run, &mut lists);
+            }
+        }
+        run.push((off, ip));
+    }
+    flush(&mut run, &mut lists);
+    for l in &lists {
+        for ip in &l.ips {
+            net_iocs.remove(ip);
+        }
+    }
+    lists
 }
 
 // Scan a single file: read bytes, hash, extract strings, apply detections,
@@ -530,6 +705,7 @@ struct FileScanResult {
 fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> {
     let mut fs_iocs = BTreeSet::new();
     let mut net_iocs = BTreeSet::new();
+    let mut ip_offsets: HashMap<String, usize> = HashMap::new();
 
     let file = File::open(path)?;
     let mut mstrings = Mstrings::new();
@@ -643,7 +819,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         tactic_priority(&a.1).cmp(&tactic_priority(&b.1)).then(a.0.cmp(&b.0))
     });
 
-    let display_matches: Vec<DisplayMatch> = sorted_groups
+    let mut display_matches: Vec<DisplayMatch> = sorted_groups
         .iter()
         .map(|(rule, tactic, technique, id, strings, max_layers)| {
             let count = strings.len();
@@ -677,6 +853,10 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         })
         .collect();
 
+    if let Some(row) = encoded_string_table_row(&mstrings.matches, buffer.len()) {
+        display_matches.insert(0, row);
+    }
+
     // Pre-compile IOC extraction regexes once, outside the loop.
     //
     // Go binaries store their entire runtime error-message table as one
@@ -691,7 +871,6 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
     // even after the fancy-regex migration added lookaround support — a
     // manual byte check is simpler to read here than a lookaround, and
     // faster since it skips backtracking on every candidate match).
-    let re_url      = Regex::new(r"https?://[^\s\x22'<>]{8,}").unwrap();
     let re_ip       = Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap();
     // Windows-style paths
     let re_fspath   = Regex::new(r"(?i)(?:%\w+%|\\|\$\{[^}]+\})[^\s\x22'<>]*\.(?:exe|bat|ps1|vbs|pdb|dll|txt|zip|lnk)").unwrap();
@@ -704,8 +883,8 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
             if m.matched_str.len() > 300 {
                 // Blob path: extract well-formed IOCs via regex
-                for cap in re_url.find_iter(&m.matched_str).flatten() {
-                    net_iocs.insert(cap.as_str().to_string());
+                for url in extract_urls(&m.matched_str) {
+                    net_iocs.insert(url);
                 }
                 // IP boundary check: regex crate has no lookarounds, so verify
                 // surrounding bytes manually. is_boring_ip() filters loopback/
@@ -728,6 +907,12 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                     let after_ok  = end == blob.len() || !is_word_byte(blob[end]);
                     if before_ok && after_ok && !is_boring_ip(mat.as_str()) {
                         net_iocs.insert(mat.as_str().to_string());
+                        // A whole line of a decoded blob counts as a list entry.
+                        let line_start = start == 0 || matches!(blob[start - 1], b'\n' | b'\r');
+                        let line_end = end == blob.len() || matches!(blob[end], b'\n' | b'\r');
+                        if line_start && line_end {
+                            ip_offsets.entry(mat.as_str().to_string()).or_insert(m.offset + start);
+                        }
                     }
                 }
                 for cap in re_fspath.find_iter(&m.matched_str).flatten() {
@@ -755,9 +940,35 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                 let is_template  = candidate.starts_with("${") || candidate.starts_with('%');
                 let has_spaces   = candidate.contains(' ') || candidate.contains('\t');
                 let has_namespace = candidate.contains("::");
+                let rule_lc = rule.to_lowercase();
 
-                if !is_template && !has_spaces && !has_namespace {
-                    let rule_lc = rule.to_lowercase();
+                // Network indicators first, and regardless of spaces: the
+                // filters below are for file IOCs. An IP or URL inside a
+                // command line ("curl -s http://…", "beacon 1.2.3.4 443") is
+                // still a precise indicator — the IP rule's own capture and
+                // extract_urls() pull out just the indicator — and skipping
+                // every string with a space dropped exactly those.
+                let mut network_done = false;
+                if rule_lc.contains("ip address") {
+                    let ip = m.display_str.trim().to_string();
+                    if !is_boring_ip(&ip) {
+                        // Only an IP that is a whole string by itself can be a
+                        // list entry (see split_ip_lists).
+                        if m.matched_str.trim() == ip {
+                            ip_offsets.entry(ip.clone()).or_insert(m.offset);
+                        }
+                        net_iocs.insert(ip);
+                    }
+                    network_done = true;
+                } else if sc.contains("http:") || sc.contains("https:") {
+                    let urls = extract_urls(candidate);
+                    network_done = !urls.is_empty();
+                    for url in urls {
+                        net_iocs.insert(url);
+                    }
+                }
+
+                if !network_done && !is_template && !has_spaces && !has_namespace {
                     let is_mac_path = sc.starts_with("/users/")
                         || sc.starts_with("/library/")
                         || sc.starts_with("~/library/")
@@ -789,12 +1000,18 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
                         // net_ioc entry when the clean, exact IP is already
                         // sitting right there in display_str.
                         net_iocs.insert(m.display_str.trim().to_string());
-                    } else if sc.contains("http:")
-                        || sc.contains("https:")
-                        || (sc.split('.').count() == 4
-                            && sc.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())))
+                        ip_offsets.entry(m.display_str.trim().to_string()).or_insert(m.offset);
+                    } else if sc.contains("http:") || sc.contains("https:") {
+                        for url in extract_urls(candidate) {
+                            net_iocs.insert(url);
+                        }
+                    } else if sc.split('.').count() == 4
+                            && sc.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
                     {
                         net_iocs.insert(candidate.to_string());
+                        if m.matched_str.trim() == candidate {
+                            ip_offsets.entry(candidate.to_string()).or_insert(m.offset);
+                        }
                     }
                 }
             }
@@ -870,6 +1087,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         raw_match_count,
         display_matches,
         flat_matches,
+        ip_lists: split_ip_lists(&mut net_iocs, &ip_offsets),
         fs_iocs,
         net_iocs,
         matches: mstrings.matches,
@@ -895,12 +1113,12 @@ fn render_display_table(display_matches: &[DisplayMatch]) -> String {
     table
         .with(Style::modern())
         .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
-        .with(Modify::new(Columns::single(0)).with(Width::wrap(5).keep_words(true)))   // Count
-        .with(Modify::new(Columns::single(1)).with(Width::wrap(30).keep_words(true)))  // Rule
-        .with(Modify::new(Columns::single(2)).with(Width::wrap(45).keep_words(true)))  // Matched Strings
-        .with(Modify::new(Columns::single(3)).with(Width::wrap(18).keep_words(true)))  // Tactic
-        .with(Modify::new(Columns::single(4)).with(Width::wrap(25).keep_words(true)))  // Technique
-        .with(Modify::new(Columns::single(5)).with(Width::wrap(10).keep_words(true))); // ID
+        .with(Modify::new(Columns::one(0)).with(Width::wrap(5).keep_words(true)))   // Count
+        .with(Modify::new(Columns::one(1)).with(Width::wrap(30).keep_words(true)))  // Rule
+        .with(Modify::new(Columns::one(2)).with(Width::wrap(45).keep_words(true)))  // Matched Strings
+        .with(Modify::new(Columns::one(3)).with(Width::wrap(18).keep_words(true)))  // Tactic
+        .with(Modify::new(Columns::one(4)).with(Width::wrap(25).keep_words(true)))  // Technique
+        .with(Modify::new(Columns::one(5)).with(Width::wrap(10).keep_words(true))); // ID
     table.to_string()
 }
 
@@ -952,10 +1170,10 @@ fn print_detail(flat_matches: &[FlatMatch]) {
         flat_table
             .with(Style::modern())
             .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
-            .with(Modify::new(Columns::single(3)).with(Width::wrap(25).keep_words(true)))
-            .with(Modify::new(Columns::single(4)).with(Width::wrap(18).keep_words(true)))
-            .with(Modify::new(Columns::single(5)).with(Width::wrap(25).keep_words(true)))
-            .with(Modify::new(Columns::single(2)).with(Width::wrap(30).keep_words(true)));
+            .with(Modify::new(Columns::one(3)).with(Width::wrap(25).keep_words(true)))
+            .with(Modify::new(Columns::one(4)).with(Width::wrap(18).keep_words(true)))
+            .with(Modify::new(Columns::one(5)).with(Width::wrap(25).keep_words(true)))
+            .with(Modify::new(Columns::one(2)).with(Width::wrap(30).keep_words(true)));
         println!("{}", flat_table.to_string());
     }
 }
@@ -1085,6 +1303,7 @@ fn append_ioc_sections(
     report_buffer: &mut String,
     fs_iocs: &BTreeSet<String>,
     net_iocs: &BTreeSet<String>,
+    ip_lists: &[IpList],
     format: &str,
 ) {
     if !fs_iocs.is_empty() {
@@ -1102,6 +1321,8 @@ fn append_ioc_sections(
         report_buffer.push('\n');
     }
 
+    let (net_iocs, resolvers) = split_resolvers(net_iocs);
+    let net_iocs = &net_iocs;
     if !net_iocs.is_empty() {
         if format == "md" {
             report_buffer.push_str("## Potential Network IOCs\n\n");
@@ -1115,6 +1336,52 @@ fn append_ioc_sections(
             }
         }
         report_buffer.push('\n');
+    }
+
+    if !resolvers.is_empty() {
+        let list = resolvers.iter().cloned().collect::<Vec<_>>().join(", ");
+        if format == "md" {
+            report_buffer.push_str("## Public DNS Resolvers Referenced (not C2)\n\n");
+            report_buffer.push_str(&format!("`{}` — hardcoded for name resolution or connectivity checks.\n\n", list));
+        } else {
+            report_buffer.push_str(&format!("PUBLIC DNS RESOLVERS REFERENCED (not C2): {}\n\n", list));
+        }
+    }
+
+    if !ip_lists.is_empty() {
+        if format == "md" {
+            report_buffer.push_str("## IP Address Lists (possible anti-analysis blocklist or C2 pool)\n\n");
+            report_buffer.push_str(IP_LIST_NOTE);
+            report_buffer.push_str("\n\n");
+            for l in ip_lists {
+                report_buffer.push_str(&format!("- **{} addresses** at 0x{:X}–0x{:X}: ", l.ips.len(), l.start, l.end));
+                report_buffer.push_str(&l.ips.iter().map(|ip| format!("`{}`", defang_network_ioc(ip))).collect::<Vec<_>>().join(", "));
+                report_buffer.push_str("\n");
+            }
+            report_buffer.push('\n');
+        } else {
+            for l in ip_lists {
+                report_buffer.push_str(&format!(
+                    "IP ADDRESS LIST ({} addresses at 0x{:X}-0x{:X}; possible anti-analysis blocklist or C2 pool, not listed as network IOCs): {}\n",
+                    l.ips.len(), l.start, l.end,
+                    l.ips.iter().map(|ip| defang_network_ioc(ip)).collect::<Vec<_>>().join(", ")
+                ));
+            }
+            report_buffer.push('\n');
+        }
+    }
+}
+
+const IP_LIST_NOTE: &str = "These IPs are stored together as a list, so they are not counted as Network IOCs. An embedded run of IP addresses is most often a blocklist of sandbox and analysis hosts the sample checks for before it runs (stealers commonly carry one), and sometimes a pool of C2 servers. Look at the code or strings around it, or look the addresses up, before reporting any of them as C2.";
+
+fn print_ip_lists(ip_lists: &[IpList]) {
+    for l in ip_lists {
+        println!(
+            "{} {}",
+            format!("IP ADDRESS LIST ({} addresses at 0x{:X}-0x{:X}; possible anti-analysis blocklist or C2 pool, not network IOCs):", l.ips.len(), l.start, l.end)
+                .truecolor(RUST_ORANGE.0, RUST_ORANGE.1, RUST_ORANGE.2),
+            l.ips.iter().map(|ip| defang_network_ioc(ip)).collect::<Vec<_>>().join(", ")
+        );
     }
 }
 
@@ -1138,8 +1405,9 @@ fn run_single(
 
     if !result.net_iocs.is_empty() {
         println!("\n");
-        print_iocs("POTENTIAL NETWORK IOCs:", &result.net_iocs, true);
+        print_net_iocs(&result.net_iocs);
     }
+    print_ip_lists(&result.ip_lists);
 
     print_detail(&result.flat_matches);
 
@@ -1164,7 +1432,7 @@ fn run_single(
         } else {
             // Build the report content (reuse printed table and IOCs)
             let mut report_buffer = build_file_report_body(&result, &table_str, format, true);
-            append_ioc_sections(&mut report_buffer, &result.fs_iocs, &result.net_iocs, format);
+            append_ioc_sections(&mut report_buffer, &result.fs_iocs, &result.net_iocs, &result.ip_lists, format);
             report_buffer
         };
 
@@ -1213,6 +1481,7 @@ fn run_bundle(
 
     let mut merged_fs_iocs: BTreeSet<String> = BTreeSet::new();
     let mut merged_net_iocs: BTreeSet<String> = BTreeSet::new();
+    let mut merged_ip_lists: Vec<IpList> = Vec::new();
     let mut scanned: Vec<(String, FileScanResult, String)> = Vec::new(); // (rel_path, result, table_str)
 
     for target in &targets {
@@ -1239,6 +1508,7 @@ fn run_bundle(
 
         merged_fs_iocs.extend(result.fs_iocs.iter().cloned());
         merged_net_iocs.extend(result.net_iocs.iter().cloned());
+        merged_ip_lists.extend(result.ip_lists.iter().cloned());
         scanned.push((rel_path, result, table_str));
     }
 
@@ -1248,8 +1518,9 @@ fn run_bundle(
 
     if !merged_net_iocs.is_empty() {
         println!("\n");
-        print_iocs("POTENTIAL NETWORK IOCs:", &merged_net_iocs, true);
+        print_net_iocs(&merged_net_iocs);
     }
+    print_ip_lists(&merged_ip_lists);
 
     println!();
 
@@ -1323,7 +1594,7 @@ fn run_bundle(
                 report_buffer.push_str(&build_file_report_body(result, table_str, format, false));
             }
 
-            append_ioc_sections(&mut report_buffer, &merged_fs_iocs, &merged_net_iocs, format);
+            append_ioc_sections(&mut report_buffer, &merged_fs_iocs, &merged_net_iocs, &merged_ip_lists, format);
             report_buffer
         };
 
@@ -1427,4 +1698,110 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     run_single(path, &file_path_copy, &matches)
+}
+
+#[cfg(test)]
+mod encoded_table_tests {
+    use super::*;
+
+    fn blob(offset: usize) -> Match {
+        Match {
+            offset,
+            encoding: Encoding::Utf8,
+            matched_str: "A".repeat(300),
+            display_str: String::new(),
+            decode_layers: 0,
+            rule_name: Some(B64_BLOB_RULE.to_string()),
+            tactic: None,
+            technique: None,
+            technique_id: None,
+        }
+    }
+
+    #[test]
+    fn few_blobs_are_not_a_table() {
+        let m: Vec<Match> = (0..ENCODED_TABLE_MIN - 1).map(|i| blob(i * 400)).collect();
+        assert!(encoded_string_table_row(&m, 1 << 20).is_none());
+    }
+
+    #[test]
+    fn many_blobs_make_one_t1027_013_row() {
+        let m: Vec<Match> = (0..100).map(|i| blob(0x1000 + i * 400)).collect();
+        let r = encoded_string_table_row(&m, 100 * 400).expect("row");
+        assert_eq!(r.technique_id, "T1027.013");
+        assert_eq!(r.count, "100");
+        assert!(r.matched_strings.contains("29 KB"), "{}", r.matched_strings);
+        assert!(r.matched_strings.contains("75% of file"), "{}", r.matched_strings);
+    }
+}
+
+#[cfg(test)]
+mod detection_file_tests {
+    use super::*;
+
+    fn rules() -> HashMap<String, Detection> {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../detections.yaml");
+        serde_yaml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    // apply_yara_detections skips a pattern that fails to compile, and a rule
+    // with no technique never fires, both silently: catch either here.
+    #[test]
+    fn every_pattern_compiles_and_every_rule_can_fire() {
+        let mut bad = Vec::new();
+        for (key, det) in rules() {
+            for p in &det.detection.strings {
+                if let Err(e) = Regex::new(p) {
+                    bad.push(format!("{key}: {p}: {e}"));
+                }
+            }
+            if det.mitre.is_empty() && !det.ioc_only {
+                bad.push(format!("{key}: no mitre entry and not ioc_only"));
+            }
+        }
+        assert!(bad.is_empty(), "{}", bad.join("\n"));
+    }
+
+    fn hits(key: &str, s: &str) -> bool {
+        let r = rules();
+        r[key].detection.strings.iter().any(|p| Regex::new(p).unwrap().is_match(s).unwrap())
+    }
+
+    #[test]
+    fn tightened_rules() {
+        // Protocol tables and option syntax are not usage.
+        assert!(!hits("TelnetLateralMovement", "telnet\t\t23/tcp"));
+        assert!(!hits("TelnetLateralMovement", "[,server][,nowait][,telnet][,websocket]"));
+        assert!(hits("TelnetLateralMovement", "telnet 192.168.1.1 23"));
+        assert!(hits("TelnetLateralMovement", "/usr/sbin/telnetd"));
+        assert!(hits("TelnetLateralMovement", "telnet evil.example.com 23"));
+        assert!(!hits("TelnetLateralMovement", "--telnet-option <opt=val> Set telnet option"));
+        assert!(!hits("HardcodedIPAddress", "2.5.29.37"));
+        assert!(hits("HttpPostExfiltration", "Content-Type                multipart/form-data;boundary=jeus"));
+        assert!(hits("HttpPostExfiltration", "multipart/form-data; boundary=%s"));
+        assert!(hits("HttpPostExfiltration", "POST /gate.php HTTP/1.1"));
+        assert!(!hits("HttpPostExfiltration", "multipart/form-data"));
+        assert!(!hits("HttpPostExfiltration", "multipart/form-data; boundary=missingrequired"));
+        assert!(!hits("HttpPostExfiltration", "Content-Type: %s%s%s ; boundary="));
+        assert!(!hits("HttpPostExfiltration", "%s %s HTTP/1.1"));
+        assert!(!hits("HttpPostExfiltration", " POST /api2/"));
+        assert!(!hits("TftpIngressTransfer", "tftp\t\t69/udp"));
+        assert!(!hits("TftpIngressTransfer", "[,tftp=dir][,tftp-server-name=name]"));
+        assert!(hits("TftpIngressTransfer", "tftp -g -l dvrHelper -r mips 1.2.3.4"));
+        assert!(!hits("CredentialStrings", "-iscsi [user=user][,password=password]"));
+        assert!(!hits("CredentialStrings", "[,sasl][,password=<secret>]"));
+        assert!(!hits("CredentialStrings", "x509-key-password=<file>"));
+        assert!(hits("CredentialStrings", "password=hunter2"));
+        assert!(!hits("MacSandboxVMEvasion", "separatorSpecstartParallelstop signal"));
+        // Private addresses are IOC-only; public ones still map to C2.
+        assert!(!hits("HardcodedIPAddress", "10.3.180.65"));
+        assert!(!hits("HardcodedIPAddress", "192.168.0.1"));
+        assert!(!hits("HardcodedIPAddress", "172.20.1.1"));
+        assert!(hits("HardcodedIPAddress", "172.32.1.1"));
+        assert!(hits("HardcodedIPAddress", "147.75.70.221"));
+        assert!(hits("HardcodedPrivateIPAddress", "10.3.180.65"));
+        assert!(hits("HardcodedPrivateIPAddress", "192.168.0.1"));
+        assert!(!hits("HardcodedPrivateIPAddress", "192.168.0.0"));
+        assert!(!hits("HardcodedPrivateIPAddress", "147.75.70.221"));
+    }
 }

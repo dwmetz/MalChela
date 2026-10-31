@@ -1,13 +1,12 @@
 [package]
 name = "mzcount"
-version = "4.3.1"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
 clearscreen = "4.0.3"
 walkdir = "2.5.0"
-yara = "0.30.0"
-yara-sys = "0.29.0"
+yara-backend = { path = "../yara-backend" }
 colored = "2" #Or newer
 atty = "0.2.14"
 chrono = "0.4.43"

@@ -22,6 +22,7 @@ cargo run -p fileanalyzer -- /path/to/sample.exe
 | Tool | Binary | Description |
 |------|--------|-------------|
 | File Analyzer | `fileanalyzer` | Hash, entropy, packing detection, PE info, YARA scan, VirusTotal lookup |
+| Unpack | `unpack` | Static packer detection + unpacking for PE/ELF/Mach-O: UPX (incl. tampered), PyInstaller, .NET/Costura, NSIS, Inno Setup, fat Mach-O, overlays, embedded executables. Never executes the sample |
 | mStrings | `mstrings` | String extraction, Sigma rule matching, Regex, MITRE ATT&CK mapping |
 | NSRL Hash Lookup | `nsrlquery` | Query MD5/SHA1 against the NIST NSRL known-good database |
 | Threat Intel Query | `tiquery` | Multi-source hash lookup: VirusTotal, MalwareBazaar, OTX, and more |
@@ -52,9 +53,10 @@ cargo run -p fileanalyzer -- /path/to/sample.exe
 
 ### Windows malware triage
 1. `fileanalyzer` — establish baseline: hashes, entropy, PE headers
-2. `mstrings` — extract strings, look for IOCs and ATT&CK technique indicators
-3. `tiquery` — check community threat intelligence
-4. `nsrlquery` — confirm or rule out known-good status
+2. `unpack` — if File Analyzer reports packing (or entropy is high), recover the payload; repeat the triage on each recovered file
+3. `mstrings` — extract strings, look for IOCs and ATT&CK technique indicators
+4. `tiquery` — check community threat intelligence
+5. `nsrlquery` — confirm or rule out known-good status
 
 ### macOS malware triage
 1. `fileminer` — scan the sample directory; note Mach-O files and .plist files
@@ -67,6 +69,15 @@ cargo run -p fileanalyzer -- /path/to/sample.exe
 ### Unknown directory or sample set
 1. `fileminer` — entry point for any unknown folder; classifies all files and suggests tools
 2. Follow fileminer's per-file suggestions for deeper analysis
+
+### Malware analysis report
+1. Finish the analysis first (`analyze`, or the triage steps above) with a case active
+2. `report_template` — Lenny Zeltser's Malware Analysis Report template (CC BY 4.0, bundled in
+   `assets/report_templates/`) and a guide to which MalChela output fills each section
+3. Write the report from the case's findings: corroborate rule hits rather than listing them, mark
+   behavioral and memory analysis as not performed (MalChela is static only), and resolve the
+   template's (Optional) sections
+4. `save_report` — saves it to `saved_output/cases/<case>/report/` and registers it in the case
 
 ## Environment Notes
 

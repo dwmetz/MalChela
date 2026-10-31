@@ -210,15 +210,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ]);
                     }
 
-                    let mismatch_column = Columns::single(9);
+                    let mismatch_column = Columns::one(9);
                     let mut built = builder.build();
                     let table = built
                         .with(Style::modern())
-                        .with(Modify::new(Columns::single(1)).with(Width::wrap(25).keep_words(true)))
+                        .with(Modify::new(Columns::one(1)).with(Width::wrap(25).keep_words(true)))
                         .with(Modify::new(Columns::new(0..)).with(Alignment::left()))
                         .with(Modify::new(Columns::new(0..)).with(Width::wrap(40).keep_words(true)))
-                        .with(Modify::new(Columns::single(2)).with(Width::wrap(30).keep_words(true)))
-                        .with(Modify::new(Columns::single(5)).with(Width::wrap(30).keep_words(true)))
+                        .with(Modify::new(Columns::one(2)).with(Width::wrap(30).keep_words(true)))
+                        .with(Modify::new(Columns::one(5)).with(Width::wrap(30).keep_words(true)))
                         .with(Modify::new(mismatch_column).with(Width::wrap(24).keep_words(true)));
 
                     println!("{}", table);
@@ -378,11 +378,13 @@ fn analyze_one_file(path: &Path) -> Result<ScanResult, Box<dyn std::error::Error
             let mut suggested_tools = Vec::new();
             if file_type.contains("portable-executable") {
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("Unpack".into(), "unpack".into()));
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type.contains("x-mach-binary") || file_type.contains("x-mach-o") {
                 suggested_tools.push(("Mach-O Info".into(), "macho_info".into()));
+                suggested_tools.push(("Unpack".into(), "unpack".into()));
                 suggested_tools.push(("Code Sign Check".into(), "codesign_check".into()));
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
@@ -394,6 +396,7 @@ fn analyze_one_file(path: &Path) -> Result<ScanResult, Box<dyn std::error::Error
                 // an empty suggested_tools list even though mStrings/detections.yaml
                 // works fine against ELF. Observed on a real m68k ELF malware sample.
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("Unpack".into(), "unpack".into()));
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
@@ -406,6 +409,17 @@ fn analyze_one_file(path: &Path) -> Result<ScanResult, Box<dyn std::error::Error
                 // against the script's own text, which is exactly the analysis a
                 // script needs.
                 suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if is_python_bytecode(&path) {
+                // Compiled Python (.pyc) has no infer signature, so it came in as
+                // Unknown and got only the generic binary tools. Unpack parses
+                // the bytecode statically, peels common obfuscators, and writes
+                // the strings out for mStrings (a PyInstaller stealer's real
+                // logic lives in its entry .pyc).
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("Unpack".into(), "unpack".into()));
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
@@ -533,6 +547,14 @@ fn save_results_json(
         println!("Results saved to {}", out_path.display());
     }
     Ok(())
+}
+
+/// A CPython 3.7–3.14 .pyc: a two-byte magic number in that range followed
+/// by "\r\n" (the same check `unpack` uses before parsing).
+fn is_python_bytecode(path: &Path) -> bool {
+    let mut head = [0u8; 4];
+    let ok = File::open(path).and_then(|mut f| f.read_exact(&mut head)).is_ok();
+    ok && &head[2..4] == b"\r\n" && (3390..3650).contains(&u16::from_le_bytes([head[0], head[1]]))
 }
 
 // infer only recognizes binary format magic-byte signatures — there's no

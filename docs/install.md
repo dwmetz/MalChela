@@ -12,26 +12,23 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ### System Dependencies
 
+MalChela's YARA engine is [YARA-X](https://virustotal.github.io/yara-x/), compiled in as a Rust crate.  There is no system YARA library to install and no `YARA_LIBRARY_PATH` or `BINDGEN_EXTRA_CLANG_ARGS` to set, and HTTPS uses rustls, so OpenSSL isn't needed either.  The build only needs a C compiler and `make`, for the few bundled C libraries (ssdeep, bzip2, LZFSE, and xz).
+
 **Linux**
 
 ```bash
-sudo apt install openssl libssl-dev clang yara libyara-dev libjansson-dev pkg-config build-essential libglib2.0-dev libgtk-3-dev
+sudo apt install build-essential pkg-config
 ```
 
 **macOS**
 
 ```bash
-brew install openssl yara pkg-config gtk+3 glib
+xcode-select --install
 ```
 
-> ⚠️ YARA 4.2 or greater is required. Before building, point the build at Homebrew's YARA prefix:
->
-> ```bash
-> export YARA_LIBRARY_PATH=$(brew --prefix yara)/lib
-> export BINDGEN_EXTRA_CLANG_ARGS="-I$(brew --prefix yara)/include"
-> ```
+> **Upgrading from v4.3 or earlier?**  The old `yara`, `libyara-dev`, `libjansson-dev`, `openssl`, `clang`, GTK, and GLib packages are no longer used by the build.  You can leave them installed, and you can drop the `YARA_LIBRARY_PATH` and `BINDGEN_EXTRA_CLANG_ARGS` exports from your shell profile.
 
-These packages cover YARA/YARA-X support, native libraries used by Rust crates that link against them (e.g. TShark/glib), and TShark integration.
+Third-party integrations (TShark, Volatility 3, the YARA-X CLI, and others in `tools.yaml`) are optional and installed separately.  See [Integrating Third Party Tools](tools/index.md) for each one.
 
 ### Clone the Repository
 

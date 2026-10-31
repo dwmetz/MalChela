@@ -60,7 +60,7 @@ Open `example_config.json` and update the paths to match your system, then copy 
 
 ## Available Tools
 
-17 tools map 1:1 to a compiled MalChela binary. Two more are MCP-only, with no binary of their own: `set_case` (session state) and `analyze` (an orchestrator that shells out to the other 17 in sequence).
+17 tools map 1:1 to a compiled MalChela binary. Four more are MCP-only, with no binary of their own: `set_case` (session state), `analyze` (an orchestrator that shells out to the other 17 in sequence), and `report_template` / `save_report` (malware analysis reports).
 
 Unlike the PWA, the MCP server uses a **mandatory case model** — call `set_case` once at the start of a session before running any other tool; every subsequent tool's output is saved to that case automatically.
 
@@ -77,6 +77,9 @@ Unlike the PWA, the MCP server uses a **mandatory case model** — call `set_cas
 | `fileanalyzer` | Hashes, entropy, packing detection, PE metadata, YARA rule matches, and VirusTotal status. Best first step for any unknown file. |
 | `fileminer` | Scans a folder for file type mismatches and metadata anomalies; suggests follow-up tools per file. Entry point for an unknown directory or sample set. |
 | `analyze` | One-shot auto-triage: runs `fileminer` against a file, folder, `.app` bundle, `.dmg`, or `.pkg`, then automatically dispatches every tool `fileminer` suggests, producing a combined rollup report. `.dmg`/`.pkg` targets are auto-unwrapped via `dpp_extract` first. Requires an active case (`set_case` first). |
+| `unpack` | Static packer detection and unpacking for PE, ELF, and Mach-O — never executes the sample. UPX (including tampered headers, repaired before `upx -d`), fat Mach-O slices, PyInstaller entry scripts, .NET/Costura resources, NSIS/Inno Setup payloads, overlays, and embedded executables; recurses into each recovered layer. Protectors (Themida, VMProtect) are identified with evidence. `analyze` runs it automatically on every executable. |
+| `report_template` | Lenny Zeltser's [Malware Analysis Report](https://zeltser.com/malware-analysis-report) template (v1.1.0, CC BY 4.0, bundled in `assets/report_templates/` for offline use), plus a guide to which MalChela output fills each section. No case needed. |
+| `save_report` | Save a finished report to the active case's `report/` folder and register it in `case.yaml`.  Won't overwrite an existing report unless asked. |
 
 **Strings Analysis**
 
@@ -107,6 +110,7 @@ Unlike the PWA, the MCP server uses a **mandatory case model** — call `set_cas
 |---|---|
 | `strings_to_yara` | Converts a text file of extracted strings into a formatted YARA rule draft. Typically used after `mstrings`. |
 | `combine_yara` | Merges multiple YARA rule files from a folder into a single consolidated ruleset. |
+| `yara_scan` | Scans a file or folder with YARA rules (a file or a folder of rules) on the embedded YARA-X engine. Returns NDJSON with each matching rule's namespace, tags, metadata, and strings; saves a Markdown report to the active case. |
 
 **Mac Analysis**
 
@@ -134,12 +138,15 @@ For initial triage of an unknown file, ask Claude to run the tools in this order
 3. `mstrings` — extract strings, surface IOCs and ATT&CK technique indicators
 4. `tiquery` — pull full community threat intel with AV verdicts
 5. `nsrlquery` — confirm or rule out known-good status
+6. `report_template` → `save_report` — when you want a written report: Claude fills Lenny Zeltser's template from the case's findings and saves it to the case
 
 Or skip the manual sequencing entirely and let `analyze` do it in one call. You don't need to invoke tools individually — just describe what you want:
 
 > "Analyze /path/to/suspicious.exe using MalChela and give me a full triage report."
 
-Claude will run the appropriate tools in sequence and synthesize the results.
+Claude will run the appropriate tools in sequence and synthesize the results.  For a formal write-up, ask for a malware analysis report — Claude pulls the bundled Zeltser template with `report_template`, fills it from the case, and saves it with `save_report`:
+
+> "Write a malware analysis report for this sample using the Zeltser template and save it to the case."
 
 ---
 

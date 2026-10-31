@@ -1,0 +1,29 @@
+[package]
+name = "unpack"
+version.workspace = true
+edition = "2021"
+description = "Static packer detection and unpacking for PE, ELF, and Mach-O"
+
+[lib]
+name = "unpack"
+path = "src/lib.rs"
+
+[[bin]]
+name = "unpack"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+flate2 = "1.1"
+base64 = "0.21"
+lzma-rs = "0.3"
+chrono = "0.4"
+colored = "3.1.1"
+common_config = { path = "../common_config" }
+common_ui = { path = "../common_ui" }
+
+[dev-dependencies]
+tempfile = "3"

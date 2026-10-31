@@ -1,10 +1,10 @@
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use common_config;
 use std::thread::sleep;
 use std::time::Duration;
-use yara::{Compiler, Rules};
+use yara_backend::YaraBackend as Rules;
 use clearscreen;
 use clap::{Arg, Command};
 use chrono::Local;
@@ -49,12 +49,22 @@ rule zip_header {
 }
 "#;
 
-    Compiler::new()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-        .add_rules_str(rules)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-        .compile_rules()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    Rules::from_inline_sources(&[("mzcount", rules)]).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+}
+
+/// Every rule in this tool tests a magic number `at 0`, so scanning a file's
+/// first 4 KiB is equivalent to scanning all of it — and much faster, with no
+/// need to read multi-GB files (yara-backend caps full scans at 256 MiB).
+fn header_matches(rules: &Rules, path: &Path, timeout_secs: u64) -> Result<Vec<String>, String> {
+    use std::io::Read as _;
+    let mut head = Vec::with_capacity(4096);
+    std::fs::File::open(path)
+        .and_then(|f| f.take(4096).read_to_end(&mut head))
+        .map_err(|e| e.to_string())?;
+    rules
+        .scan_bytes(&head, std::time::Duration::from_secs(timeout_secs))
+        .map(|r| r.rule_names_sorted())
+        .map_err(|e| e.to_string())
 }
 
 fn display_table(counts: &Counts) {
@@ -143,12 +153,7 @@ fn scan_and_count_files(
 }
 
 fn scan_file(file_path: &Path, rules: &Rules) -> Result<Vec<String>, io::Error> {
-    let mut file = File::open(file_path)?;
-    let mut data = Vec::new();
-    file.read_to_end(&mut data)?;
-
-    let matches = rules.scan_mem(&data, 5).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    Ok(matches.iter().map(|m| m.identifier.to_string()).collect())
+    header_matches(rules, file_path, 5).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }
 
 fn main() {

@@ -22,8 +22,11 @@
     <tr><td>Mach-O Info</td><td>Parses Mach-O binaries: architecture, linked libraries, section entropy, symbol status, RPATH entries, and deprecated crypto library detection</td></tr>
     <tr><td>mStrings</td><td>Extracts strings, IOCs, and MITRE ATT&CK matches from Mach-O binaries and .app bundles</td></tr>
     <tr><td>Plist Analyzer</td><td>Parses .plist files and .app bundle Info.plist for malware indicators: hidden background agent, ATS disabled, custom URL schemes, env injection</td></tr>
+    <tr><td>Unpack</td><td>Splits fat (universal) Mach-O binaries into their architectures and unpacks UPX-packed Mach-O, recursing into each layer; never executes the sample</td></tr>
   </tbody>
 </table>
+
+Analyze, mStrings, and Unpack work across platforms, so their full pages live under Core Tools: [Analyze](../coretools/analyze.md), [mStrings](../coretools/mstrings.md), and [Unpack](../coretools/unpack.md).
 
 <p style="text-align: center;">
   Code Sign Check, Mach-O Info, mStrings, and Plist Analyzer auto-resolve a .app bundle's main executable — point them at the bundle directly. Run those four together against a bundle or binary with <code>./mac_stack.sh</code>.

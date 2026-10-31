@@ -28,6 +28,9 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import yaml
 
+sys.path.insert(0, str(Path(__file__).parent.resolve()))
+import mitre_matrix  # noqa: E402  (server/mitre_matrix.py)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,52 @@ _CFG = _load_config()
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 MALCHELA_ROOT   = Path(_CFG["malchela_root"]).resolve()
+
+
+class _CaseYamlLoader(yaml.SafeLoader):
+    """case.yaml loader that keeps every scalar except null as a string.
+
+    case.yaml is written by three YAML implementations: the Rust tools
+    (serde_yaml, YAML 1.2), this server (PyYAML, YAML 1.1), and the MCP
+    plugin (js-yaml). serde_yaml emits values like `20261029_203020` or an
+    ISO timestamp unquoted; under YAML 1.1 rules PyYAML would read those
+    back as an int and a datetime and rewrite them on the next save
+    (`20261029_203020` -> `20261029203020`). Nothing in a case manifest is
+    numeric or a date, so only null is resolved."""
+
+
+_CaseYamlLoader.yaml_implicit_resolvers = {
+    first: [(tag, rx) for tag, rx in resolvers if tag == "tag:yaml.org,2002:null"]
+    for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+
+
+def _case_yaml_load(fh):
+    return yaml.load(fh, Loader=_CaseYamlLoader)
+
+
+def _case_yaml_dump(meta, fh):
+    # safe_dump quotes any string that YAML 1.1 would otherwise resolve to
+    # another type, so the file reads back identically in every tool.
+    yaml.safe_dump(meta, fh, default_flow_style=False)
+
+
+def _read_malchela_version() -> str:
+    """The release version, read from [workspace.package] in the workspace
+    Cargo.toml — the single place it's set. Every Rust tool inherits the
+    same value, so the server, PWA title bar, and About text can't drift."""
+    try:
+        text = (MALCHELA_ROOT / "Cargo.toml").read_text()
+        section = text.split("[workspace.package]", 1)[1]
+        m = re.search(r'^\s*version\s*=\s*"([^"]+)"', section, re.MULTILINE)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return "unknown"
+
+
+MALCHELA_VERSION = _read_malchela_version()
 BINARY_DIR      = MALCHELA_ROOT / "target" / "release"
 API_DIR         = MALCHELA_ROOT / "api"
 YARA_DIR        = MALCHELA_ROOT / "yara_rules"
@@ -260,7 +309,7 @@ def _register_cli_case_output(tool: str, case_name: str, target: str,
     yaml_file = case_dir / "case.yaml"
     if yaml_file.exists():
         with open(yaml_file) as fh:
-            meta = yaml.safe_load(fh) or {}
+            meta = _case_yaml_load(fh) or {}
     else:
         meta = {
             "name":        case_name,
@@ -283,7 +332,38 @@ def _register_cli_case_output(tool: str, case_name: str, target: str,
         meta["files"]    = files
         meta["modified"] = ts_str
         with open(yaml_file, "w") as fh:
-            yaml.dump(meta, fh, default_flow_style=False)
+            _case_yaml_dump(meta, fh)
+
+
+def _register_case_file(case_name: str, path: Path, tool: str, target: str) -> None:
+    """Register one explicit file (already written inside the case folder) in
+    case.yaml. For outputs written in a batch, where
+    _register_cli_case_output's newest-file-in-window pick can't tell them
+    apart (the Analyze summary, its MITRE matrix, and its Navigator layer)."""
+    case_dir = _case_dir(case_name)
+    if case_dir is None:
+        return
+    try:
+        rel_path = str(path.resolve().relative_to(case_dir.resolve()))
+    except ValueError:
+        return
+    ts_str = datetime.now().isoformat()
+    yaml_file = case_dir / "case.yaml"
+    meta = {}
+    if yaml_file.exists():
+        with open(yaml_file) as fh:
+            meta = _case_yaml_load(fh) or {}
+    if not meta:
+        meta = {"name": case_dir.name, "created": ts_str, "description": "",
+                "tags": [], "status": "open", "files": []}
+    files = meta.get("files") or []
+    if not any(e.get("path") == rel_path for e in files):
+        files.append({"filename": path.name, "path": rel_path, "tool": tool,
+                      "target": target, "timestamp": ts_str})
+        meta["files"] = files
+        meta["modified"] = ts_str
+        with open(yaml_file, "w") as fh:
+            _case_yaml_dump(meta, fh)
 
 
 _FILENAME_SANITIZE_RE = re.compile(r"[^\w.\-]+")
@@ -342,13 +422,13 @@ def _rename_case_report(tool: str, case_name: str, display_name: str, window_sec
         return
     try:
         with open(yaml_file) as fh:
-            meta = yaml.safe_load(fh) or {}
+            meta = _case_yaml_load(fh) or {}
         files = meta.get("files", [])
         pruned = [f for f in files if f.get("path") != old_rel_path]
         if len(pruned) != len(files):
             meta["files"] = pruned
             with open(yaml_file, "w") as fh:
-                yaml.dump(meta, fh, default_flow_style=False)
+                _case_yaml_dump(meta, fh)
     except Exception:
         pass  # best-effort cleanup — a stale entry here is a cosmetic issue, not worth failing the run over
 
@@ -426,13 +506,14 @@ def health():
     """Health check — confirms server and binary availability."""
     binaries = [
         "fileanalyzer", "fileminer", "hashit", "hashcheck",
-        "malhash", "mstrings", "mzhash", "mzcount", "xmzhash",
+        "malhash", "mstrings", "mzhash", "mzcount", "xmzhash", "unpack",
         "nsrlquery", "combine_yara", "strings_to_yara", "extract_samples",
         "tiquery", "about", "MITRE_lookup",
     ]
     available = {b: (BINARY_DIR / b).exists() for b in binaries}
     return jsonify({
         "status": "ok",
+        "version": MALCHELA_VERSION,
         "malchela_root": str(MALCHELA_ROOT),
         "binaries": available,
         "vt_key_configured": read_api_key("vt-api.txt") is not None,
@@ -625,12 +706,12 @@ def run_generic_tool():
 
     binary = command[0]
     # Handle case where binary has embedded args e.g. "/usr/bin/r2 -i"
+    embedded_args: list = []
     if ' ' in binary:
         import shlex as _shlex2
         parts = _shlex2.split(binary)
         binary = parts[0]
-        # Prepend the embedded args to optional_args
-        resolved_optional = list(parts[1:]) + list(resolved_optional)
+        embedded_args = list(parts[1:])  # placed ahead of optional_args below
     resolved = find_tool(binary)
     if not resolved:
         return jsonify({"success": False, "error": f"Command not found: {binary}. Add its directory to tool_paths in server_config.yaml"})
@@ -646,7 +727,7 @@ def run_generic_tool():
             resolved_optional.append(arg)
 
     # Build args list
-    args = list(resolved_optional) if resolved_optional else []
+    args = embedded_args + list(resolved_optional)
 
     path_obj = safe_path(input_path) if input_path else None
 
@@ -762,7 +843,7 @@ def home_screen():
     output = (
         f"{ascii_art}\n"
         f"            https://bakerstreetforensics.com\n\n"
-        f"            MalChela Analysis Toolkit v4.3.1\n\n"
+        f"            MalChela Analysis Toolkit v{MALCHELA_VERSION}\n\n"
         f"{koan}"
     )
     return jsonify({"success": True, "output": output})
@@ -826,7 +907,7 @@ def home_stats():
             if yaml_file.exists():
                 try:
                     with open(yaml_file) as f:
-                        meta = yaml.safe_load(f) or {}
+                        meta = _case_yaml_load(f) or {}
                     status = meta.get("status", "open")
                 except Exception:
                     pass
@@ -846,15 +927,7 @@ def home_stats():
             pass
 
     # API keys — same 12-source list as /api_keys, just a configured/total count
-    api_key_files = [
-        "vt-api.txt", "mb-api.txt", "otx-api.txt", "md-api.txt", "mp-api.txt",
-        "ha-api.txt", "mw-api.txt", "tr-api.txt", "fs-api.txt", "ms-api.txt",
-        "url-api.txt", "gsb-api.txt",
-    ]
-    api_keys_configured = sum(
-        1 for fname in api_key_files
-        if (API_DIR / fname).exists() and (API_DIR / fname).read_text().strip() != ""
-    )
+    api_keys_configured = sum(1 for k in API_KEY_DEFS if _api_key_configured(k["file"]))
 
     # Tools: same availability check as /tools_yaml, split into MalChela-native
     # (exec_type: cargo, checked against our own compiled release binaries) vs.
@@ -879,12 +952,16 @@ def home_stats():
                         integrations_available += 1
         except Exception:
             pass
+    for _name, binary in BUILTIN_TOOLS:
+        malchela_total += 1
+        if (BINARY_DIR / binary).exists():
+            malchela_available += 1
 
     return jsonify({
         "success": True,
         "cases": {"open": cases_open, "closed": cases_closed},
         "detections": detections_count,
-        "api_keys": {"configured": api_keys_configured, "total": len(api_key_files)},
+        "api_keys": {"configured": api_keys_configured, "total": len(API_KEY_DEFS)},
         "malchela_tools": {"available": malchela_available, "total": malchela_total},
         "integrations": {"available": integrations_available, "total": integrations_total},
     })
@@ -1372,6 +1449,100 @@ def _expand_nested_containers(scan_results: list, case_name: str) -> list:
     return notes
 
 
+_UNPACK_MAX_CANDIDATES = 25  # executables checked for packing per Analyze run
+# Tools still run on a universal binary after Unpack splits it into slices:
+# hash lookups are about the distributed file itself; everything content-
+# based runs on the slices, whose bytes the container merely concatenates.
+_CONTAINER_TOOLS = {"tiquery", "nsrlquery"}
+
+
+def _expand_packed_executables(scan_results: list, case_name: str) -> tuple:
+    """Run `unpack` once against every executable FileMiner suggested it for,
+    and fold each recovered payload (UPX-decompressed binary, fat Mach-O
+    slice, PyInstaller entry script, Costura assembly, installer payload,
+    carved overlay/embedded executable) back into scan_results as its own
+    file, so the normal per-file dispatch analyses the real payload and not
+    just the packer stub.
+
+    unpack recurses internally (layer depth/size capped there), so each
+    candidate is unpacked exactly once — payloads it returns are not
+    re-unpacked here. Only runs that found something are kept: a clean
+    binary produces no rollup section and, via --only-if-found, no case
+    report either.
+
+    Mutates scan_results in place. Returns (notes, runs_by_path) where
+    runs_by_path maps an original file's path to the Unpack tool_run to
+    show in its rollup section."""
+    notes: list = []
+    runs: dict = {}
+    candidates = [
+        r for r in list(scan_results)
+        if any(isinstance(p, (list, tuple)) and len(p) == 2 and p[1] == "unpack"
+               for p in r.get("suggested_tools", []))
+    ][:_UNPACK_MAX_CANDIDATES]
+
+    for res in candidates:
+        filepath = res.get("filepath", "")
+        filename = res.get("filename", "")
+        _analyze_progress.update({"phase": f"Checking {filename} for packing", "detail": filename})
+        args = [filepath, "--json", "-o", "-m", "--only-if-found"]
+        if case_name:
+            args += ["--case", case_name]
+        result = run_binary("unpack", args, timeout=300)
+        if not result.get("success"):
+            continue
+        try:
+            summary = json.loads(result["output"])
+        except (ValueError, KeyError):
+            logger.warning("Could not parse unpack output for %s", filepath, exc_info=True)
+            continue
+        if not summary.get("success") or not summary.get("significant"):
+            continue
+
+        if case_name:
+            _rename_case_report("unpack", case_name, filename)
+        markdown = _read_tool_markdown("unpack", case_name)
+        if case_name:
+            _register_cli_case_output("unpack", case_name, filepath, "md")
+        runs[filepath] = {
+            "label": "Unpack", "tool": "unpack", "success": True,
+            "output": summary.get("verdict", ""), "error": "", "markdown": markdown,
+            # A universal (fat) Mach-O was split into per-architecture slices;
+            # the slices get the full tool run, so the container itself only
+            # needs its hash lookups (see the dispatch loop).
+            "split_container": any(
+                v.get("id") == "fat_macho" for v in (summary.get("tree") or {}).get("verdicts", [])
+            ),
+        }
+        payloads = summary.get("payloads") or []
+        notes.append(f"Unpacked `{filename}`: {summary.get('verdict', '')}.")
+
+        for p in payloads:
+            ppath = p.get("path", "")
+            if not ppath or not Path(ppath).is_file():
+                continue
+            fm_args = [ppath, "--no-prompt"]
+            if case_name:
+                fm_args += ["--case", case_name]
+            fm_result = run_binary("fileminer", fm_args, timeout=120)
+            if not fm_result.get("success"):
+                continue
+            try:
+                fm_data = json.loads(fm_result["output"])
+            except (ValueError, KeyError):
+                continue
+            try:
+                target_resolved = Path(ppath).resolve()
+            except Exception:
+                target_resolved = Path(ppath)
+            for nr in fm_data.get("results", []):
+                if _paths_match(nr.get("filepath", ""), target_resolved):
+                    nr["unpacked_from"] = filename
+                    nr["unpack_source"] = p.get("source", "")
+                    scan_results.append(nr)
+    return notes, runs
+
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     """
@@ -1437,11 +1608,16 @@ def analyze():
                     "error": "Selected file was not found in fileminer's scan results (it may be a hidden/skipped file type)."
                 })
         else:
-            _analyze_progress.update({"phase": "Expanding nested containers", "detail": str(scan_dir)})
+            _analyze_progress.update({"phase": "Expanding nested containers", "detail": str(target)})
             nested_notes = _expand_nested_containers(scan_results, case_name)
             if nested_notes:
                 combined = ([extraction_note] if extraction_note else []) + nested_notes
                 extraction_note = " ".join(combined)
+
+        _analyze_progress.update({"phase": "Checking executables for packing", "detail": ""})
+        unpack_notes, unpack_runs = _expand_packed_executables(scan_results, case_name)
+        if unpack_notes:
+            extraction_note = " ".join(([extraction_note] if extraction_note else []) + unpack_notes)
 
         if len(scan_results) > _ANALYZE_MAX_FILES:
             # Too many files to auto-run every suggested tool on every one —
@@ -1471,10 +1647,16 @@ def analyze():
             suggested = res.get("suggested_tools", [])  # [[label, slug], ...]
 
             tool_runs = []
+            if filepath in unpack_runs:
+                tool_runs.append(unpack_runs[filepath])
             for pair in suggested:
                 if not isinstance(pair, (list, tuple)) or len(pair) != 2:
                     continue
                 label, slug = pair
+                if slug == "unpack":
+                    continue  # already run (once, recursively) by _expand_packed_executables
+                if unpack_runs.get(filepath, {}).get("split_container") and slug not in _CONTAINER_TOOLS:
+                    continue  # analysed per-slice instead — rescanning the container double-counts every finding
 
                 if slug == "tiquery":
                     args = [sha256] if sha256 else None
@@ -1541,11 +1723,14 @@ def analyze():
                 "sha256":   sha256,
                 "md5":      md5,
                 "tool_runs": tool_runs,
+                "unpacked_from": res.get("unpacked_from", ""),
+                "unpack_source": res.get("unpack_source", ""),
             })
             _analyze_progress["done"] = file_idx + 1
 
+        ip_reputation = _lookup_ip_reputation(per_file_results, case_name)
         _analyze_progress.update({"phase": "Building rollup report", "detail": ""})
-        rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note)
+        rollup_md = _build_analyze_rollup(str(target), per_file_results, extraction_note, ip_reputation)
         return _save_analyze_rollup(target, case_name, per_file_results, rollup_md, extraction_note)
     finally:
         _analyze_progress["running"] = False
@@ -1565,12 +1750,49 @@ def _save_analyze_rollup(target: Path, case_name: str, per_file_results: list,
     rollup_dir = (case_dir / "analyze") if case_dir else (OUTPUT_DIR / "analyze")
     rollup_dir.mkdir(parents=True, exist_ok=True)
     rollup_path = rollup_dir / f"malchela_summary_{ts}.md"
+
+    # MITRE ATT&CK matrix + Navigator layer, built from the rollup itself
+    # (see server/mitre_matrix.py). Best-effort: a failure here must never
+    # cost the user their Analyze summary.
+    mitre = None
+    try:
+        matrix = mitre_matrix.build_matrix(
+            mitre_matrix.extract_hits(rollup_md, run_label=rollup_path.name),
+            target=str(target), runs=[rollup_path.name])
+        if matrix["techniques"]:
+            n_tac = len({tac for t in matrix["techniques"] for tac in t["tactics"]})
+            pointer = (f"- **MITRE ATT&CK matrix:** {len(matrix['techniques'])} technique(s) across "
+                       f"{n_tac} tactic(s) — open it from the PWA (Analyze results or the case), or load "
+                       f"`navigator_layer_{ts}.json` in ATT&CK Navigator")
+            if MITRE_POINTER_MARK in rollup_md:
+                rollup_md = rollup_md.replace(MITRE_POINTER_MARK, pointer, 1)
+            elif "## Triage Summary" in rollup_md:  # over-cap fallback / older layout
+                head, sep, rest = rollup_md.partition("## Triage Summary")
+                i = rest.find("\n- **")
+                if i >= 0:
+                    rest = rest[:i + 1] + pointer + "\n" + rest[i + 1:]
+                rollup_md = head + sep + rest
+        rollup_md = rollup_md.replace(MITRE_POINTER_MARK + "\n", "").replace(MITRE_POINTER_MARK, "")
+        mpath = rollup_dir / f"mitre_matrix_{ts}.json"
+        lpath = rollup_dir / f"navigator_layer_{ts}.json"
+        mpath.write_text(json.dumps(matrix, indent=2, ensure_ascii=False))
+        lpath.write_text(json.dumps(mitre_matrix.navigator_layer(
+            matrix, name=f"MalChela — {Path(str(target)).name or target}"), indent=2))
+        mitre = {"matrix": matrix, "matrix_path": str(mpath), "layer_path": str(lpath)}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("MITRE matrix build failed: %s", e)
+
     rollup_path.write_text(rollup_md)
 
     if case_dir:
-        _register_cli_case_output("analyze", case_name, str(target), "md")
+        _register_case_file(case_name, rollup_path, "analyze", str(target))
+        if mitre:
+            _register_case_file(case_name, Path(mitre["matrix_path"]), "analyze", str(target))
+            _register_case_file(case_name, Path(mitre["layer_path"]), "analyze", str(target))
 
     return jsonify({
+        "mitre_matrix":     mitre["matrix"] if mitre else None,
+        "mitre_layer_path": mitre["layer_path"] if mitre else None,
         "success":         True,
         "target":          str(target),
         "file_count":      len(per_file_results),
@@ -1639,7 +1861,10 @@ def _demote_markdown_headings(md: str, shift: int = 2) -> str:
     return _MD_HEADING.sub(lambda m: "#" * min(len(m.group(1)) + shift, 6) + m.group(2), md)
 
 
-_MD_MITRE_ROW = re.compile(r"^\|\s*(\d+)\s*\|[^|]*\|[^|]*\|\s*([^|]+?)\s*\|[^|]*\|[^|]*\|\s*$", re.MULTILINE)
+_MD_MITRE_ROW = re.compile(r"^\|\s*(\d+)\s*\|([^|]*)\|[^|]*\|\s*([^|]+?)\s*\|[^|]*\|[^|]*\|\s*$", re.MULTILINE)
+# mStrings' summary row for a table of encoded strings re-counts the same
+# strings its base64-blob rule already matched — a finding, not more strings.
+_MSTRINGS_SUMMARY_ROWS = ("Encoded string table",)
 
 
 def _extract_mitre_tactics(markdown: str) -> tuple:
@@ -1649,19 +1874,27 @@ def _extract_mitre_tactics(markdown: str) -> tuple:
     heuristic isn't at risk of matching some other tool's table. A rule
     mapped to multiple tactics (comma-separated) credits its count to each
     tactic — that's how ATT&CK tagging works — so tactic_counts can sum to
-    more than raw_total; raw_total is the true per-file match count."""
+    more than raw_total; raw_total is the true per-file match count.
+
+    Returns (raw_total, rule_hits, tactic_counts). tactic_counts counts
+    matched RULES, not matched strings: one rule that fires on 1,164
+    encoded chunks (AMOS) is one finding, not 1,164 — raw string counts
+    stay available as raw_total for context."""
     raw_total = 0
+    rule_hits = 0
     tactics: dict = {}
-    for count_str, tactic_field in _MD_MITRE_ROW.findall(markdown):
-        count = int(count_str)
-        raw_total += count
+    for count_str, rule_field, tactic_field in _MD_MITRE_ROW.findall(markdown):
+        if not rule_field.strip().startswith(_MSTRINGS_SUMMARY_ROWS):
+            raw_total += int(count_str)
+        rule_hits += 1
         for tactic in tactic_field.split(","):
             tactic = tactic.strip()
             if tactic:
-                tactics[tactic] = tactics.get(tactic, 0) + count
-    return raw_total, tactics
+                tactics[tactic] = tactics.get(tactic, 0) + 1
+    return raw_total, rule_hits, tactics
 
 
+_UNPACK_VERDICT = re.compile(r"^\*\*Packer verdict:\*\*\s*(.+?)\s*$", re.MULTILINE)
 _TIQUERY_TAG_ROW = re.compile(r"^\|\s*[^\s|]+\s*\|\s*FOUND\s*\|\s*([^|]+?)\s*\|[^|]*\|[^|]*\|\s*$", re.MULTILINE)
 
 
@@ -1744,6 +1977,21 @@ def _extract_mstrings_iocs(markdown: str) -> tuple:
     return _bullets(_MSTRINGS_FS_IOC_BLOCK), _bullets(_MSTRINGS_NET_IOC_BLOCK)
 
 
+_MSTRINGS_IP_LIST_BLOCK = re.compile(r"## IP Address Lists[^\n]*\n\n(?:[^\n]*\n\n)?((?:- \*\*.+\n)+)")
+_MSTRINGS_IP_LIST_ROW = re.compile(r"^- \*\*(\d+) addresses\*\* at (0x[0-9A-Fa-f]+)\S(0x[0-9A-Fa-f]+): (.+)$", re.MULTILINE)
+
+
+def _extract_ip_lists(markdown: str) -> list:
+    """mStrings' "IP Address Lists" section: [(count, "0xA–0xB", [ips])].
+    Runs of IPs stored together (often an anti-analysis blocklist) that
+    mStrings keeps out of its Network IOCs."""
+    m = _MSTRINGS_IP_LIST_BLOCK.search(markdown)
+    if not m:
+        return []
+    return [(int(n), f"{a}–{b}", re.findall(r"`([^`]+)`", rest))
+            for n, a, b, rest in _MSTRINGS_IP_LIST_ROW.findall(m.group(1))]
+
+
 _MD_OBFUSCATION_LAYERS = re.compile(r"found after (\d+) layers of base64 decoding")
 
 
@@ -1779,10 +2027,174 @@ def _flag_verdict(tool_runs: list) -> tuple:
     return False, ""
 
 
-def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: str = None) -> str:
-    """Mechanical rollup only — every tool's captured output concatenated
-    under per-file/per-tool headings. No synthesis, no narrative; that's a
-    separate, human (or LLM-assisted) step on top of this.
+_TIQUERY_FOUND_ROW = re.compile(
+    r"^\|\s*([^\s|]+)\s*\|\s*FOUND\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|[^|]*\|\s*$", re.MULTILINE)
+_UNPACK_FORMAT = re.compile(r"^\*\*Format:\*\*\s*(.+?)\s*$", re.MULTILINE)
+_IPV4 = re.compile(r"^\d{1,3}(?:\[?\.\]?\d{1,3}){3}$")
+_SUMMARY_ROW_CAP = 25
+MITRE_POINTER_MARK = "<!-- mitre-matrix-pointer -->"
+
+
+def _platform_for(filetype: str, fmt: str) -> str:
+    """Target platform from FileMiner's MIME type and Unpack's format label."""
+    ft = (filetype or "").lower()
+    arch = ""
+    m = re.search(r"\(([^)]*)\)\s*$", fmt or "")
+    if m:
+        arch = m.group(1)
+    if "portable-executable" in ft or (fmt or "").startswith("PE"):
+        base = "Windows"
+    elif "mach" in ft or (fmt or "").startswith("Mach-O"):
+        base = "macOS"
+    elif "x-executable" in ft or (fmt or "").startswith("ELF"):
+        base = "Linux / Unix (ELF)"
+    elif ft.startswith("text/"):
+        base = "Script / text"
+    else:
+        return ""
+    return f"{base} ({arch})" if arch else base
+
+
+def _md_cell(text: str) -> str:
+    return str(text).replace("|", "\\|").replace("\n", " ")
+
+
+def _lookups_offline() -> bool:
+    """Offline mode as Analyze's tool runs see it: the PWA toggle, or the
+    environment variable set when the server was started offline."""
+    return is_offline_mode() or os.environ.get("MALCHELA_OFFLINE") == "1"
+
+
+# ── IP reputation (capped) ──────────────────────────────────────────────────
+# Analyze looks up at most this many standalone IP IOCs per run (VT, OTX,
+# GreyNoise via tiquery): a free VT key allows 4 lookups a minute and 500 a
+# day, so looking up every IP a sample references isn't an option. IPs
+# mStrings put in an "IP Address List" (blocklists, C2 pools) and public DNS
+# resolvers are never looked up. MALCHELA_IP_LOOKUPS overrides the cap
+# (0 turns lookups off).
+_IP_LOOKUP_DEFAULT_CAP = 5
+
+
+def _ip_lookup_cap() -> int:
+    try:
+        return max(0, int(os.environ.get("MALCHELA_IP_LOOKUPS", _IP_LOOKUP_DEFAULT_CAP)))
+    except ValueError:
+        return _IP_LOOKUP_DEFAULT_CAP
+
+
+def _public_ip(ip: str) -> bool:
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return a.is_global and not a.is_multicast
+
+
+def _summarize_ip_results(results: list) -> tuple:
+    """tiquery --json results for one IP -> (summary text, flagged?)."""
+    parts, flagged = [], False
+    for r in results or []:
+        src, st = r.get("source", "?"), r.get("status")
+        fam, det = r.get("family") or "", r.get("detections") or ""
+        if st == "found":
+            if src == "VT":
+                m = re.match(r"(\d+)/(\d+)", det)
+                if m and int(m.group(1)) > 0:
+                    flagged = True
+                parts.append(f"VT {det}" + (f" · {fam}" if fam else ""))
+            elif src == "GN":
+                if det == "malicious":
+                    flagged = True
+                parts.append(f"GreyNoise: {fam}" + (f" ({det})" if det else ""))
+            elif src == "OTX":
+                parts.append(f"OTX {det}" + (f" · {fam}" if fam else ""))
+            else:
+                parts.append(f"{src} {det or 'found'}")
+        elif st == "not_found":
+            parts.append({"GN": "GreyNoise: not seen scanning, not a known service", "OTX": "OTX: no pulses"}.get(src, f"{src}: not found"))
+        elif isinstance(st, dict) and "error" in st:
+            parts.append(f"{src}: {st['error']}")
+    return "; ".join(parts), flagged
+
+
+def _lookup_ip_reputation(per_file_results: list, case_name: str) -> dict:
+    """Look up the first few standalone IP IOCs. Returns
+    {"ips": {ip: (summary, flagged)}, "skipped": n, "cap": cap, "offline": bool}."""
+    out = {"ips": {}, "skipped": 0, "cap": _ip_lookup_cap(), "offline": _lookups_offline()}
+    candidates: list = []
+    for f in per_file_results:
+        for run in f.get("tool_runs", []):
+            if run.get("tool") != "mstrings" or not run.get("success") or not run.get("markdown"):
+                continue
+            _fs, net = _extract_mstrings_iocs(run["markdown"])
+            for ioc in net:
+                ip = ioc.strip().replace("[.]", ".").replace("[:]", ":")
+                if _public_ip(ip) and ip not in candidates:
+                    candidates.append(ip)
+    if out["offline"] or out["cap"] == 0 or not candidates:
+        out["skipped"] = len(candidates)
+        return out
+    for i, ip in enumerate(candidates):
+        if i >= out["cap"]:
+            out["skipped"] = len(candidates) - out["cap"]
+            break
+        _analyze_progress.update({"phase": "IP reputation", "detail": ip})
+        args = [ip, "--json"]
+        if case_name:
+            args += ["--case", case_name, "-o", "-m"]
+        res = run_binary("tiquery", args, timeout=90)
+        if not res.get("success"):
+            err = (res.get("error") or "").strip().splitlines()
+            out["ips"][ip] = (f"lookup failed: {err[-1][:80] if err else 'tiquery error'}", False)
+            continue
+        try:
+            results = json.loads(res.get("output") or "[]")
+        except ValueError:
+            results = []
+        if case_name:
+            # Dots and colons -> dashes: the rename treats a trailing ".4" as
+            # an extension otherwise.
+            _rename_case_report("tiquery", case_name, "ip_" + re.sub(r"[.:]", "-", ip))
+            _register_cli_case_output("tiquery", case_name, ip, "md")
+        summary = _summarize_ip_results(results)
+        if not results:
+            summary = ("no IP reputation source configured (add a VT, OTX, or GreyNoise key)", False)
+        out["ips"][ip] = summary
+    return out
+
+
+def _ip_rep_note(rep: dict) -> str:
+    if not rep:
+        return "Not run"
+    looked, skipped = len(rep.get("ips", {})), rep.get("skipped", 0)
+    if rep.get("offline"):
+        return "Off (offline mode)" + (f" — {skipped} standalone IP(s) not looked up" if skipped else "")
+    if rep.get("cap") == 0:
+        return "Off (MALCHELA_IP_LOOKUPS=0)"
+    if not looked and not skipped:
+        return "No standalone public IPs to look up"
+    s = f"{looked} standalone IP(s) looked up via tiquery (VT, OTX, GreyNoise)"
+    if skipped:
+        s += f"; {skipped} more not looked up (cap {rep.get('cap')}, set MALCHELA_IP_LOOKUPS to change)"
+    return s + "; IP address lists and public DNS resolvers are never looked up"
+
+
+def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: str = None,
+                          ip_reputation: dict = None) -> str:
+    """Mechanical rollup, laid out in the order of Lenny Zeltser's Malware
+    Analysis Report template (assets/report_templates/): Sample Snapshot,
+    Component Inventory, Capabilities, Indicators of Compromise, Analysis
+    Details (every tool's output, per file), and Analysis Environment.
+
+    Only the evidence sections are filled. Executive Summary, family
+    confidence, MBC behaviors, What We Don't Know, and Infection Vector need
+    an analyst's judgment and are left for the written report — a mechanical
+    rollup that filled them would read as conclusions nobody drew.
+
+    The per-file sections keep their original shape (<a id="file-N"> + "## "
+    heading + "### ✓ Tool (`tool`)" blocks): mitre_matrix.py parses them, for
+    this run and for every older summary in a case.
 
     Files are grouped by SHA256 for display: duplicate content saved under
     different names (common with carved/exported network artifacts) gets one
@@ -1808,152 +2220,350 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
 
     flagged = []  # (filename, anchor)
     dup_groups = []
-    mitre_tactics: dict = {}
     mitre_total = 0
-    malware_tags: list = []
-    malware_tags_seen: set = set()
+    mitre_strings = 0
+    ti_rows: list = []  # (source, family/tags, detections, filename, anchor)
+    ti_seen: set = set()
     flag_findings: list = []  # (filename, tool, flag_text, anchor)
-    fs_iocs: list = []  # (ioc, anchor of the first file it was found in)
+    fs_iocs: list = []  # (ioc, anchor of the first file it was found in, filename)
     fs_iocs_seen: set = set()
-    net_iocs: list = []  # (ioc, anchor of the first file it was found in)
+    net_iocs: list = []  # (ioc, anchor, filename)
     net_iocs_seen: set = set()
+    ip_lists: list = []  # (count, offset range, ips, anchor, filename)
     obfuscation_findings: list = []  # (filename, max_layers)
     revoked_certs: list = []  # (filename, anchor)
+    packer_findings: list = []  # (filename, verdict, anchor)
+    fmt_by_key: dict = {}
+    tools_run: dict = {}
     for key in order:
         members = groups[key]
         anchor = anchor_by_key[key]
+        fname = members[0]["filename"]
         is_flagged, reason = _flag_verdict(members[0]["tool_runs"])
         if is_flagged:
-            flagged.append((members[0]["filename"], anchor))
+            flagged.append((fname, anchor))
         if len(members) > 1:
             dup_groups.append(members)
         for run in members[0]["tool_runs"]:
+            tools_run[run.get("tool")] = tools_run.get(run.get("tool"), 0) + 1
+            if run.get("tool") == "unpack" and run.get("success"):
+                md = run.get("markdown") or ""
+                m = _UNPACK_VERDICT.search(md)
+                packer_findings.append((fname, m.group(1).strip() if m else run.get("output", ""), anchor))
+                fm = _UNPACK_FORMAT.search(md)
+                if fm:
+                    fmt_by_key[key] = fm.group(1).strip()
             if run.get("tool") == "codesign_check" and run.get("success") and run.get("markdown"):
                 if _extract_revoked_cert(run["markdown"]):
-                    revoked_certs.append((members[0]["filename"], anchor))
+                    revoked_certs.append((fname, anchor))
             if run.get("tool") == "mstrings" and run.get("success") and run.get("markdown"):
-                raw_total, tactics = _extract_mitre_tactics(run["markdown"])
-                mitre_total += raw_total
-                for tactic, count in tactics.items():
-                    mitre_tactics[tactic] = mitre_tactics.get(tactic, 0) + count
+                raw_total, rule_hits, _tactics = _extract_mitre_tactics(run["markdown"])
+                mitre_total += rule_hits
+                mitre_strings += raw_total
                 fs, net = _extract_mstrings_iocs(run["markdown"])
+                for n_ips, rng, ips in _extract_ip_lists(run["markdown"]):
+                    ip_lists.append((n_ips, rng, ips, anchor, fname))
                 for ioc in fs:
                     if ioc not in fs_iocs_seen:
                         fs_iocs_seen.add(ioc)
-                        fs_iocs.append((ioc, anchor))
+                        fs_iocs.append((ioc, anchor, fname))
                 for ioc in net:
                     if ioc not in net_iocs_seen:
                         net_iocs_seen.add(ioc)
-                        net_iocs.append((ioc, anchor))
+                        net_iocs.append((ioc, anchor, fname))
                 max_layers = _extract_max_obfuscation_layers(run["markdown"])
                 if max_layers > 1:
-                    obfuscation_findings.append((members[0]["filename"], max_layers))
-            if is_flagged and run.get("tool") == "tiquery" and run.get("success") and run.get("markdown"):
-                for tag in _extract_tiquery_tags(run["markdown"]):
-                    if tag not in malware_tags_seen:
-                        malware_tags_seen.add(tag)
-                        malware_tags.append(tag)
+                    obfuscation_findings.append((fname, max_layers))
+            if run.get("tool") == "tiquery" and run.get("success") and run.get("markdown"):
+                for src, fam, det in _TIQUERY_FOUND_ROW.findall(run["markdown"]):
+                    if fam and (src, fam) not in ti_seen:
+                        ti_seen.add((src, fam))
+                        ti_rows.append((src, fam, det, fname, anchor))
             if run.get("success") and run.get("markdown") and run.get("tool") in ("macho_info", "plist_analyzer", "codesign_check"):
                 for flag_text in _extract_flags(run["tool"], run["markdown"]):
-                    flag_findings.append((members[0]["filename"], run["tool"], flag_text, anchor))
+                    flag_findings.append((fname, run["tool"], flag_text, anchor))
 
+    # ── Per-file sections (Analysis Details) — built first so the matrix
+    # behind Capabilities comes from exactly what this summary shows.
+    details: list = []
+    for key in order:
+        members = groups[key]
+        primary = members[0]
+        details.append(f'<a id="{anchor_by_key[key]}"></a>')
+        details.append(f"## {primary['filename']}")
+        details.append("")
+        if len(members) > 1:
+            other_names = ", ".join(f"`{m['filename']}`" for m in members[1:])
+            details.append(f"- **Also found as:** {other_names} — identical content, tool output shown once")
+        if primary.get("unpacked_from"):
+            how = f" ({primary['unpack_source']})" if primary.get("unpack_source") else ""
+            details.append(f"- **Unpacked from:** `{primary['unpacked_from']}`{how}")
+        details.append(f"- **Path:** `{primary['filepath']}`")
+        details.append(f"- **Type:** {primary['filetype']}")
+        if primary["sha256"]:
+            details.append(f"- **SHA256:** `{primary['sha256']}`")
+        if primary["md5"]:
+            details.append(f"- **MD5:** `{primary['md5']}`")
+        details.append("")
+
+        if not primary["tool_runs"]:
+            details.append("_No suggested tools for this file type._")
+            details.append("")
+            continue
+
+        for run in primary["tool_runs"]:
+            status = "✓" if run["success"] else "✕"
+            details.append(f"### {status} {run['label']} (`{run['tool']}`)")
+            details.append("")
+            if run["success"]:
+                if run.get("markdown"):
+                    details.append(_demote_markdown_headings(run["markdown"]))
+                else:
+                    # Fallback for the rare case the .md read-back came up empty
+                    # (tool didn't actually write one) — raw stdout, code-fenced.
+                    details.append("```")
+                    details.append(run["output"] or "(no output)")
+                    details.append("```")
+            else:
+                details.append(f"**Error:** {run['error'] or 'Tool run failed.'}")
+            details.append("")
+
+    try:
+        matrix = mitre_matrix.build_matrix(mitre_matrix.extract_hits("\n".join(details)))
+    except Exception as e:  # noqa: BLE001 — the summary must survive a matrix bug
+        logger.warning("Capabilities table: matrix build failed: %s", e)
+        matrix = {"techniques": [], "tactics": []}
+
+    top_keys = [k for k in order if not groups[k][0].get("unpacked_from")]
+    single = len(top_keys) == 1
+
+    def link(name, anchor):
+        return f"[`{name}`](#{anchor})"
+
+    # ── Header ──
     lines = [
         f"# MalChela Summary — {target}",
         "",
-        f"Generated: {datetime.now().isoformat()}",
-        f"Files analyzed: {len(per_file_results)}",
+        # Trailing double spaces: Markdown hard line breaks, so these stay
+        # separate lines when rendered.
+        f"Generated: {datetime.now().isoformat()}  ",
+        f"Files analyzed: {len(per_file_results)}  ",
     ]
     if extraction_note:
         lines.append(f"_{extraction_note}_")
     lines += [
         "",
-        "## Triage Summary",
+        "_An evidence rollup in the order of Lenny Zeltser's Malware Analysis Report template. "
+        "Sections that need an analyst's judgment (Executive Summary, family confidence, What We "
+        "Don't Know, Infection Vector) are left for the written report. Links jump to that file's "
+        "section below; network indicators are defanged (hxxp, `[.]`)._",
         "",
     ]
-    if order:
-        lines.append(
-            "_Links below jump to that finding's section further down this report — "
-            "they do not open the indicator itself. Network indicators are defanged "
-            "(hxxp, `[.]`)._"
-        )
-        lines.append("")
-    if len(order) != len(per_file_results):
-        lines.append(
-            f"- **{len(order)} unique file(s)** across {len(per_file_results)} path(s) "
-            f"({len(per_file_results) - len(order)} duplicate instance(s) collapsed below)"
-        )
+
+    # ── Sample Snapshot ──
+    lines += ["## Sample Snapshot", "", "|  |  |", "|---|---|"]
+    if ti_rows:
+        ti = "; ".join(f"{_md_cell(fam)} — {src}" + (f" {_md_cell(det)}" if det else "")
+                       for src, fam, det, _n, _a in ti_rows[:8])
+        if len(ti_rows) > 8:
+            ti += f"; +{len(ti_rows) - 8} more"
+    elif _lookups_offline():
+        ti = "Not queried (offline mode)"
+    elif tools_run.get("tiquery"):
+        ti = "No match in the queried sources"
     else:
-        lines.append(f"- **{len(order)} file(s)** analyzed")
+        ti = "Not queried"
+    lines.append(f"| **Threat Intel Matches** | {ti} |")
     if flagged:
-        lines.append(f"- **⚠ {len(flagged)} flagged malicious** (VirusTotal): "
-                      + ", ".join(f"[`{n}`](#{a})" for n, a in flagged))
-    else:
-        lines.append("- No files flagged malicious by VirusTotal")
+        lines.append(f"| **VirusTotal** | ⚠ {len(flagged)} of {len(order)} file(s) flagged malicious: "
+                     + ", ".join(link(n, a) for n, a in flagged) + " |")
+    elif _lookups_offline():
+        lines.append("| **VirusTotal** | Not queried (offline mode) |")
+    elif tools_run.get("tiquery") or tools_run.get("fileanalyzer"):
+        lines.append("| **VirusTotal** | No file flagged malicious |")
+    platforms = []
+    for k in top_keys:
+        pl = _platform_for(groups[k][0]["filetype"], fmt_by_key.get(k, ""))
+        if pl and pl not in platforms:
+            platforms.append(pl)
+    if platforms:
+        lines.append(f"| **Target Platform** | {_md_cell(', '.join(platforms))} |")
+    if single:
+        p0 = groups[top_keys[0]][0]
+        sha = f" — SHA-256 `{p0['sha256']}`" if p0["sha256"] else ""
+        lines.append(f"| **Primary Artifact** | {link(p0['filename'], anchor_by_key[top_keys[0]])}{sha} |")
+    pk = [f"{link(n, a)} — {_md_cell(v)}" for n, v, a in packer_findings]
+    pk += [f"`{n}` — {layers} layers of base64 (mStrings)" for n, layers in obfuscation_findings]
+    lines.append(f"| **Packing / Obfuscation** | {'; '.join(pk) if pk else 'None detected'} |")
     if revoked_certs:
-        lines.append(f"- **⚠ {len(revoked_certs)} certificate(s) REVOKED** (Apple OCSP): "
-                      + ", ".join(f"[`{n}`](#{a})" for n, a in revoked_certs))
-    if malware_tags:
-        lines.append("- **Malware tags** (tiquery): " + ", ".join(f"`{t}`" for t in malware_tags))
+        lines.append("| **Code Signing** | ⚠ certificate REVOKED (Apple OCSP): "
+                     + ", ".join(link(n, a) for n, a in revoked_certs) + " |")
+    if len(order) != len(per_file_results):
+        lines.append(f"| **Files** | {len(order)} unique across {len(per_file_results)} paths "
+                     f"({len(per_file_results) - len(order)} duplicate instance(s) collapsed) |")
+    else:
+        lines.append(f"| **Files** | {len(order)} |")
+    lines.append("")
+
+    # ── Component Inventory ──
+    lines += ["## Component Inventory", "", "| Role | File Name | File Type | Notes |", "|---|---|---|---|"]
+    for key in order:
+        members = groups[key]
+        pf = members[0]
+        if pf.get("unpacked_from"):
+            role = "Recovered payload" + (f" ({pf['unpack_source']})" if pf.get("unpack_source") else "")
+        else:
+            role = "Primary artifact" if single else "Analyzed file"
+        notes = []
+        if pf.get("unpacked_from"):
+            notes.append(f"unpacked from `{pf['unpacked_from']}`")
+        if len(members) > 1:
+            notes.append("also found as " + ", ".join(f"`{m['filename']}`" for m in members[1:]))
+        nflags = sum(1 for f in flag_findings if f[3] == anchor_by_key[key])
+        if nflags:
+            notes.append(f"{nflags} tool flag(s)")
+        ftype = fmt_by_key.get(key) or pf["filetype"]
+        lines.append(f"| {_md_cell(role)} | {link(pf['filename'], anchor_by_key[key])} | {_md_cell(ftype)} | {_md_cell('; '.join(notes))} |")
+    lines.append("")
+
+    # ── Capabilities ──
+    lines += [
+        "## Capabilities",
+        "",
+        "_ATT&CK techniques from mStrings rules, Unpack, and tool flags (`assets/flag_attack_map.yaml`). "
+        "These are rule hits: evidence to corroborate, not confirmed behavior. Hits from a bundler's "
+        "bootloader or runtime describe the wrapper, not the sample._",
+        "",
+        MITRE_POINTER_MARK,
+    ]
     if mitre_total:
-        by_tactic = sorted(mitre_tactics.items(), key=lambda kv: kv[1], reverse=True)
-        breakdown = ", ".join(f"{t} ({c})" for t, c in by_tactic)
-        lines.append(f"- **{mitre_total} MITRE ATT&CK finding(s)** (mstrings), by tactic: {breakdown}")
-    if fs_iocs:
-        lines.append("- **Filesystem IOCs** (mstrings): " + ", ".join(f"[`{i}`](#{a})" for i, a in fs_iocs))
-    if net_iocs:
-        lines.append("- **Network IOCs** (mstrings): " + ", ".join(f"[`{_defang(i)}`](#{a})" for i, a in net_iocs))
-    if obfuscation_findings:
-        detail = ", ".join(f"`{n}` ({layers} layers)" for n, layers in obfuscation_findings)
-        lines.append(f"- **⚠ Multi-layer obfuscation detected** (mstrings): {detail}")
+        lines.append(f"- **{mitre_total} MITRE ATT&CK rule hit(s)** (mstrings; {mitre_strings} matched strings)")
+    techs = matrix.get("techniques") or []
+    if techs:
+        tac_name = {t["shortname"]: t["name"] for t in matrix.get("tactics", [])}
+        tac_order = [t["shortname"] for t in matrix.get("tactics", [])]
+        name_to_anchor = {groups[k][0]["filename"]: anchor_by_key[k] for k in order}
+        # One row per technique, under every tactic it was plotted in (the
+        # matrix shows it in each column; a table repeating it would not help).
+        rows = sorted(techs, key=lambda t: (min((tac_order.index(x) for x in t["tactics"] if x in tac_order), default=99), t["id"]))
+        lines += ["", "| Tactic | Technique | Evidence | Files |", "|---|---|---|---|"]
+        for t in rows:
+            tacs = ", ".join(tac_name.get(x, x) for x in sorted(t["tactics"], key=lambda x: tac_order.index(x) if x in tac_order else 99))
+            ev, seen_ev = [], set()
+            for h in t["hits"]:
+                e = f"{h['tool']}: {h.get('source') or ''}".strip()
+                if e not in seen_ev:
+                    seen_ev.add(e)
+                    ev.append(e)
+            evs = "; ".join(ev[:3]) + (f"; +{len(ev) - 3} more" if len(ev) > 3 else "")
+            files = ", ".join(link(f["file"], name_to_anchor.get(f["file"], "")) if f.get("file") in name_to_anchor
+                              else f"`{f.get('file')}`" for f in t["files"])
+            low = " _(low confidence)_" if t.get("confidence") == "low" else ""
+            lines.append(f"| {_md_cell(tacs)} | {t['id']} {_md_cell(t['name'])}{low} | {_md_cell(evs)} | {files} |")
+    else:
+        lines.append("")
+        lines.append("_No ATT&CK techniques matched._")
+    lines.append("")
+
+    # ── Indicators of Compromise ──
+    lines += [
+        "## Indicators of Compromise",
+        "",
+        "_Strings the tools extracted that match indicator patterns. Before listing one in a report, "
+        "confirm the sample uses it: strings from packed, encrypted, or anti-analysis data (a sandbox "
+        "IP blocklist, for example) are not indicators on their own. Public DNS resolvers are listed "
+        "separately in each mStrings report and are not C2._",
+        "",
+        "| Type | Indicator | Context |",
+        "|---|---|---|",
+    ]
+    for key in order:
+        pf = groups[key][0]
+        if pf["sha256"]:
+            role = "recovered payload" if pf.get("unpacked_from") else ("primary artifact" if single else "analyzed file")
+            md5 = f"; MD5 `{pf['md5']}`" if pf["md5"] else ""
+            lines.append(f"| Hash Values | `{pf['sha256']}` | {role} — {link(pf['filename'], anchor_by_key[key])}{md5} |")
+    ips, urls, domains = [], [], []
+    for ioc, a, n in net_iocs:
+        d = _defang(ioc)
+        if _IPV4.match(ioc.strip()):
+            ips.append((d, a, n))
+        elif "://" in ioc:
+            urls.append((d, a, n))
+        else:
+            domains.append((d, a, n))
+    url_hosts = []
+    for d, a, n in urls:
+        host = d.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+        if _IPV4.match(host):
+            continue  # an IP host is already under IP Addresses
+        if host and host not in [h for h, _a, _n in url_hosts] and host not in [x for x, _a, _n in domains]:
+            url_hosts.append((host, a, n))
+
+    rep_ips = (ip_reputation or {}).get("ips", {})
+
+    def ioc_rows(kind, items, note=""):
+        for i, (ioc, a, n) in enumerate(items):
+            if i >= _SUMMARY_ROW_CAP:
+                lines.append(f"| {kind} | _+{len(items) - _SUMMARY_ROW_CAP} more_ | see the mStrings reports below |")
+                break
+            ctx = f"mStrings — {link(n, a)}" + (f"; {note}" if note else "")
+            rep_hit = rep_ips.get(ioc.replace("[.]", ".").replace("[:]", ":"))
+            if rep_hit and rep_hit[0]:
+                summary, bad = rep_hit
+                ctx += f"; {'⚠ ' if bad else ''}{_md_cell(summary)}"
+            lines.append(f"| {kind} | `{_md_cell(ioc)}` | {ctx} |")
+    ioc_rows("IP Addresses", ips)
+    for n_ips, rng, list_ips, a, n in ip_lists:
+        shown = ", ".join(f"`{_md_cell(x)}`" for x in list_ips[:3]) + (", …" if len(list_ips) > 3 else "")
+        lines.append(f"| IP Address List | {n_ips} addresses stored together at {rng}: {shown} | "
+                     f"possible anti-analysis blocklist or C2 pool, not counted as IP indicators — mStrings — {link(n, a)} |")
+    ioc_rows("Domain Names", domains + url_hosts)
+    ioc_rows("Network Artifacts", urls, "URL")
+    ioc_rows("Host Artifacts", fs_iocs)
+    if not (ips or urls or domains or ip_lists):
+        lines.append("| Network | _none extracted_ | |")
+    lines.append("")
+
+    # ── Analysis Details ──
+    lines += [
+        "## Analysis Details",
+        "",
+        "_Static analysis only: MalChela never executes a sample, so behavioral, memory, and dynamic "
+        "code analysis were not performed. Every tool's full output follows, one section per file "
+        "(Static Properties Analysis)._",
+        "",
+    ]
     if flag_findings:
-        flagged_files = len({f[0] for f in flag_findings})
-        lines.append(f"- **{len(flag_findings)} flag(s)/indicator(s)** across {flagged_files} file(s):")
+        lines.append(f"**Tool flags:** {len(flag_findings)} across {len({f[0] for f in flag_findings})} file(s)")
+        lines.append("")
         for filename, tool, text, anchor in flag_findings:
-            lines.append(f"  - [`{filename}`](#{anchor}) ({tool}): {text}")
+            lines.append(f"- {link(filename, anchor)} ({tool}): {text}")
+        lines.append("")
     for members in dup_groups:
         names = ", ".join(f"`{m['filename']}`" for m in members)
         lines.append(f"- **Duplicate content:** {names} share SHA256 `{members[0]['sha256']}`")
-    lines.append("")
-
-    for key in order:
-        members = groups[key]
-        primary = members[0]
-        lines.append(f'<a id="{anchor_by_key[key]}"></a>')
-        lines.append(f"## {primary['filename']}")
+    if dup_groups:
         lines.append("")
-        if len(members) > 1:
-            other_names = ", ".join(f"`{m['filename']}`" for m in members[1:])
-            lines.append(f"- **Also found as:** {other_names} — identical content, tool output shown once")
-        lines.append(f"- **Path:** `{primary['filepath']}`")
-        lines.append(f"- **Type:** {primary['filetype']}")
-        if primary["sha256"]:
-            lines.append(f"- **SHA256:** `{primary['sha256']}`")
-        if primary["md5"]:
-            lines.append(f"- **MD5:** `{primary['md5']}`")
-        lines.append("")
+    lines += details
 
-        if not primary["tool_runs"]:
-            lines.append("_No suggested tools for this file type._")
-            lines.append("")
-            continue
-
-        for run in primary["tool_runs"]:
-            status = "✓" if run["success"] else "✕"
-            lines.append(f"### {status} {run['label']} (`{run['tool']}`)")
-            lines.append("")
-            if run["success"]:
-                if run.get("markdown"):
-                    lines.append(_demote_markdown_headings(run["markdown"]))
-                else:
-                    # Fallback for the rare case the .md read-back came up empty
-                    # (tool didn't actually write one) — raw stdout, code-fenced.
-                    lines.append("```")
-                    lines.append(run["output"] or "(no output)")
-                    lines.append("```")
-            else:
-                lines.append(f"**Error:** {run['error'] or 'Tool run failed.'}")
-            lines.append("")
-
+    # ── Appendix: Analysis Environment ──
+    import platform as _platform
+    ran = ", ".join(f"{t} ({n})" for t, n in sorted(tools_run.items()) if t)
+    lines += [
+        "## Appendix: Analysis Environment",
+        "",
+        "|  |  |",
+        "|---|---|",
+        f"| **Toolkit** | MalChela v{MALCHELA_VERSION} — Analyze (PWA server) |",
+        "| **Analysis Depth** | Static only — samples were never executed or emulated |",
+        f"| **Tools Run** | {_md_cell(ran) or 'none'} |",
+        f"| **Network Lookups** | {'Off (offline mode)' if _lookups_offline() else 'Threat intel and NSRL lookups by hash; samples are never uploaded'} |",
+        f"| **IP Reputation** | {_ip_rep_note(ip_reputation)} |",
+        f"| **Host** | {_md_cell(_platform.platform())} |",
+        f"| **Generated** | {datetime.now().isoformat(timespec='seconds')} |",
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -2269,6 +2879,30 @@ def dpp_extract():
     return jsonify(run_binary("dpp_extract", args, timeout=180))
 
 
+@app.route("/tools/unpack", methods=["POST"])
+def unpack_tool():
+    """Detect packers/protectors/installers and statically unpack what can be
+    unpacked without executing the sample (UPX incl. tampered headers, fat
+    Mach-O, PyInstaller, .NET/Costura resources, NSIS, Inno Setup, overlays,
+    embedded executables). Args: path [case_name] [save_format]"""
+    data        = request.json or {}
+    path        = safe_path(data.get("path", ""))
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
+    if not path:
+        return jsonify({"success": False, "error": "Invalid or missing path"}), 400
+    args = [str(path)]
+    if case_name:
+        args += ["--case", case_name, "-o", _FMT_FLAG[save_format]]
+    result = run_binary("unpack", args, timeout=300)
+    if case_name and result.get("success"):
+        _register_cli_case_output("unpack", case_name, str(path), save_format)
+        result["saved_to_case"] = True
+    return jsonify(result)
+
+
 @app.route("/tools/strings_to_yara", methods=["POST"])
 def strings_to_yara():
     """
@@ -2347,10 +2981,11 @@ def strings_to_yara():
 
 @app.route("/tools/tiquery", methods=["POST"])
 def tiquery():
-    """Threat Intel Query — multi-source hash or URL lookup."""
+    """Threat Intel Query — multi-source hash, URL, or IP lookup."""
     data = request.json or {}
     hash_val   = data.get("hash", "").strip()
     url_val    = data.get("url", "").strip()
+    ip_val     = str(data.get("ip", "")).strip()
     bulk_path  = safe_path(data.get("bulk", "")) if data.get("bulk") else None
     qr_path    = safe_path(data.get("qr", "")) if data.get("qr") else None
     sources    = data.get("sources", "").strip()
@@ -2380,8 +3015,14 @@ def tiquery():
         args = [hash_val]
     elif url_val:
         args = [url_val]
+    elif ip_val:
+        # tiquery refangs (1.2.3[.]4) and rejects non-public addresses itself;
+        # this only keeps anything but an address-shaped token off the argv.
+        if not re.fullmatch(r"[0-9A-Fa-f:.\[\]]{2,64}", ip_val):
+            return jsonify({"success": False, "error": "Not an IP address"}), 400
+        args = [ip_val]
     else:
-        return jsonify({"success": False, "error": "Provide hash, url, bulk, or qr path"}), 400
+        return jsonify({"success": False, "error": "Provide hash, url, ip, bulk, or qr path"}), 400
 
     download    = data.get("download", False)
     verbose_vt  = data.get("verbose_vt", False)
@@ -2677,6 +3318,60 @@ def run_vol3():
         return jsonify({"success": False, "error": _safe_error(e)})
 
 
+@app.route("/tools/yara_scan", methods=["POST"])
+def yara_scan():
+    """
+    Native YARA scan (embedded YARA-X engine). Flags follow `yr scan`:
+    yara_scan [flags] [extra_args] <rules_path> <target_path>
+    """
+    data        = request.json or {}
+    rules_path  = safe_path(data.get("rules_path", ""))
+    target_path = safe_path(data.get("target_path", ""))
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
+    save_format = data.get("save_format", "md").lower()
+    if save_format not in _FMT_FLAG:
+        save_format = "md"
+    if not rules_path:
+        return jsonify({"success": False, "error": "Rules path required"}), 400
+    if not target_path:
+        return jsonify({"success": False, "error": "Target path required"}), 400
+    if not rules_path.exists():
+        return jsonify({"success": False, "error": f"Rules not found: {rules_path}"}), 404
+    if not target_path.exists():
+        return jsonify({"success": False, "error": f"Target not found: {target_path}"}), 404
+
+    args = []
+    for key, flag in (("recursive", "--recursive"), ("print_strings", "--print-strings"),
+                      ("print_meta", "--print-meta"), ("print_tags", "--print-tags"),
+                      ("print_namespace", "--print-namespace"), ("count", "--count"),
+                      ("negate", "--negate")):
+        if data.get(key):
+            args.append(flag)
+    tag = str(data.get("tag", "")).strip()
+    if tag and _SAFE_ARG_RE.match(tag):
+        args += ["--tag", tag]
+    extra_args = str(data.get("extra_args", "")).strip()
+    if extra_args:
+        import shlex as _shlex
+        try:
+            parsed = _shlex.split(extra_args)
+        except ValueError as e:
+            return jsonify({"success": False, "error": f"Arguments: {e}"}), 400
+        # --case/--save come from the case selector. Refuse them here rather
+        # than drop the flag and leave its value behind as a stray path.
+        if any(a.startswith(("--case", "--save")) for a in parsed):
+            return jsonify({"success": False, "error": "Use Save to Case instead of --case/--save in Arguments"}), 400
+        args.extend(a for a in parsed if _SAFE_ARG_RE.match(a))
+    if case_name:
+        args += ["--case", case_name, f"--save={save_format}"]
+    args += ["--", str(rules_path), str(target_path)]
+
+    result = run_binary("yara_scan", args, timeout=600)
+    if case_name and result.get("success") and result.get("returncode") == 0:
+        result["saved_to_case"] = True
+    return jsonify(result)
+
+
 @app.route("/tools/yarax", methods=["POST"])
 def yarax():
     """
@@ -2748,53 +3443,57 @@ def file_hash():
         return jsonify({"success": False, "error": _safe_error(e)})
 
 
+# The one list of API keys: the API Keys panel, reveal/save, and the home
+# page's At a Glance count all read it, so a new source is one line here.
+API_KEY_DEFS = [
+    # Tier 1
+    {"id": "vt",  "name": "VirusTotal",         "file": "vt-api.txt",  "tier": 1},
+    {"id": "mb",  "name": "MalwareBazaar",      "file": "mb-api.txt",  "tier": 1},
+    {"id": "otx", "name": "AlienVault OTX",     "file": "otx-api.txt", "tier": 1},
+    # Tier 2
+    {"id": "md",  "name": "MetaDefender Cloud", "file": "md-api.txt",  "tier": 2},
+    {"id": "mp",  "name": "Malpedia",           "file": "mp-api.txt",  "tier": 2},
+    {"id": "ha",  "name": "Hybrid Analysis",    "file": "ha-api.txt",  "tier": 2},
+    {"id": "mw",  "name": "MWDB",               "file": "mw-api.txt",  "tier": 2},
+    {"id": "tr",  "name": "Triage",             "file": "tr-api.txt",  "tier": 2},
+    {"id": "fs",  "name": "FileScan.IO",        "file": "fs-api.txt",  "tier": 2},
+    {"id": "ms",  "name": "Malshare",           "file": "ms-api.txt",  "tier": 2},
+    # URL sources
+    {"id": "url", "name": "urlscan.io",         "file": "url-api.txt", "tier": "url"},
+    {"id": "gsb", "name": "Google Safe Browsing", "file": "gsb-api.txt", "tier": "url"},
+    # IP sources (VirusTotal and OTX keys above also cover IP lookups)
+    {"id": "gn",  "name": "GreyNoise",          "file": "gn-api.txt",  "tier": "ip"},
+]
+API_KEY_FILES = {k["id"]: k["file"] for k in API_KEY_DEFS}
+
+
+def _api_key_configured(filename: str) -> bool:
+    path = API_DIR / filename
+    try:
+        return path.exists() and path.read_text().strip() != ""
+    except OSError:
+        return False
+
+
+# MalChela tools that are not cargo entries in tools.yaml but are listed in
+# About, so the At a Glance count matches it: (name, binary it depends on).
+BUILTIN_TOOLS = [
+    ("Analyze", "fileminer"),          # server workflow driven by FileMiner
+    ("MITRE Lookup", "MITRE_lookup"),  # PWA panel and CLI
+]
+
+
 @app.route("/api_keys", methods=["GET"])
 def get_api_keys():
     """Return status of all API keys — whether each file exists and is non-empty."""
-    keys = [
-        # Tier 1
-        {"id": "vt",  "name": "VirusTotal",        "file": "vt-api.txt",  "tier": 1},
-        {"id": "mb",  "name": "MalwareBazaar",      "file": "mb-api.txt",  "tier": 1},
-        {"id": "otx", "name": "AlienVault OTX",     "file": "otx-api.txt", "tier": 1},
-        # Tier 2
-        {"id": "md",  "name": "MetaDefender Cloud", "file": "md-api.txt",  "tier": 2},
-        {"id": "mp",  "name": "Malpedia",            "file": "mp-api.txt",  "tier": 2},
-        {"id": "ha",  "name": "Hybrid Analysis",     "file": "ha-api.txt",  "tier": 2},
-        {"id": "mw",  "name": "MWDB",                "file": "mw-api.txt",  "tier": 2},
-        {"id": "tr",  "name": "Triage",              "file": "tr-api.txt",  "tier": 2},
-        {"id": "fs",  "name": "FileScan.IO",         "file": "fs-api.txt",  "tier": 2},
-        {"id": "ms",  "name": "Malshare",            "file": "ms-api.txt",  "tier": 2},
-        # URL Sources
-        {"id": "url", "name": "urlscan.io",          "file": "url-api.txt", "tier": "url"},
-        {"id": "gsb", "name": "Google Safe Browsing","file": "gsb-api.txt", "tier": "url"},
-    ]
-
-    result = []
-    for key in keys:
-        path = API_DIR / key["file"]
-        configured = path.exists() and path.read_text().strip() != ""
-        result.append({
-            "id":         key["id"],
-            "name":       key["name"],
-            "file":       key["file"],
-            "tier":       key["tier"],
-            "configured": configured,
-        })
-
+    result = [dict(k, configured=_api_key_configured(k["file"])) for k in API_KEY_DEFS]
     return jsonify({"success": True, "keys": result})
 
 
 @app.route("/api_keys/<key_id>", methods=["GET"])
 def get_api_key_value(key_id):
     """Return the actual value of a specific API key (for reveal)."""
-    # Map id to filename
-    file_map = {
-        "vt": "vt-api.txt", "mb": "mb-api.txt", "otx": "otx-api.txt",
-        "md": "md-api.txt", "mp": "mp-api.txt", "ha": "ha-api.txt",
-        "mw": "mw-api.txt", "tr": "tr-api.txt", "fs": "fs-api.txt",
-        "ms": "ms-api.txt", "url": "url-api.txt", "gsb": "gsb-api.txt",
-    }
-    filename = file_map.get(key_id)
+    filename = API_KEY_FILES.get(key_id)
     if not filename:
         return jsonify({"success": False, "error": "Unknown key ID"}), 404
 
@@ -2808,13 +3507,7 @@ def get_api_key_value(key_id):
 @app.route("/api_keys/<key_id>", methods=["POST"])
 def set_api_key(key_id):
     """Write a new value for a specific API key."""
-    file_map = {
-        "vt": "vt-api.txt", "mb": "mb-api.txt", "otx": "otx-api.txt",
-        "md": "md-api.txt", "mp": "mp-api.txt", "ha": "ha-api.txt",
-        "mw": "mw-api.txt", "tr": "tr-api.txt", "fs": "fs-api.txt",
-        "ms": "ms-api.txt", "url": "url-api.txt", "gsb": "gsb-api.txt",
-    }
-    filename = file_map.get(key_id)
+    filename = API_KEY_FILES.get(key_id)
     if not filename:
         return jsonify({"success": False, "error": "Unknown key ID"}), 404
 
@@ -2885,7 +3578,7 @@ def list_cases():
             if yaml_file.exists():
                 try:
                     with open(yaml_file) as f:
-                        meta = yaml.safe_load(f) or {}
+                        meta = _case_yaml_load(f) or {}
                 except Exception:
                     pass
             all_files = [f for f in case_dir.rglob("*") if f.is_file() and f.name != "case.yaml"]
@@ -2924,7 +3617,7 @@ def create_case():
         "notes":       "",
     }
     with open(case_dir / "case.yaml", "w") as f:
-        yaml.dump(case_meta, f, default_flow_style=False)
+        _case_yaml_dump(case_meta, f)
 
     return jsonify({"success": True, "case": case_meta}), 201
 
@@ -2944,7 +3637,7 @@ def get_case(case_name):
     meta = {}
     if yaml_file.exists():
         with open(yaml_file) as f:
-            meta = yaml.safe_load(f) or {}
+            meta = _case_yaml_load(f) or {}
 
     outputs = []
     for f in sorted(case_dir.rglob("*")):
@@ -2959,6 +3652,82 @@ def get_case(case_name):
             })
 
     return jsonify({"success": True, "case": meta, "outputs": outputs})
+
+
+def _case_dir_checked(case_name: str):
+    case_dir = CASES_DIR / case_name
+    try:
+        case_dir.resolve().relative_to(CASES_DIR.resolve())
+    except ValueError:
+        return None
+    return case_dir if case_dir.is_dir() else None
+
+
+@app.route("/cases/<case_name>/mitre", methods=["GET"])
+def case_mitre_matrix(case_name):
+    """Combined MITRE ATT&CK matrix for every Analyze run in a case (also
+    works for cases saved before the matrix existed — parsed from their
+    summaries)."""
+    case_dir = _case_dir_checked(case_name)
+    if case_dir is None:
+        return jsonify({"success": False, "error": "Case not found"}), 404
+    try:
+        matrix = mitre_matrix.for_case(case_dir, case_name)
+        return jsonify({"success": True, "matrix": matrix})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"success": False, "error": _safe_error(e)}), 500
+
+
+@app.route("/cases/<case_name>/mitre/layer", methods=["GET"])
+def case_mitre_layer(case_name):
+    """Navigator layer download for the case's combined matrix."""
+    case_dir = _case_dir_checked(case_name)
+    if case_dir is None:
+        return jsonify({"success": False, "error": "Case not found"}), 404
+    try:
+        layer = mitre_matrix.navigator_layer(mitre_matrix.for_case(case_dir, case_name),
+                                             name=f"MalChela — case {case_name}")
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"success": False, "error": _safe_error(e)}), 500
+    resp = app.response_class(json.dumps(layer, indent=2), mimetype="application/json")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{secure_filename(case_name)}_navigator_layer.json"'
+    return resp
+
+
+@app.route("/mitre/matrix/template", methods=["GET"])
+def mitre_matrix_template():
+    """Full Enterprise matrix skeleton (tactics in order, each with its live
+    parent techniques and their sub-techniques) for the PWA to draw cells
+    that weren't hit."""
+    db = mitre_matrix.techniques()
+    cols = []
+    for tac in mitre_matrix.tactics():
+        parents, subs = [], {}
+        for t in tac["techniques"]:
+            if "." in t["id"]:
+                subs.setdefault(t["id"].split(".")[0], []).append({"id": t["id"], "name": t["name"]})
+            else:
+                parents.append({"id": t["id"], "name": t["name"]})
+        for p in parents:
+            p["subs"] = sorted(subs.get(p["id"], []), key=lambda x: x["id"])
+        cols.append({"id": tac["id"], "name": tac["name"], "shortname": tac["shortname"],
+                     "techniques": sorted(parents, key=lambda x: x["name"])})
+    return jsonify({"success": True, "attack_version": mitre_matrix.attack_version(), "tactics": cols,
+                    "technique_count": sum(1 for t in db.values() if not t["deprecated"])})
+
+
+@app.route("/mitre/layer", methods=["POST"])
+def mitre_layer_from_matrix():
+    """Navigator layer for a matrix the PWA already holds (an Analyze run that
+    wasn't saved to a case)."""
+    body = request.get_json(silent=True) or {}
+    matrix = body.get("matrix")
+    if not isinstance(matrix, dict) or not isinstance(matrix.get("techniques"), list):
+        return jsonify({"success": False, "error": "matrix required"}), 400
+    layer = mitre_matrix.navigator_layer(matrix, name=body.get("name") or "MalChela Analyze")
+    resp = app.response_class(json.dumps(layer, indent=2), mimetype="application/json")
+    resp.headers["Content-Disposition"] = 'attachment; filename="navigator_layer.json"'
+    return resp
 
 
 @app.route("/cases/<case_name>", methods=["PATCH"])
@@ -2976,7 +3745,7 @@ def update_case(case_name):
     meta = {}
     if yaml_file.exists():
         with open(yaml_file) as f:
-            meta = yaml.safe_load(f) or {}
+            meta = _case_yaml_load(f) or {}
 
     data = request.json or {}
     for field in ["notes", "tags", "description", "status"]:
@@ -2985,7 +3754,7 @@ def update_case(case_name):
     meta["modified"] = datetime.now().isoformat()
 
     with open(yaml_file, "w") as f:
-        yaml.dump(meta, f, default_flow_style=False)
+        _case_yaml_dump(meta, f)
 
     return jsonify({"success": True, "case": meta})
 
@@ -3154,14 +3923,14 @@ def save_to_case(case_name):
     yaml_file = case_dir / "case.yaml"
     if yaml_file.exists():
         with open(yaml_file) as f:
-            meta = yaml.safe_load(f) or {}
+            meta = _case_yaml_load(f) or {}
         files = meta.get("files", [])
         files.append({"filename": filename, "path": rel_path,
                       "tool": tool, "target": target, "timestamp": timestamp})
         meta["files"] = files
         meta["modified"] = datetime.now().isoformat()
         with open(yaml_file, "w") as f:
-            yaml.dump(meta, f, default_flow_style=False)
+            _case_yaml_dump(meta, f)
 
     return jsonify({"success": True, "filename": rel_path})
 
@@ -3189,7 +3958,7 @@ def search_cases():
         if yaml_file.exists():
             try:
                 with open(yaml_file) as f:
-                    meta = yaml.safe_load(f) or {}
+                    meta = _case_yaml_load(f) or {}
             except Exception:
                 pass
 

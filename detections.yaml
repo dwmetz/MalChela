@@ -26,7 +26,7 @@ HardcodedIPAddress:
   title: "Hardcoded IP address"
   id: "b2e9a3d7-cf18-4b6f-987b-4d90d7a94b88"
   status: "experimental"
-  description: "Detection of hardcoded IP address. Excludes X.0.0.0- and X.X.0.0-shaped matches (network/supernet addresses, not usable host targets), 127.0.0.1 (loopback), the RFC 5737 documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) and 192.0.0.0/24 (IETF protocol assignments) — all guaranteed by RFC to never be real routable hosts — plus 255.255.255.255 (broadcast) and 239.255.255.250 (SSDP multicast, the one specific address every UPnP/SSDP implementation hardcodes). Boundary requires the match not be immediately preceded or followed by another digit, dot, OR letter/underscore — \\b alone (or a digit/dot-only boundary check) lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer identifier: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth) matched as \"1.3.6.1\", and — the case that motivated tightening the boundary further — a Go compiler closure symbol like crypto/tls.(*clientHelloMsg).marshal.func1.4.10.1 matched \"4.10.1\"-style tails as if they were IPs, since the character right before the digits was a letter ('c' in 'func'), which the original digit/dot-only lookbehind never checked. Observed on IPStorm (TAOMM Ch1): 29 raw matches, nearly all either Go symbol-table tail-numbers or one of these now-excluded reserved ranges (themselves libp2p's own bogon/CIDR-filter constants, not C2 infrastructure)."
+  description: "Detection of hardcoded IP address. Excludes X.509 attribute and extension OIDs (2.5.4.x, 2.5.29.x, e.g. 2.5.29.37 extKeyUsage), X.0.0.0- and X.X.0.0-shaped matches (network/supernet addresses, not usable host targets), 127.0.0.1 (loopback), the RFC 5737 documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) and 192.0.0.0/24 (IETF protocol assignments) — all guaranteed by RFC to never be real routable hosts — plus 255.255.255.255 (broadcast) and 239.255.255.250 (SSDP multicast, the one specific address every UPnP/SSDP implementation hardcodes). Boundary requires the match not be immediately preceded or followed by another digit, dot, OR letter/underscore — \\b alone (or a digit/dot-only boundary check) lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer identifier: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth) matched as \"1.3.6.1\", and — the case that motivated tightening the boundary further — a Go compiler closure symbol like crypto/tls.(*clientHelloMsg).marshal.func1.4.10.1 matched \"4.10.1\"-style tails as if they were IPs, since the character right before the digits was a letter ('c' in 'func'), which the original digit/dot-only lookbehind never checked. RFC 1918 private and 169.254/16 link-local addresses are excluded here and reported by HardcodedPrivateIPAddress instead (an IOC-only rule): a private IP is worth listing (lab infrastructure, an internal target) but is not evidence of C2 — e.g. OSX.Yort embeds a table of 10.3.18x.x addresses and OSX.CreativeUpdate references 192.168.0.1. Observed on IPStorm (TAOMM Ch1): 29 raw matches, nearly all either Go symbol-table tail-numbers or one of these now-excluded reserved ranges (themselves libp2p's own bogon/CIDR-filter constants, not C2 infrastructure)."
   references:
     - "https://oidref.com/1.3.6.1.5.5.7.3.1"
   logsource:
@@ -34,7 +34,7 @@ HardcodedIPAddress:
     product: "windows"
   detection:
     strings:
-      - "(?<![\\w.])(?!127\\.0\\.0\\.1\\b)(?!\\d{1,3}\\.0\\.0\\.0\\b)(?!\\d{1,3}\\.\\d{1,3}\\.0\\.0\\b)(?!192\\.0\\.0\\.)(?!192\\.0\\.2\\.)(?!198\\.51\\.100\\.)(?!203\\.0\\.113\\.)(?!255\\.255\\.255\\.255\\b)(?!239\\.255\\.255\\.250\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\w.])(?![^\\s]*version=)"
+      - "(?<![\\w.])(?!127\\.0\\.0\\.1\\b)(?!2\\.5\\.(?:4|29)\\.)(?!\\d{1,3}\\.0\\.0\\.0\\b)(?!\\d{1,3}\\.\\d{1,3}\\.0\\.0\\b)(?!192\\.0\\.0\\.)(?!192\\.0\\.2\\.)(?!198\\.51\\.100\\.)(?!203\\.0\\.113\\.)(?!10\\.)(?!192\\.168\\.)(?!172\\.(?:1[6-9]|2\\d|3[01])\\.)(?!169\\.254\\.)(?!255\\.255\\.255\\.255\\b)(?!239\\.255\\.255\\.250\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\w.])(?![^\\s]*version=)"
   falsepositives:
     - "A real hardcoded IP that genuinely ends in .0.0.0 or .0.0 (rare — that's a network/supernet address, not a usable host target)"
   tags:
@@ -44,6 +44,20 @@ HardcodedIPAddress:
     - technique_id: "T1071.001"
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
+
+HardcodedPrivateIPAddress:
+  title: "Hardcoded private IP address"
+  id: "hardcoded-private-ip-001"
+  status: "experimental"
+  description: "RFC 1918 private (10/8, 172.16/12, 192.168/16) and 169.254/16 link-local addresses. Reported as indicators — a lab or internal-network address hardcoded in malware is a useful tell — but mapped to no ATT&CK technique, since by itself it shows neither C2 nor lateral movement. Network-address shapes (X.X.0.0) are excluded as in HardcodedIPAddress. Title must keep the words 'IP address': mstrings' IOC extraction keys on them."
+  logsource:
+    category: "file_event"
+    product: any
+  detection:
+    strings:
+      - "(?<![\\w.])(?!\\d{1,3}\\.\\d{1,3}\\.0\\.0\\b)(?:10\\.(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){2}|192\\.168\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.|169\\.254\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.)(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?![\\w.])(?![^\\s]*version=)"
+  level: low
+  ioc_only: true
 
 SuspiciousC2ApiPhp:
   title: "Suspicious C2 URL (api.php, gate.php)"
@@ -182,8 +196,8 @@ LOLBinsDefenseEvasion:
   level: high
   mitre:
     - technique_id: "T1218"
-      technique_name: "Signed Binary Proxy Execution"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution"
+      tactics: ["Stealth"]
 
 LOLBinsLateralMovement:
   title: "LOLBins Used for Lateral Movement"
@@ -222,8 +236,8 @@ MsiexecRemoteExecution:
   level: high
   mitre:
     - technique_id: "T1218.007"
-      technique_name: "Signed Binary Proxy Execution: Msiexec"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution: Msiexec"
+      tactics: ["Stealth"]
 
 
 CmstpUACBypass:
@@ -243,11 +257,11 @@ CmstpUACBypass:
   level: high
   mitre:
     - technique_id: "T1218.003"
-      technique_name: "Signed Binary Proxy Execution: CMSTP"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution: CMSTP"
+      tactics: ["Stealth"]
     - technique_id: "T1548.002"
-      technique_name: "Abuse Elevation Control Mechanism: Bypass User Access Control"
-      tactics: ["Privilege Escalation", "Defense Evasion"]
+      technique_name: "Abuse Elevation Control Mechanism: Bypass User Account Control"
+      tactics: ["Privilege Escalation"]
 
 
 DotNetLOLBinExecution:
@@ -268,11 +282,11 @@ DotNetLOLBinExecution:
   level: high
   mitre:
     - technique_id: "T1218.009"
-      technique_name: "Signed Binary Proxy Execution: Regsvcs/Regasm"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution: Regsvcs/Regasm"
+      tactics: ["Stealth"]
     - technique_id: "T1218.008"
-      technique_name: "Signed Binary Proxy Execution: Odbcconf"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution: Odbcconf"
+      tactics: ["Stealth"]
 
 
 MshtaRemoteExecution:
@@ -292,8 +306,8 @@ MshtaRemoteExecution:
   level: high
   mitre:
     - technique_id: "T1218.005"
-      technique_name: "Signed Binary Proxy Execution: Mshta"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution: Mshta"
+      tactics: ["Stealth"]
 
 
 SquiblydooRegsvr32:
@@ -314,8 +328,8 @@ SquiblydooRegsvr32:
   level: high
   mitre:
     - technique_id: "T1218.010"
-      technique_name: "Signed Binary Proxy Execution: Regsvr32"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution: Regsvr32"
+      tactics: ["Stealth"]
 
 
 CertutilDownloadDecode:
@@ -342,7 +356,7 @@ CertutilDownloadDecode:
       tactics: ["Command and Control"]
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 
 HHCHMExecution:
@@ -362,8 +376,8 @@ HHCHMExecution:
   level: medium
   mitre:
     - technique_id: "T1218.001"
-      technique_name: "Signed Binary Proxy Execution: Compiled HTML File"
-      tactics: ["Defense Evasion"]
+      technique_name: "System Binary Proxy Execution: Compiled HTML File"
+      tactics: ["Stealth"]
 
 
 MavinjectDLLInjection:
@@ -384,7 +398,7 @@ MavinjectDLLInjection:
   mitre:
     - technique_id: "T1055.001"
       technique_name: "Process Injection: Dynamic-link Library Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+      tactics: ["Stealth", "Privilege Escalation"]
 
 
 CredentialFileCopyLOLBin:
@@ -460,7 +474,7 @@ PayloadExtractionLOLBin:
   mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 
 SuspiciousExecutableRundll32:
@@ -495,12 +509,12 @@ TaskmgrKillAttempt:
     strings:
       - "taskmgr\\.exe"
   tags:
-    - attack.t1089
+    - attack.t1685
   level: high
   mitre:
-    - technique_id: "T1089"
-      technique_name: "Disabling Security Tools"
-      tactics: ["Defense Evasion"]
+    - technique_id: "T1685"
+      technique_name: "Disable or Modify Tools"
+      tactics: ["Defense Impairment"]
 
 SchtasksPersistence:
   title: "schtasks.exe for persistence"
@@ -514,12 +528,12 @@ SchtasksPersistence:
     strings:
       - "schtasks\\.exe\\s+/create"
   tags:
-    - attack.T1543.013
+    - attack.t1053.005
   level: high
   mitre:
-    - technique_id: "T1543.013"
-      technique_name: "Create or Modify System Process: Scheduled Task/Job"
-      tactics: ["Persistence", "Privilege Escalation"]
+    - technique_id: "T1053.005"
+      technique_name: "Scheduled Task/Job: Scheduled Task"
+      tactics: ["Execution", "Persistence", "Privilege Escalation"]
 
 PersistenceKeyHKLM:
   title: "Persistence key (HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run)"
@@ -537,7 +551,7 @@ PersistenceKeyHKLM:
   level: high
   mitre:
     - technique_id: "T1547.001"
-      technique_name: "Registry Run Keys / Startup Folder"
+      technique_name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
       tactics: ["Persistence", "Privilege Escalation"]
 
 PersistenceKeyHKCU:
@@ -556,8 +570,54 @@ PersistenceKeyHKCU:
   level: high
   mitre:
     - technique_id: "T1547.001"
-      technique_name: "Registry Run Keys / Startup Folder"
+      technique_name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
       tactics: ["Persistence", "Privilege Escalation"]
+
+WebhookExfiltration:
+  title: "Chat / collaboration webhook endpoint (exfiltration)"
+  id: "webhook-exfil-001"
+  status: "experimental"
+  description: "Detects hardcoded webhook and bot-API endpoints that commodity stealers post stolen data to: Discord webhooks (discord.com, discordapp.com, canary/ptb), Telegram bot API sendDocument/sendMessage calls, Slack incoming webhooks, and Microsoft Teams / Power Automate webhooks. The URL itself becomes a Network IOC; an embedded Discord webhook or Telegram bot token is usually the operator's exfil channel."
+  logsource:
+    category: "file_event"
+    product: "any"
+  detection:
+    strings:
+      - "(?i)https?://(?:(?:canary|ptb)\\.)?discord(?:app)?\\.com/api/(?:v\\d+/)?webhooks/\\d{15,21}/[A-Za-z0-9_\\-]{30,}"
+      - "(?i)https?://api\\.telegram\\.org/bot\\d{6,12}:[A-Za-z0-9_\\-]{30,}"
+      - "(?i)https?://hooks\\.slack\\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_\\-]{20,}"
+      - "(?i)https?://[a-z0-9\\-]+\\.webhook\\.office\\.com/webhookb2/[A-Za-z0-9@/_\\-]{20,}"
+  tags:
+    - attack.t1567.004
+  level: high
+  mitre:
+    - technique_id: "T1567.004"
+      technique_name: "Exfiltration Over Web Service: Exfiltration Over Webhook"
+      tactics: ["Exfiltration"]
+
+
+WindowsDefenderTampering:
+  title: "Microsoft Defender tampering (Set-MpPreference / exclusions)"
+  id: "defender-tamper-001"
+  status: "experimental"
+  description: "Detects commands that switch off or blind Microsoft Defender: Set-MpPreference with -DisableRealtimeMonitoring and related switches, sample submission or MAPS turned off, Controlled Folder Access disabled, Add-MpPreference exclusions, the DisableAntiSpyware policy value, and MpCmdRun -RemoveDefinitions. Common in commodity stealers (Luna Grabber and others run a single Set-MpPreference line before stealing), often base64-encoded, which mStrings decodes before matching."
+  logsource:
+    category: "process_creation"
+    product: "windows"
+  detection:
+    strings:
+      - "(?i)Set-MpPreference\\b.*-(?:Disable(?:RealtimeMonitoring|BehaviorMonitoring|IOAVProtection|ScriptScanning|IntrusionPreventionSystem|BlockAtFirstSeen|ArchiveScanning|PrivacyMode|EmailScanning)|MAPSReporting\\s+(?:0|Disabled)|SubmitSamplesConsent\\s+(?:2|NeverSend)|EnableControlledFolderAccess\\s+Disabled)"
+      - "(?i)Add-MpPreference\\b.*-Exclusion(?:Path|Process|Extension|IpAddress)"
+      - "(?i)Windows Defender.*DisableAntiSpyware|DisableAntiSpyware.*Windows Defender"
+      - "(?i)MpCmdRun(?:\\.exe)?\\b.*-RemoveDefinitions"
+  tags:
+    - attack.t1685
+  level: high
+  mitre:
+    - technique_id: "T1685"
+      technique_name: "Disable or Modify Tools"
+      tactics: ["Defense Impairment"]
+
 
 RegistryToolBlock:
   title: "Registry tool block (DisableTaskMgr, DisableRegistryTools)"
@@ -571,12 +631,12 @@ RegistryToolBlock:
     strings:
       - "(DisableTaskMgr|DisableRegistryTools)"
   tags:
-    - attack.T1089
+    - attack.t1685
   level: high
   mitre:
-    - technique_id: "T1089"
-      technique_name: "Disabling Security Tools"
-      tactics: ["Defense Evasion"]
+    - technique_id: "T1685"
+      technique_name: "Disable or Modify Tools"
+      tactics: ["Defense Impairment"]
 
 SetWindowsHookExKeylogger:
   title: "SetWindowsHookEx (keylogger)"
@@ -620,8 +680,8 @@ AntiDebuggingNtQuerySystemInformation:
       technique_name: "System Information Discovery"
       tactics: ["Discovery"]
     - technique_id: "T1497.003"
-      technique_name: "Virtualization/Sandbox Evasion: Time Based Evasion"
-      tactics: ["Defense Evasion"]
+      technique_name: "Virtualization/Sandbox Evasion: Time Based Checks"
+      tactics: ["Stealth"]
 
 CmdCExecution:
   title: "cmd /c (command execution)"
@@ -722,7 +782,7 @@ AntiDebuggingCheckIsDebuggerPresent:
   title: "Anti-debugging check (IsDebuggerPresent)"
   id: "u9c8f1e0-b623-44f3-a28e-e9f89a2c80a7"
   status: "experimental"
-  description: "Check for debuggers to prevent analysis"
+  description: "Check for debuggers to prevent analysis. Mapped to T1622 Debugger Evasion (was T1082). The import is also in the MSVC C runtime and most bootloaders (PyInstaller, for one), so on a bundled sample it usually describes the wrapper."
   logsource:
     category: "file_event"
     product: "windows"
@@ -730,12 +790,12 @@ AntiDebuggingCheckIsDebuggerPresent:
     strings:
       - "IsDebuggerPresent"
   tags:
-    - attack.T1082
-  level: high
+    - attack.T1622
+  level: medium
   mitre:
-    - technique_id: "T1082"
-      technique_name: "System Information Discovery"
-      tactics: ["Discovery"]
+    - technique_id: "T1622"
+      technique_name: "Debugger Evasion"
+      tactics: ["Stealth", "Discovery"]
 
 ProcessInjectionVirtualAllocEx:
   title: "Process injection (VirtualAllocEx, WriteProcessMemory)"
@@ -754,7 +814,7 @@ ProcessInjectionVirtualAllocEx:
   mitre:
     - technique_id: "T1055"
       technique_name: "Process Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+      tactics: ["Stealth", "Privilege Escalation"]
 
 SandboxDetectionZwQueryInformationProcess:
   title: "Sandbox detection (ZwQueryInformationProcess)"
@@ -779,7 +839,7 @@ SleepCommandSleep:
   title: "Sleep command (sleep(60000))"
   id: "x9c7b6e1-bf34-44fe-9176-e3881a3515d8"
   status: "experimental"
-  description: "Suspicious sleep commands, often used in malware"
+  description: "Hardcoded sleep calls. A long delay before acting is a time-based sandbox evasion (T1497.003); short sleeps are routine, so this is weak evidence. Previously mapped to T1499 Endpoint Denial of Service, which describes exhausting a target's resources, not delaying one's own execution."
   logsource:
     category: "file_event"
     product: "windows"
@@ -787,12 +847,12 @@ SleepCommandSleep:
     strings:
       - "sleep\\(\\d+\\)"
   tags:
-    - attack.T1499
-  level: high
+    - attack.T1497.003
+  level: low
   mitre:
-    - technique_id: "T1499"
-      technique_name: "Endpoint Denial of Service"
-      tactics: ["Impact"]
+    - technique_id: "T1497.003"
+      technique_name: "Virtualization/Sandbox Evasion: Time Based Checks"
+      tactics: ["Stealth", "Discovery"]
 
 UserActivityDetection:
   title: "User activity detection (GetForegroundWindow, GetCursorPos)"
@@ -843,13 +903,13 @@ SuspiciousScriptReferences:
   title: "Suspicious Script File Extension Reference"
   id: "bb2c8d6a-3a8e-4957-9a3c-b9a6b5f3065f"
   status: "experimental"
-  description: "Detects filenames with script or payload extensions (.js, .jse, .vbe, .msi, .hta, .ps1, .vbs) bounded by whitespace, quotes, or path separators. Indicates a script or installer being referenced for execution or delivery. .bat is intentionally excluded — covered by SuspiciousBatFilename with the more specific T1059.003 mapping. Note: may produce false positives on Go binaries that embed HTML content (e.g. DGA word lists containing inline JavaScript references)."
+  description: "Detects filenames with script or payload extensions (.js, .jse, .vbe, .msi, .hta, .ps1, .vbs) bounded by whitespace, quotes, or path separators. Indicates a script or installer being referenced for execution or delivery. .bat is intentionally excluded — covered by SuspiciousBatFilename with the more specific T1059.003 mapping. Note: may produce false positives on Go binaries that embed HTML content (e.g. DGA word lists containing inline JavaScript references). The file name must be at least two characters, so stray runs inside compressed data (\"l.js\") don't match."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(?:^|[\\s\\\\/'\"(])([a-zA-Z0-9_\\-\\.]+\\.)(js|jse|vbe|msi|hta|ps1|vbs)(?:$|[\\s\"'\\)])"
+      - "(?:^|[\\s\\\\/'\"(])([a-zA-Z0-9][a-zA-Z0-9_\\-\\.]+\\.)(js|jse|vbe|msi|hta|ps1|vbs)(?:$|[\\s\"'\\)])"
   tags:
     - attack.T1059
   level: high
@@ -870,12 +930,12 @@ ProcessManipulationTools:
     strings:
       - "(regedit\\.exe|taskkill\\.exe)"
   tags:
-    - attack.T1089
+    - attack.t1685
   level: high
   mitre:
-    - technique_id: "T1089"
-      technique_name: "Disabling Security Tools"
-      tactics: ["Defense Evasion"]
+    - technique_id: "T1685"
+      technique_name: "Disable or Modify Tools"
+      tactics: ["Defense Impairment"]
 
 MaliciousPowerShellFunctions:
   title: "Malicious PowerShell functions"
@@ -901,13 +961,13 @@ SuspiciousExeFilename:
   title: "Suspicious Executable Filename (.exe)"
   id: "suspicious-exe-filename-001"
   status: "experimental"
-  description: "Detects .exe filenames in strings — useful when analyzing binaries or payload references."
+  description: "Detects .exe filenames in strings — useful when analyzing binaries or payload references. The name must stand alone (start of string or after a path separator, space, quote, or parenthesis) and be at least two characters, so format strings such as PyInstaller's \"%s%c%s.exe\" and one-letter fragments don't match."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "[a-zA-Z0-9_\\-\\.]+\\.exe$"
+      - "(?:^|[\\s\\\\/'\"(])[a-zA-Z0-9][a-zA-Z0-9_\\-\\.]+\\.exe$"
   tags:
     - attack.T1204.002
   level: low
@@ -987,23 +1047,23 @@ SuspiciousURLGeneric:
       tactics: ["Initial Access"]
       
 UnusualDllFilenamePattern:
-  title: "Unusual DLL Filename Pattern"
+  title: "Randomized-looking DLL filename"
   id: "dll-filename-anomaly-001"
   status: "experimental"
-  description: "Detects suspicious DLL names that appear randomized or auto-generated (e.g., 4usfliof.dll, abcd1234.dll)."
+  description: "Detects a standalone DLL filename of 5-16 lowercase letters and digits where a digit is followed by a letter (e.g., 4usfliof.dll, x7k2m9q.dll), the shape of generated names malware gives the DLLs it drops and loads. Names with only a trailing number (imm32, perl512, winpty64, python311) are versions, not randomness, and do not match. The name must stand alone (start of string or after a path separator, space, or quote), so archive tables of contents such as PyInstaller's (\"7python311.dll\", \"blibffi-8.dll\") don't match, and versioned runtime and system DLLs (python311, msvcp140, vcruntime140, sqlite3, d3d11, any lib* name such as libcrypto or libpng16, wow64, and others, including with the one-character type code PyInstaller prefixes in its table of contents) are excluded. Mapped to T1129 Shared Modules (a DLL the sample loads) rather than Process Injection: a name alone says nothing about injection."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "\\b(?!(user32|kernel32|advapi32|ole32|shell32|comdlg32|shlwapi|gdiplus|gdi32|oleaut32|comctl32|ntdll))([a-z]*[0-9]+[a-z0-9]*)\\.dll\\b"
+      - "(?:^|[\\s\\\\/'\"(])(?![a-z0-9]?(?:lib|wow64|python|pywintypes|pythoncom|msvcp|msvcr|vcruntime|vccorlib|mfc|atl|sqlite|d3d|d3dx|d3dcompiler_|xinput|xaudio|lib|wow64|graphite|zlib|ucrtbase|concrt|vcomp|opengl|glu|ws2|wsock|user32|kernel32|advapi32|ole32|shell32|comdlg32|shlwapi|gdiplus|gdi32|oleaut32|comctl32|ntdll|msvbvm|mscoree|crypt32|secur32|netapi32|iphlpapi|wtsapi32|wldap32|dxgi|dinput|ddraw|dsound|qt5|qt6|icu|tcl|tk|lua|python3)[a-z0-9_]*\\.dll)(?=[a-z0-9]*\\d[a-z])[a-z0-9]{5,16}\\.dll(?:$|[\\s\"'),])"
   tags:
-    - attack.T1055
-  level: medium
+    - attack.t1129
+  level: low
   mitre:
-    - technique_id: "T1055"
-      technique_name: "Process Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+    - technique_id: "T1129"
+      technique_name: "Shared Modules"
+      tactics: ["Execution"]
 
 ProcessEnumerationAndHooking:
   title: "Process Enumeration and API Hooking Indicators"
@@ -1027,7 +1087,7 @@ ProcessEnumerationAndHooking:
   mitre:
     - technique_id: "T1055"
       technique_name: "Process Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+      tactics: ["Stealth", "Privilege Escalation"]
     - technique_id: "T1056.001"
       technique_name: "Input Capture: Keylogging"
       tactics: ["Credential Access"]
@@ -1061,18 +1121,17 @@ CredentialStrings:
   title: "Credential-related strings"
   id: "cred1234-detect"
   status: "experimental"
-  description: "Detects hardcoded credential or authentication-related strings. NOTE: Bare 'password' and 'username' patterns were tightened - they matched extensively in Go runtime data blobs, HTTP framework strings, and protocol error messages. Patterns now require context (assignment-style or quoted form) to reduce noise. 'login' removed as it matches too many legitimate path strings."
+  description: "Detects hardcoded credential or authentication-related strings. NOTE: Bare 'password' and 'username' patterns were tightened - they matched extensively in Go runtime data blobs, HTTP framework strings, and protocol error messages. Patterns now require context (assignment-style or quoted form) to reduce noise. 'login' removed as it matches too many legitimate path strings. Bare 'credentials' removed and the key= forms now skip usage-text placeholders (password=<secret>, [,password=password], x509-key-password=): BirdMiner's bundled QEMU help text matched all of them (TAOMM Ch1)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "password="
-      - "passwd="
-      - "username="
+      - "(?<![\\w-])password=(?![<\\[%{]|password\\b)"
+      - "(?<![\\w-])passwd=(?![<\\[%{]|passwd\\b)"
+      - "(?<![\\w-])username=(?![<\\[%{]|user(?:name)?\\b)"
       - "auth_token"
       - "apikey"
-      - "(?<!allow-)credentials"
   tags:
     - attack.T1552
   level: high
@@ -1085,19 +1144,19 @@ SuspiciousEmailExfil:
   title: "Suspicious email or SMTP strings"
   id: "mail9876-exfil"
   status: "experimental"
-  description: "Detects potential SMTP usage or hardcoded email destinations."
+  description: "Detects potential SMTP usage or hardcoded email destinations. Bare 'starttls' removed: STARTTLS is also an NBD, IMAP, XMPP, and LDAP verb, and matched QEMU's NBD client in BirdMiner (TAOMM Ch1)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(smtp\\.|mail\\.to:|mailfrom:|starttls|EHLO|RCPT TO|MAIL FROM)"
+      - "(smtp\\.|mail\\.to:|mailfrom:|EHLO|RCPT TO|MAIL FROM)"
   tags:
     - attack.T1048.003
   level: medium
   mitre:
     - technique_id: "T1048.003"
-      technique_name: "Exfiltration Over Unencrypted/Obfuscated Non-C2 Protocol"
+      technique_name: "Exfiltration Over Alternative Protocol: Exfiltration Over Unencrypted Non-C2 Protocol"
       tactics: ["Exfiltration"]
 
 GeolocationCheck:
@@ -1137,7 +1196,7 @@ VirtualProtectShellcode:
   mitre:
     - technique_id: "T1055"
       technique_name: "Process Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+      tactics: ["Stealth", "Privilege Escalation"]
 
 UACBypassHints:
   title: "UAC bypass methods or auto-elevation indicators"
@@ -1155,7 +1214,7 @@ UACBypassHints:
   level: high
   mitre:
     - technique_id: "T1548.002"
-      technique_name: "Abuse Elevation Control Mechanism: Bypass User Access Control"
+      technique_name: "Abuse Elevation Control Mechanism: Bypass User Account Control"
       tactics: ["Privilege Escalation"]
 
 PowerShellEncodedCommandUsage:
@@ -1181,14 +1240,14 @@ PowerShellInvokeExpression:
   title: "PowerShell Invoke-Expression or IEX"
   id: "ps-invoke-expression-001"
   status: "experimental"
-  description: "Detects usage of Invoke-Expression or IEX in PowerShell scripts"
+  description: "Detects usage of Invoke-Expression or its IEX alias in PowerShell. The alias is only matched in invocation shape — piped into (`| iex`) or followed by an argument (`IEX (`, `iex $x`, `IEX '...'`) — because a bare three-letter \"IEX\" occurs by chance in compiled binaries and encoded data (false positive seen on an AMOS Mach-O)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
       - "Invoke-Expression"
-      - "IEX"
+      - "(?i)(?:\\|\\s*iex\\b|(?<![\\w-])iex\\s*[($'\"])"
   tags:
     - attack.T1059.001
   level: high
@@ -1252,11 +1311,11 @@ WMIPersistenceEventConsumers:
       - "EventConsumer"
       - "ActiveScriptEventConsumer"
   tags:
-    - attack.T1543.004
+    - attack.t1546.003
   level: high
   mitre:
-    - technique_id: "T1543.004"
-      technique_name: "Create or Modify System Process: Windows Service"
+    - technique_id: "T1546.003"
+      technique_name: "Event Triggered Execution: Windows Management Instrumentation Event Subscription"
       tactics: ["Persistence", "Privilege Escalation"]
 
 WMIUsageDiscoveryExecution:
@@ -1314,7 +1373,7 @@ CreateRemoteThreadInjection:
   mitre:
     - technique_id: "T1055"
       technique_name: "Process Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+      tactics: ["Stealth", "Privilege Escalation"]
 
 SleepDelayEvasion:
   title: "Extended Sleep or Delay (evasion)"
@@ -1333,8 +1392,8 @@ SleepDelayEvasion:
   level: medium
   mitre:
     - technique_id: "T1497.003"
-      technique_name: "Virtualization/Sandbox Evasion: Time Based Evasion"
-      tactics: ["Defense Evasion"]
+      technique_name: "Virtualization/Sandbox Evasion: Time Based Checks"
+      tactics: ["Stealth"]
 
 LsassCredDump:
   title: "Credential Dumping Indicators (LSASS Access)"
@@ -1354,14 +1413,14 @@ LsassCredDump:
   level: high
   mitre:
     - technique_id: "T1003.001"
-      technique_name: "Credential Dumping: LSASS Memory"
+      technique_name: "OS Credential Dumping: LSASS Memory"
       tactics: ["Credential Access"]
 
 PackedOrStubExecutable:
   title: "Packed Executable or Stub Artifact"
   id: "packer-stub-hint"
   status: "experimental"
-  description: "Hints that the binary is packed or a stub loader (e.g., UPX or DOS headers only). The leading-dot .UPX! pattern only matches when some other character happens to immediately precede the marker within the same extracted string — a UPX-packed Mach-O (iWorm/JavaW, from the 2014 Virus Bulletin analysis) extracts \"UPX!\" as its own clean isolated string, which the leading dot then fails to match at all. Added the bare marker plus UPX's own info/copyright strings, which are unambiguous. Cross-platform, not Windows-specific — genuinely more notable on macOS, where packers are uncommon."
+  description: "Hints that the binary is packed or a stub loader (e.g., UPX or DOS headers only). The leading-dot .UPX! pattern only matches when some other character happens to immediately precede the marker within the same extracted string — a UPX-packed Mach-O (iWorm/JavaW, from the 2014 Virus Bulletin analysis) extracts \"UPX!\" as its own clean isolated string, which the leading dot then fails to match at all. Added the bare marker plus UPX's own info/copyright strings, which are unambiguous. Cross-platform, not Windows-specific — genuinely more notable on macOS, where packers are uncommon. The PE DOS-stub message (\"This program cannot be run in DOS mode\") was removed: it is in every Windows executable, so it fired on all of them; embedded PEs inside other files are found by Unpack (T1027.009) instead."
   references:
     - "https://www.virusbulletin.com/uploads/pdf/magazine/2014/vb201410-iWorm.pdf"
   logsource:
@@ -1370,7 +1429,6 @@ PackedOrStubExecutable:
   detection:
     strings:
       - "UPX!"
-      - "This program cannot be run in DOS mode"
       - "packed with the UPX executable packer"
       - "UPX \\d+\\.\\d+ Copyright"
   tags:
@@ -1379,7 +1437,7 @@ PackedOrStubExecutable:
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 PowerShellMemoryExecution:
   title: "In-Memory Payload Execution (PowerShell / .NET)"
@@ -1405,10 +1463,10 @@ PowerShellMemoryExecution:
       tactics: ["Execution"]
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
     - technique_id: "T1620"
       technique_name: "Reflective Code Loading"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 RansomwareCryptoAPIs:
   title: "Ransomware Cryptography APIs"
   id: "ransom-crypto-001"
@@ -1475,7 +1533,7 @@ StringEncodingObfuscation:
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 
 StartupFolderPersistence:
@@ -1496,7 +1554,7 @@ StartupFolderPersistence:
   level: high
   mitre:
     - technique_id: "T1547.001"
-      technique_name: "Registry Run Keys / Startup Folder"
+      technique_name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
       tactics: ["Persistence"]
 
 
@@ -1540,7 +1598,7 @@ WMIPermanentSubscription:
   level: high
   mitre:
     - technique_id: "T1546.003"
-      technique_name: "Event Triggered Execution: WMI Event Subscription"
+      technique_name: "Event Triggered Execution: Windows Management Instrumentation Event Subscription"
       tactics: ["Persistence"]
 
 
@@ -1570,16 +1628,14 @@ HttpPostExfiltration:
   title: "HTTP POST Data Exfiltration"
   id: "http-exfil-002"
   status: "experimental"
-  description: "Detects HTTP POST used for data exfiltration."
+  description: "Detects an HTTP POST upload the sample builds itself: a multipart Content-Type with a hardcoded or printf-style boundary (OSX.AppleJeus uses 'multipart/form-data;boundary=jeus' and 'multipart/form-data; boundary=%s'), or a complete request line with a literal path ('POST /upload.php HTTP/1.1'). Bare 'multipart/form-data', 'boundary=', 'POST /', and 'application/octet-stream' were dropped: every HTTP library carries them (libcurl, Go net/http and mime/multipart, CFNetwork), so they fired on nearly any networked binary (TAOMM Ch1: IPStorm, XCSSET's HackBrowserData, a libcurl bundled in AppleJeus). 'boundary=missing' is excluded: Go stores strings unterminated, and mime/multipart's 'multipart/form-data; boundary=' sits next to 'missing' in the string table of every Go binary checked (gh, dockerd, rclone)."
   logsource:
     category: "file_event"
-    product: "windows"
+    product: any
   detection:
     strings:
-      - "POST /"
-      - "Content-Type: application/octet-stream"
-      - "multipart/form-data"
-      - "boundary="
+      - "multipart/form-data;\\s*boundary=(?:%[@sd]|(?!missing)[A-Za-z0-9'()+_,./:=?-]{3,}(?<!multipart))"
+      - "\\bPOST /[^\\s\"%]+ HTTP/1\\.[01]\\b"
   tags:
     - attack.T1041
   level: medium
@@ -1610,7 +1666,7 @@ MalwareC2Paths:
   level: high
   mitre:
     - technique_id: "T1071.001"
-      technique_name: "Application Layer Protocol"
+      technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
 
 
@@ -1640,7 +1696,7 @@ FileSystemManipulationAPI:
       tactics: ["Impact"]
     - technique_id: "T1070.004"
       technique_name: "Indicator Removal: File Deletion"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 
 FileSystemDiscoveryAPI:
@@ -1684,10 +1740,10 @@ FileAttributeManipulationAPI:
   mitre:
     - technique_id: "T1564.001"
       technique_name: "Hide Artifacts: Hidden Files and Directories"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
     - technique_id: "T1222.001"
-      technique_name: "File and Directory Permissions Modification: Windows File and Directory Permissions Modification"
-      tactics: ["Defense Evasion"]
+      technique_name: "File and Directory Permissions Modification: Windows Permissions"
+      tactics: ["Defense Impairment"]
 
 
 RegistryModificationAPI:
@@ -1708,7 +1764,7 @@ RegistryModificationAPI:
   mitre:
     - technique_id: "T1112"
       technique_name: "Modify Registry"
-      tactics: ["Defense Evasion"]
+      tactics: ["Defense Impairment"]
 
 
 RegistryQueryAPI:
@@ -1746,15 +1802,15 @@ ProcessThreadManipulationAPI:
       - "TerminateProcess"
   tags:
     - attack.T1055
-    - attack.T1562.001
+    - attack.t1685
   level: high
   mitre:
     - technique_id: "T1055"
       technique_name: "Process Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
-    - technique_id: "T1562.001"
-      technique_name: "Impair Defenses: Disable or Modify Tools"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth", "Privilege Escalation"]
+    - technique_id: "T1685"
+      technique_name: "Disable or Modify Tools"
+      tactics: ["Defense Impairment"]
 
 
 TokenPrivilegeManipulationAPI:
@@ -1776,7 +1832,7 @@ TokenPrivilegeManipulationAPI:
   mitre:
     - technique_id: "T1134.001"
       technique_name: "Access Token Manipulation: Token Impersonation/Theft"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+      tactics: ["Stealth", "Privilege Escalation"]
 
 
 WMISystemDiscovery:
@@ -1822,7 +1878,7 @@ DPAPIMemoryEncryption:
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
     - technique_id: "T1486"
       technique_name: "Data Encrypted for Impact"
       tactics: ["Impact"]
@@ -1846,7 +1902,7 @@ FileMappingInjection:
   mitre:
     - technique_id: "T1055.001"
       technique_name: "Process Injection: Dynamic-link Library Injection"
-      tactics: ["Defense Evasion", "Privilege Escalation"]
+      tactics: ["Stealth", "Privilege Escalation"]
 
 
 TimingBasedSandboxEvasion:
@@ -1867,8 +1923,8 @@ TimingBasedSandboxEvasion:
   level: medium
   mitre:
     - technique_id: "T1497.003"
-      technique_name: "Virtualization/Sandbox Evasion: Time Based Evasion"
-      tactics: ["Defense Evasion"]
+      technique_name: "Virtualization/Sandbox Evasion: Time Based Checks"
+      tactics: ["Stealth"]
 
 
 OSVersionFingerprinting:
@@ -1932,8 +1988,8 @@ DLLSearchOrderManipulation:
   level: medium
   mitre:
     - technique_id: "T1574.001"
-      technique_name: "Hijack Execution Flow: DLL Search Order Hijacking"
-      tactics: ["Persistence", "Privilege Escalation", "Defense Evasion"]
+      technique_name: "Hijack Execution Flow: DLL"
+      tactics: ["Stealth", "Execution"]
 
 
 ConsoleWindowHiding:
@@ -1954,25 +2010,22 @@ ConsoleWindowHiding:
   mitre:
     - technique_id: "T1564.003"
       technique_name: "Hide Artifacts: Hidden Window"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 
 # ── macOS-specific detections ─────────────────────────────────────────────────
 
 MacLaunchAgentDaemonPersistence:
-  title: "macOS LaunchAgent / LaunchDaemon Persistence"
+  title: "macOS LaunchAgent Persistence"
   id: "mac-launchagent-persist-001"
   status: "experimental"
-  description: "Detects strings referencing LaunchAgent or LaunchDaemon plist directories and launchctl commands — the primary macOS persistence mechanism. User-level LaunchAgents survive logout; system-level LaunchDaemons persist across reboots."
+  description: "Detects strings referencing LaunchAgent plist directories, the most common macOS persistence location. Split from LaunchDaemons and launchctl, which map to different techniques (T1543.004, T1569.001): one rule carries one set of techniques for every pattern it matches."
   logsource:
     category: "file_event"
     product: "macos"
   detection:
     strings:
       - "Library/LaunchAgents/"
-      - "Library/LaunchDaemons/"
-      - "launchctl\\s+(load|bootstrap|submit|start)"
-      - "com\\.apple\\.launchd"
   tags:
     - attack.T1543.001
   level: high
@@ -1980,6 +2033,44 @@ MacLaunchAgentDaemonPersistence:
     - technique_id: "T1543.001"
       technique_name: "Create or Modify System Process: Launch Agent"
       tactics: ["Persistence", "Privilege Escalation"]
+
+MacLaunchDaemonPersistence:
+  title: "macOS LaunchDaemon Persistence"
+  id: "mac-launchdaemon-persist-001"
+  status: "experimental"
+  description: "Detects strings referencing the system LaunchDaemons directory. A daemon runs as root at boot, before any user logs in; writing one requires root, so its presence also implies privilege escalation or an installer running with admin rights."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "Library/LaunchDaemons/"
+  tags:
+    - attack.T1543.004
+  level: high
+  mitre:
+    - technique_id: "T1543.004"
+      technique_name: "Create or Modify System Process: Launch Daemon"
+      tactics: ["Persistence", "Privilege Escalation"]
+
+MacLaunchctlExecution:
+  title: "macOS launchctl Load or Start"
+  id: "mac-launchctl-exec-001"
+  status: "experimental"
+  description: "Detects launchctl commands that load, bootstrap, submit, or start a job: the step that activates an agent or daemon without waiting for the next login or reboot. Bare 'com.apple.launchd' was dropped from the old combined rule; it is launchd's own identifier and appears in many benign binaries."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
+      - "launchctl\\s+(load|bootstrap|submit|start)"
+  tags:
+    - attack.T1569.001
+  level: high
+  mitre:
+    - technique_id: "T1569.001"
+      technique_name: "System Services: Launchctl"
+      tactics: ["Execution"]
 
 IWormJavaWPersistence:
   title: "iWorm/JavaW persistence indicators"
@@ -2117,7 +2208,7 @@ MacDylibInjection:
   mitre:
     - technique_id: "T1574.006"
       technique_name: "Hijack Execution Flow: Dynamic Linker Hijacking"
-      tactics: ["Persistence", "Privilege Escalation", "Defense Evasion"]
+      tactics: ["Stealth", "Execution"]
 
 MacKeychainAccess:
   title: "macOS Keychain Credential Access"
@@ -2212,7 +2303,7 @@ MacAppleScriptFilelessRemoteExec:
   mitre:
     - technique_id: "T1620"
       technique_name: "Reflective Code Loading"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 XcssetCdntorC2:
   title: "XCSSET cdntor.ru C2 domain (2025 campaign)"
@@ -2242,7 +2333,7 @@ MacUnixShellExecution:
   title: "macOS Unix Shell Execution via POSIX API"
   id: "mac-posix-exec-001"
   status: "experimental"
-  description: "Detects posix_spawn and execve as strings, indicating spawning of child processes. Hardcoded shell paths (/bin/sh, /bin/bash, /bin/zsh) combined with these indicate command execution capability."
+  description: "Detects posix_spawn and execve as strings, indicating spawning of child processes. popen must be a standalone symbol or call (popen, _popen, popen(...)), not part of a dotted or longer name such as Python's multiprocessing.popen_fork. Hardcoded shell paths (/bin/sh, /bin/bash, /bin/zsh) combined with these indicate command execution capability."
   logsource:
     category: "file_event"
     product: "macos"
@@ -2252,7 +2343,7 @@ MacUnixShellExecution:
       - "/bin/sh"
       - "/bin/bash"
       - "/bin/zsh"
-      - "popen"
+      - "(?<![\\w.])_?popen(?![\\w])"
   tags:
     - attack.T1059.004
   level: medium
@@ -2265,7 +2356,7 @@ MacPrivilegeEscalation:
   title: "macOS Privilege Escalation Indicators"
   id: "mac-privesc-001"
   status: "experimental"
-  description: "Detects AuthorizationExecuteWithPrivileges (deprecated but abused in malware for root execution without a visible prompt), and setuid/setgid syscalls used to permanently elevate privileges."
+  description: "Detects AuthorizationExecuteWithPrivileges (deprecated but abused in malware for root execution after a password prompt) and AuthorizationCreate. sudo and setuid/setgid moved to their own rules, since each maps to a different sub-technique."
   logsource:
     category: "file_event"
     product: "macos"
@@ -2273,16 +2364,52 @@ MacPrivilegeEscalation:
     strings:
       - "AuthorizationExecuteWithPrivileges"
       - "AuthorizationCreate"
-      - "setuid\\("
-      - "setgid\\("
-      - "sudo\\s+"
   tags:
     - attack.T1548.004
   level: high
   mitre:
     - technique_id: "T1548.004"
       technique_name: "Abuse Elevation Control Mechanism: Elevated Execution with Prompt"
-      tactics: ["Privilege Escalation", "Defense Evasion"]
+      tactics: ["Privilege Escalation"]
+
+UnixSudoExecution:
+  title: "sudo Command Execution"
+  id: "unix-sudo-exec-001"
+  status: "experimental"
+  description: "Detects a sudo command line. Malware uses sudo with a harvested or prompted password, or abuses cached sudo credentials, to run as root."
+  logsource:
+    category: "file_event"
+    product: any
+  detection:
+    strings:
+      - "\\bsudo\\s+"
+  tags:
+    - attack.T1548.003
+  level: medium
+  mitre:
+    - technique_id: "T1548.003"
+      technique_name: "Abuse Elevation Control Mechanism: Sudo and Sudo Caching"
+      tactics: ["Privilege Escalation"]
+
+UnixSetuidCall:
+  title: "setuid / setgid Call"
+  id: "unix-setuid-001"
+  status: "experimental"
+  description: "Detects setuid() and setgid() calls, used to switch a process to another user ID (for example to root after an exploit or from a setuid binary). Daemons also call these to drop privileges, so this is weak evidence on its own."
+  logsource:
+    category: "file_event"
+    product: any
+  detection:
+    strings:
+      - "setuid\\("
+      - "setgid\\("
+  tags:
+    - attack.T1548.001
+  level: low
+  mitre:
+    - technique_id: "T1548.001"
+      technique_name: "Abuse Elevation Control Mechanism: Setuid and Setgid"
+      tactics: ["Privilege Escalation"]
 
 MacSystemDiscovery:
   title: "macOS System Fingerprinting"
@@ -2318,7 +2445,7 @@ MacSandboxVMEvasion:
   detection:
     strings:
       - "VMware"
-      - "Parallels"
+      - "(?<![A-Za-z])Parallels(?![a-z])"
       - "VirtualBox"
       - "hw\\.logicalcpu"
   tags:
@@ -2327,7 +2454,7 @@ MacSandboxVMEvasion:
   mitre:
     - technique_id: "T1497.001"
       technique_name: "Virtualization/Sandbox Evasion: System Checks"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 MacActivityMonitorEvasion:
   title: "macOS Activity Monitor process-check evasion"
@@ -2352,7 +2479,7 @@ MacActivityMonitorEvasion:
   mitre:
     - technique_id: "T1497.001"
       technique_name: "Virtualization/Sandbox Evasion: System Checks"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 MacLaunchDaemonLabelIsFilename:
   title: "macOS LaunchDaemon/LaunchAgent Label literally ends in .plist"
@@ -2431,7 +2558,7 @@ MacInMemoryMachOLoading:
   mitre:
     - technique_id: "T1620"
       technique_name: "Reflective Code Loading"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 BellaMacRatSignature:
   title: "Bella macOS RAT signature (Python post-exploitation payload)"
@@ -2464,7 +2591,7 @@ EmbeddedBase64Payload:
   title: "Large embedded base64 blob"
   id: "obfuscation-b64blob-001"
   status: "experimental"
-  description: "Detects a single extracted string that is almost entirely a long, unbroken base64-alphabet run (200+ chars) — the shape of an embedded encoded payload (script, executable, config) rather than incidental text. A backstop signal alongside mstrings' base64 auto-decode-and-rescan step: this still fires even when the blob doesn't decode to printable text (e.g. it's encrypted before being base64-encoded) or in any context that only runs detections.yaml pattern matching without the decode step. Requires at least one character outside the 0-9/A-F/a-f hex range: a long pure-hex constant (a crypto prime, RSA modulus, hash chain) trivially satisfies the base64 charset+length envelope despite not being base64 at all, and the odds of a genuine base64-encoded blob this long staying entirely within the hex-compatible subset of the alphabet are astronomically small. Confirmed false positive on iWorm's JavaW (TAOMM Ch1, unpacked with upx -d): matched two ~256-char embedded Diffie-Hellman prime constants (part of its embedded crypto library) before this fix."
+  description: "Detects a single extracted string that is almost entirely a long, unbroken base64-alphabet run (200+ chars) — the shape of an embedded encoded payload (script, executable, config) rather than incidental text. A backstop signal alongside mstrings' base64 auto-decode-and-rescan step: this still fires even when the blob doesn't decode to printable text (e.g. it's encrypted before being base64-encoded) or in any context that only runs detections.yaml pattern matching without the decode step. Requires at least one character outside the 0-9/A-F/a-f hex range: a long pure-hex constant (a crypto prime, RSA modulus, hash chain) trivially satisfies the base64 charset+length envelope despite not being base64 at all, and the odds of a genuine base64-encoded blob this long staying entirely within the hex-compatible subset of the alphabet are astronomically small. Confirmed false positive on iWorm's JavaW (TAOMM Ch1, unpacked with upx -d): matched two ~256-char embedded Diffie-Hellman prime constants (part of its embedded crypto library) before this fix. Also excludes runs of /xNN escape triplets — escaped byte strings (e.g. Gafgyt's flood-payload templates) that fit the base64 alphabet without being base64."
   author: Doug Metz
   date: 2026-07-24
   logsource:
@@ -2472,7 +2599,7 @@ EmbeddedBase64Payload:
     product: any
   detection:
     strings:
-      - "^(?=[A-Za-z0-9+/]*[G-Zg-z+/])[A-Za-z0-9+/]{200,}={0,2}$"
+      - "^(?!.*(?:/x[0-9A-Za-z]{2}){8})(?=[A-Za-z0-9+/]*[G-Zg-z+/])[A-Za-z0-9+/]{200,}={0,2}$"
   falsepositives:
     - "Long non-encoded alphanumeric identifiers (rare at this length), embedded font/resource data that happens to be base64-alphabet-shaped without being a deliberately encoded payload"
   level: medium
@@ -2481,7 +2608,7 @@ EmbeddedBase64Payload:
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 SelfDecodingBase64Cli:
   title: "Self-decoding via macOS base64 CLI"
@@ -2505,13 +2632,13 @@ SelfDecodingBase64Cli:
   mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 EmPyreStagerSignature:
   title: "EmPyre-style Python stager signature"
   id: "mac-empyre-stager-001"
   status: "experimental"
-  description: "Detects the distinctive stager pattern used by EmPyre (the macOS/Linux port of PowerShell Empire) and its derivatives: a beacon request whose Cookie header carries a base64-encoded JSON config with loader_options/payload_options fields (host, port, launch_agent_name, loader_name), and a second stage smuggled inside an intentional HTTP 404 response body (real server code is expected to 404; the actual payload is appended after a literal 'DEBUG:' marker and executed via exec(b64decode(...))). Observed in a Siggen sample: a hidden LaunchDaemon (label \"com.enzo\", masquerading launch_agent_name \"com.apple.HEYgiNb\") ran a beacon-gate script (checks a status endpoint for the word \"open\" before activating) that fetched and exec'd this stager. Only visible to string matching once mstrings' base64 auto-decode-and-rescan step runs, since this content is typically embedded as an encoded blob rather than literal source."
+  description: "Detects the distinctive stager pattern used by EmPyre (the macOS/Linux port of PowerShell Empire) and its derivatives: a beacon request whose Cookie header carries a base64-encoded JSON config with loader_options/payload_options fields (host, port, launch_agent_name, loader_name), and a second stage smuggled inside an intentional HTTP 404 response body (real server code is expected to 404; the actual payload is appended after a literal 'DEBUG:' marker and executed via exec(b64decode(...))). Observed in a Siggen sample: a hidden LaunchDaemon (label \"com.enzo\", masquerading launch_agent_name \"com.apple.HEYgiNb\") ran a beacon-gate script (checks a status endpoint for the word \"open\" before activating) that fetched and exec'd this stager. Only visible to string matching once mstrings' base64 auto-decode-and-rescan step runs, since this content is typically embedded as an encoded blob rather than literal source. Mapped to T1059.006: every pattern here is part of the Python stager itself (its config fields and the exec(b64decode()) launch), while the C2 host is reported separately by the domain and IP rules."
   references:
     - "https://github.com/EmpireProject/EmPyre"
   author: Doug Metz
@@ -2529,11 +2656,11 @@ EmPyreStagerSignature:
   falsepositives: []
   level: high
   tags:
-    - attack.t1071.001
+    - attack.t1059.006
   mitre:
-    - technique_id: "T1071.001"
-      technique_name: "Application Layer Protocol: Web Protocols"
-      tactics: ["Command and Control"]
+    - technique_id: "T1059.006"
+      technique_name: "Command and Scripting Interpreter: Python"
+      tactics: ["Execution"]
 
 DynamicDnsC2Domain:
   title: "Free dynamic-DNS domain (common C2 hosting choice)"
@@ -2615,13 +2742,13 @@ TftpIngressTransfer:
   title: "TFTP Used for Payload Download"
   id: "tftp-ingress-001"
   status: "experimental"
-  description: "Detects tftp as an ingress tool transfer mechanism. Mirai and other IoT botnets use TFTP to fetch architecture-specific payloads after initial compromise — it requires no authentication and is available on many embedded devices."
+  description: "Detects tftp as an ingress tool transfer mechanism. Mirai and other IoT botnets use TFTP to fetch architecture-specific payloads after initial compromise — it requires no authentication and is available on many embedded devices. Requires a tftp command line (an option flag or an IP argument, as in Mirai's 'tftp -g -l x -r y IP'): the bare word matched /etc/services tables (Go's net package embeds one; HackBrowserData in XCSSET), libcurl protocol lists, and QEMU's tftp= option (BirdMiner)."
   logsource:
     category: "file_event"
     product: "linux"
   detection:
     strings:
-      - "\\btftp\\b"
+      - "\\btftp\\s+(?:-[a-z]|\\d{1,3}\\.\\d)"
   tags:
     - attack.T1105
   level: high
@@ -2632,28 +2759,46 @@ TftpIngressTransfer:
 
 
 TelnetLateralMovement:
-  title: "Telnet Access (IoT Lateral Movement)"
+  title: "Telnet service reference"
   id: "telnet-lateral-001"
   status: "experimental"
-  description: "Detects hardcoded telnet and telnetd references. Mirai and similar IoT botnets spread by brute-forcing telnet credentials on embedded devices. Presence of telnetd suggests the sample may also install a backdoor listener."
+  description: "Detects hardcoded telnet and telnetd references. IoT botnets reach embedded devices over telnet (T1021 Remote Services; ATT&CK has no telnet sub-technique), but the string alone is not evidence of brute force: Mirai-family killers also list in.telnetd among services to shut down, and benign busybox builds reference it. Credential guessing is detected separately by IoTDefaultCredentialList. Bare 'telnet' now needs an argument (a telnet command line): alone it matched /etc/services tables ('telnet 23/tcp', in every Go binary using the net package), libcurl's protocol list, and QEMU's '[,telnet]' option syntax (TAOMM Ch1: XCSSET, Yort, BirdMiner)."
   logsource:
     category: "file_event"
     product: "linux"
   detection:
     strings:
-      - "\\btelnet\\b"
+      - "(?<![\\[,])\\btelnet\\s+(?:\\d{1,3}\\.\\d|[\\w-]+\\.[\\w.-]*[a-z])"
       - "\\btelnetd\\b"
   tags:
-    - attack.T1110
-    - attack.T1021.004
+    - attack.t1021
+  level: medium
+  mitre:
+    - technique_id: "T1021"
+      technique_name: "Remote Services"
+      tactics: ["Lateral Movement"]
+
+
+IoTDefaultCredentialList:
+  title: "Hardcoded IoT default credentials (telnet/SSH password guessing)"
+  id: "iot-default-creds-001"
+  status: "experimental"
+  description: "Detects default passwords for IP cameras, DVRs, and routers that Mirai, Gafgyt, and their descendants carry in their credential-guessing tables (xc3511, vizxv, 7ujMko0admin, Zte521, hi3518, and others). Only vendor-specific defaults are listed; generic words such as admin, root, or default are left out because benign binaries contain them. Mirai builds that XOR their credential table will not match until unpacked or decoded."
+  references:
+    - "https://www.usenix.org/system/files/conference/usenixsecurity17/sec17-antonakakis.pdf"
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "(?<![A-Za-z0-9])(?:xc3511|vizxv|7ujMko0admin|7ujMko0vizxv|Zte521|hi3518|jvbzd|klv1234|klv123|xmhdipc|juantech|1001chin|hunt5759|tsgoingon|zlxx\\.|GM8182|ikwb|ipcam_rt5350|dvr2580222|ivdev|anni2013|tl789|vhd1206|cat1029|20080826|wabjtam|grouter|e8ehome|e8telnet)(?![A-Za-z0-9])"
+  tags:
+    - attack.t1110.001
   level: high
   mitre:
-    - technique_id: "T1110"
-      technique_name: "Brute Force"
+    - technique_id: "T1110.001"
+      technique_name: "Brute Force: Password Guessing"
       tactics: ["Credential Access"]
-    - technique_id: "T1021.004"
-      technique_name: "Remote Services: SSH"
-      tactics: ["Lateral Movement"]
 
 
 SSDPUPnPScanning:
@@ -2679,27 +2824,40 @@ SSDPUPnPScanning:
 
 
 LinuxProcEnumeration:
-  title: "Linux /proc Filesystem Enumeration"
+  title: "Linux /proc Process Enumeration"
   id: "linux-proc-enum-001"
   status: "experimental"
-  description: "Detects hardcoded /proc paths used for process and network discovery on Linux. /proc/self/exe is used to re-execute or overwrite the running binary; /proc/net/tcp enumerates open connections; /proc/%d/cmdline walks running processes."
+  description: "Detects format strings that walk /proc/<pid>/ to enumerate running processes (Mirai-family killers do this to find and kill competing bots). /proc/self/exe and /proc/cpuinfo were dropped: they are routine runtime self-reference and CPU feature checks (QEMU, Go, Rust), not discovery, and BirdMiner's bundled QEMU matched both."
   logsource:
     category: "file_event"
     product: "linux"
   detection:
     strings:
-      - "/proc/self/exe"
-      - "/proc/net/tcp"
-      - "/proc/%d/cmdline"
-      - "/proc/cpuinfo"
+      - "/proc/%d/(cmdline|exe|stat|status|maps)"
+      - "/proc/%s/(cmdline|exe|stat|status|maps)"
   tags:
     - attack.T1057
-    - attack.T1049
   level: medium
   mitre:
     - technique_id: "T1057"
       technique_name: "Process Discovery"
       tactics: ["Discovery"]
+
+LinuxProcNetEnumeration:
+  title: "Linux /proc/net Connection Enumeration"
+  id: "linux-proc-net-001"
+  status: "experimental"
+  description: "Detects /proc/net/tcp and /proc/net/udp, read to list open sockets and connections without netstat."
+  logsource:
+    category: "file_event"
+    product: "linux"
+  detection:
+    strings:
+      - "/proc/net/(tcp6?|udp6?)\\b"
+  tags:
+    - attack.T1049
+  level: medium
+  mitre:
     - technique_id: "T1049"
       technique_name: "System Network Connections Discovery"
       tactics: ["Discovery"]
@@ -2747,7 +2905,7 @@ AntiGDBSymbol:
   mitre:
     - technique_id: "T1622"
       technique_name: "Debugger Evasion"
-      tactics: ["Defense Evasion", "Discovery"]
+      tactics: ["Stealth", "Discovery"]
 
 
 SpoofedBrowserUserAgent:
@@ -2884,31 +3042,6 @@ LinuxProfileDPersistence:
       tactics: ["Persistence", "Privilege Escalation"]
 
 
-GoCBCEncryption:
-  title: "Go AES-CBC Encryption (NewCBCEncrypter / NewCBCDecrypter)"
-  id: "go-cbc-encrypt-001"
-  status: "experimental"
-  description: "Detects Go crypto/cipher CBC mode API strings. NewCBCEncrypter and NewCBCDecrypter are the standard Go AES-CBC primitives used by Go-based ransomware and RATs for file encryption or C2 traffic encryption. Distinct from Windows CryptoAPI (covered by RansomwareCryptoAPIs)."
-  logsource:
-    category: "file_event"
-    product: "any"
-  detection:
-    strings:
-      - "NewCBCEncrypter"
-      - "NewCBCDecrypter"
-  tags:
-    - attack.T1486
-    - attack.T1027
-  level: high
-  mitre:
-    - technique_id: "T1486"
-      technique_name: "Data Encrypted for Impact"
-      tactics: ["Impact"]
-    - technique_id: "T1027"
-      technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
-
-
 DotNetReflectiveLoading:
   title: ".NET Reflective Assembly Loading"
   id: "dotnet-reflective-load-001"
@@ -2927,7 +3060,7 @@ DotNetReflectiveLoading:
   mitre:
     - technique_id: "T1620"
       technique_name: "Reflective Code Loading"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 
 # ── Windows downloader / dropper detections ───────────────────────────────────
@@ -3228,7 +3361,7 @@ PythonSelfDecompressingExec:
   mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 CreativeUpdateFakeUpdateDropperChain:
   title: "OSX.CreativeUpdate trojanized-app dropper install chain"
@@ -3284,7 +3417,7 @@ CreativeUpdateActivityMonitorEvasion:
   title: "OSX.CreativeUpdate Activity Monitor detection evasion loop"
   id: "creativeupdate-activitymonitor-evasion-001"
   status: "experimental"
-  description: "Detects the watchdog loop in OSX.CreativeUpdate's mdworker shell script: it polls the process list every 5 seconds and unloads its own MacOS.plist LaunchAgent the instant Activity Monitor is running, then reloads it once the miner process (sysmdworker) is no longer found — hiding the cryptominer from a user who opens Activity Monitor to check CPU usage. Confirmed verbatim in the top-level 'mdworker' script inside mdworker.zip."
+  description: "Detects the watchdog loop in OSX.CreativeUpdate's mdworker shell script: it polls the process list every 5 seconds and unloads its own MacOS.plist LaunchAgent the instant Activity Monitor is running, then reloads it once the miner process (sysmdworker) is no longer found — hiding the cryptominer from a user who opens Activity Monitor to check CPU usage. Confirmed verbatim in the top-level 'mdworker' script inside mdworker.zip. Mapped to T1497.001 (checking running processes for analysis tools), not T1622 Debugger Evasion: Activity Monitor is not a debugger."
   references:
     - "https://objective-see.org/blog/blog_0x29.html"
     - "https://www.malwarebytes.com/blog/news/2018/02/new-mac-cryptominer-distributed-via-a-macupdate-hack"
@@ -3299,11 +3432,11 @@ CreativeUpdateActivityMonitorEvasion:
   falsepositives: []
   level: high
   tags:
-    - attack.t1622
+    - attack.t1497.001
   mitre:
-    - technique_id: "T1622"
-      technique_name: "Debugger Evasion"
-      tactics: ["Defense Evasion"]
+    - technique_id: "T1497.001"
+      technique_name: "Virtualization/Sandbox Evasion: System Checks"
+      tactics: ["Stealth", "Discovery"]
 
 CreativeUpdateMinerGateInvocation:
   title: "OSX.CreativeUpdate mdworker MinerGate cryptomining invocation"
@@ -3334,7 +3467,7 @@ IPStormCustomLibp2pProtocolIDs:
   title: "IPStorm custom libp2p protocol IDs (sbpcp/sbptp)"
   id: "ipstorm-custom-p2p-protocol-001"
   status: "experimental"
-  description: "Detects IPStorm's own proprietary libp2p protocol identifiers '/sbpcp/1.0.0' and '/sbptp/1.0.0', registered alongside standard libp2p protocols (kad, secio, yamux, mplex) in the same binary. IPStorm abuses the legitimate IPFS/libp2p peer-to-peer network as C2 transport specifically so its traffic blends in with normal libp2p protocol negotiation — but these two protocol IDs are IPStorm's own namespace, not part of libp2p/IPFS itself, so their presence is a much stronger signal than the generic libp2p package strings (github.com/libp2p/go-libp2p-*) that any legitimate libp2p application would also contain. Confirmed verbatim in IPStorm_unpacked (TAOMM Ch1), the UPX-unpacked macOS Mach-O sample, alongside the storm/p2p/gostream, storm/ddb, and storm/filetransfer Go packages that build on top of them."
+  description: "Detects IPStorm's own proprietary libp2p protocol identifiers '/sbpcp/1.0.0' and '/sbptp/1.0.0', registered alongside standard libp2p protocols (kad, secio, yamux, mplex) in the same binary. IPStorm abuses the legitimate IPFS/libp2p peer-to-peer network as C2 transport specifically so its traffic blends in with normal libp2p protocol negotiation — but these two protocol IDs are IPStorm's own namespace, not part of libp2p/IPFS itself, so their presence is a much stronger signal than the generic libp2p package strings (github.com/libp2p/go-libp2p-*) that any legitimate libp2p application would also contain. Confirmed verbatim in IPStorm_unpacked (TAOMM Ch1), the UPX-unpacked macOS Mach-O sample, alongside the storm/p2p/gostream, storm/ddb, and storm/filetransfer Go packages that build on top of them. Mapped to T1090.003, whose ATT&CK description covers abusing peer-to-peer infrastructure to route between decentralized peers. T1102 Web Service is for legitimate web platforms (social media, paste and file-sharing sites)."
   references:
     - "https://objective-see.org/blog/blog_0x5F.html"
     - "https://research.intezer.com/blog/2020/10/a-storm-is-brewing-ipstorm-now-has-linux-malware/"
@@ -3350,10 +3483,10 @@ IPStormCustomLibp2pProtocolIDs:
   falsepositives: []
   level: high
   tags:
-    - attack.t1102.002
+    - attack.t1090.003
   mitre:
-    - technique_id: "T1102.002"
-      technique_name: "Web Service: Bidirectional Communication"
+    - technique_id: "T1090.003"
+      technique_name: "Proxy: Multi-hop Proxy"
       tactics: ["Command and Control"]
 
 IPStormSSHBruteForcePropagation:
@@ -3385,7 +3518,7 @@ IPStormCowrieHoneypotEvasion:
   title: "IPStorm Cowrie honeypot hostname check before infecting an SSH brute-force target"
   id: "ipstorm-cowrie-honeypot-evasion-001"
   status: "experimental"
-  description: "Detects a case-insensitive check for the hostname 'svr04' — the default hostname Cowrie (the most widely deployed open-source SSH honeypot) presents to a connecting client — embedded as a compiled regex literal '(?i)svr04' in IPStorm's binary. After a successful SSH brute-force, IPStorm checks the victim's hostname against this value before proceeding with infection, skipping the target if it matches, so as not to waste an install (and expose its payload/C2 behavior) on a research honeypot. Confirmed verbatim in IPStorm_unpacked (TAOMM Ch1)."
+  description: "Detects a case-insensitive check for the hostname 'svr04' — the default hostname Cowrie (the most widely deployed open-source SSH honeypot) presents to a connecting client — embedded as a compiled regex literal '(?i)svr04' in IPStorm's binary. After a successful SSH brute-force, IPStorm checks the victim's hostname against this value before proceeding with infection, skipping the target if it matches, so as not to waste an install (and expose its payload/C2 behavior) on a research honeypot. Confirmed verbatim in IPStorm_unpacked (TAOMM Ch1). Mapped to T1497.001 (identifying an analysis environment, here a honeypot, from a system property), not T1622 Debugger Evasion."
   references:
     - "https://research.intezer.com/blog/2020/10/a-storm-is-brewing-ipstorm-now-has-linux-malware/"
   author: Doug Metz
@@ -3399,11 +3532,11 @@ IPStormCowrieHoneypotEvasion:
   falsepositives: []
   level: high
   tags:
-    - attack.t1622
+    - attack.t1497.001
   mitre:
-    - technique_id: "T1622"
-      technique_name: "Debugger Evasion"
-      tactics: ["Defense Evasion", "Discovery"]
+    - technique_id: "T1497.001"
+      technique_name: "Virtualization/Sandbox Evasion: System Checks"
+      tactics: ["Stealth", "Discovery"]
 
 IPStormPlatformPayloadNamingScheme:
   title: "IPStorm cross-platform self-propagation payload naming scheme"
@@ -3453,7 +3586,7 @@ FruitFlyReversedHostnameC2:
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 FruitFlyJavaProcessMasquerade:
   title: "FruitFly Perl backdoor masquerading its process name as 'java'"
@@ -3478,8 +3611,8 @@ FruitFlyJavaProcessMasquerade:
     - attack.t1036.005
   mitre:
     - technique_id: "T1036.005"
-      technique_name: "Masquerading: Match Legitimate Name or Location"
-      tactics: ["Defense Evasion"]
+      technique_name: "Masquerading: Match Legitimate Resource Name or Location"
+      tactics: ["Stealth"]
 
 FruitFlyAntiquatedQuickTimeCapture:
   title: "FruitFly Mach-O helper's antiquated QuickTime SequenceGrabber webcam/screen capture"
@@ -3584,7 +3717,7 @@ AppleJeusHardcodedCryptoKeys:
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 AppleJeusGifSmugglingExfil:
   title: "AppleJeus C2 exfil disguised as a GIF image upload"
@@ -3615,7 +3748,7 @@ AppleJeusSandboxEvasionPayloadDrop:
   title: "AppleJeus downloaded-payload drop path and hidden sandbox-evasion argument"
   id: "applejeus-payload-drop-001"
   status: "experimental"
-  description: "Detects AppleJeus's fixed drop path for second-stage payloads downloaded from its C2 (/var/zdiffsec, written world-executable) and the hidden command-line argument 'bf6a0c760cc642' it launches them with — an argument value that means nothing on its own but is checked for by the payload itself, so a sandbox or analyst running the dropped binary directly (without this exact flag) sees different, usually inert, behavior. Confirmed verbatim in the Updater binary (TAOMM Ch1 AppleJeus/A), matching Kaspersky's Securelist writeup on Operation AppleJeus."
+  description: "Detects AppleJeus's fixed drop path for second-stage payloads downloaded from its C2 (/var/zdiffsec, written world-executable) and the hidden command-line argument 'bf6a0c760cc642' it launches them with — an argument value that means nothing on its own but is checked for by the payload itself, so a sandbox or analyst running the dropped binary directly (without this exact flag) sees different, usually inert, behavior. Confirmed verbatim in the Updater binary (TAOMM Ch1 AppleJeus/A), matching Kaspersky's Securelist writeup on Operation AppleJeus. Mapped to T1480: the payload only behaves as intended when given the operator-supplied argument. No debugger is involved, so not T1622."
   references:
     - "https://securelist.com/operation-applejeus/87553/"
   author: Doug Metz
@@ -3630,11 +3763,11 @@ AppleJeusSandboxEvasionPayloadDrop:
   falsepositives: []
   level: high
   tags:
-    - attack.t1622
+    - attack.t1480
   mitre:
-    - technique_id: "T1622"
-      technique_name: "Debugger Evasion"
-      tactics: ["Defense Evasion"]
+    - technique_id: "T1480"
+      technique_name: "Execution Guardrails"
+      tactics: ["Stealth"]
 
 AppleJeusCheckUpdateC2:
   title: "AppleJeus fake-updater C2 checkin URL"
@@ -3708,7 +3841,7 @@ AppleJeusJMTTraderC2:
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 AppleJeusUnionCryptoPersistence:
   title: "AppleJeus/UnionCryptoTrader LaunchDaemon persistence"
@@ -3758,7 +3891,7 @@ AppleJeusUnionCryptoC2:
   mitre:
     - technique_id: "T1620"
       technique_name: "Reflective Code Loading"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 DokRogueAutoProxyPacMitm:
   title: "OSX.Dok rogue system-wide auto-proxy MITM (networksetup)"
@@ -3858,7 +3991,7 @@ DokRogueRootCAInstall:
   mitre:
     - technique_id: "T1553.004"
       technique_name: "Subvert Trust Controls: Install Root Certificate"
-      tactics: ["Defense Evasion"]
+      tactics: ["Defense Impairment"]
 
 YortC2Endpoints:
   title: "OSX.Yort (Lazarus) hardcoded C2 endpoints"
@@ -4064,8 +4197,8 @@ GmeraBundleIdSpoof:
     - attack.t1036.005
   mitre:
     - technique_id: "T1036.005"
-      technique_name: "Masquerading: Match Legitimate Name or Location"
-      tactics: ["Defense Evasion"]
+      technique_name: "Masquerading: Match Legitimate Resource Name or Location"
+      tactics: ["Stealth"]
 
 GmeraGatedPayloadDecrypt:
   title: "GMERA C2-gated AES second-stage payload decryption (appcode)"
@@ -4090,7 +4223,7 @@ GmeraGatedPayloadDecrypt:
   mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 GmeraReconExfil:
   title: "GMERA system/Wi-Fi recon and screenshot exfiltration to appstockfolio.com"
@@ -4139,7 +4272,7 @@ FlashBackPlatformUuidKeyedCrypto:
   mitre:
     - technique_id: "T1480.001"
       technique_name: "Execution Guardrails: Environmental Keying"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 ShlayerQuarantineCampaignCheckin:
   title: "Shlayer-style campaign checkin via macOS Quarantine Events database"
@@ -4189,7 +4322,7 @@ ShlayerEvalOpensslDecryptExec:
   mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 WindTailDecoyDocumentIdentity:
   title: "WindTail decoy-document app bundle (fixed bundle ID + custom openurl scheme)"
@@ -4216,7 +4349,7 @@ WindTailDecoyDocumentIdentity:
   mitre:
     - technique_id: "T1036.008"
       technique_name: "Masquerading: Masquerade File Type"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 WindTailAesConfigDecrypt:
   title: "WindTail AES-decrypted date.txt configuration file"
@@ -4243,7 +4376,7 @@ WindTailAesConfigDecrypt:
   mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 MacOffersMmInstallStub:
   title: "MacOffers-style staged mm-install-macos second-stage downloader"
@@ -4294,7 +4427,7 @@ JanicabDecoySplitFileExtraction:
   mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 
 JanicabCrontabWatchdogPersistence:
   title: "Janicab crontab persistence with kill-and-respawn watchdog"
@@ -4400,5 +4533,5 @@ VSearchAntiCompetitorCleanup:
   mitre:
     - technique_id: "T1070.004"
       technique_name: "Indicator Removal: File Deletion"
-      tactics: ["Defense Evasion"]
+      tactics: ["Stealth"]
 

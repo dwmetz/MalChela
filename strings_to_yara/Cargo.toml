@@ -1,6 +1,6 @@
 [package]
 name = "strings_to_yara"
-version = "4.3.1"
+version.workspace = true
 edition = "2021"
 
 [dependencies]

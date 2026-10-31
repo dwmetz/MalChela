@@ -1,12 +1,11 @@
 [package]
 name = "xmzhash"
-version = "4.3.1"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
 walkdir = "2.5.0"
-yara = "0.30.0"
-yara-sys = "0.29.0"
+yara-backend = { path = "../yara-backend" }
 common_config = { path = "../common_config" }
 sha2 = "0.10.9"
 rayon = "1.11.0"

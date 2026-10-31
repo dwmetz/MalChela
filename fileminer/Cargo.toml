@@ -1,6 +1,6 @@
 [package]
 name = "fileminer"
-version = "4.3.1"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
@@ -12,6 +12,6 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
-tabled = "0.19.0"
+tabled = "0.22"
 walkdir = "2.5.0"
 common_config = { path = "../common_config" }

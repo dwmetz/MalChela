@@ -71,6 +71,30 @@ struct ArchInfo {
     pagezero_present: bool,
     pagezero_zero_sized: bool,
     has_pie: bool,
+    /// Imported libc functions that run a shell or a new program
+    /// (system, popen, exec*, posix_spawn*), without the leading underscore.
+    exec_imports: Vec<String>,
+}
+
+/// libc entry points that start a shell or another program. A binary that
+/// imports one can run osascript, curl, and so on with arguments it builds
+/// at runtime, which no static string will show.
+const EXEC_IMPORTS: &[&str] = &[
+    "system", "popen", "execl", "execle", "execlp", "execv", "execve", "execvp", "execvP",
+    "posix_spawn", "posix_spawnp",
+];
+
+fn exec_imports(macho: &goblin::mach::MachO) -> Vec<String> {
+    let mut out: Vec<String> = macho
+        .imports()
+        .unwrap_or_default()
+        .iter()
+        .map(|i| i.name.trim_start_matches('_').to_string())
+        .filter(|n| EXEC_IMPORTS.contains(&n.as_str()))
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 #[derive(Serialize)]
@@ -219,6 +243,7 @@ fn analyze_macho_single(bytes: &[u8], macho: &mach::MachO) -> ArchInfo {
     // Symbol count
     let symbol_count = macho.symbols.as_ref().map(|s| s.iter().count()).unwrap_or(0);
     let symbols_stripped = symbol_count == 0;
+    let exec_imports = exec_imports(macho);
 
     ArchInfo {
         cpu_type: cpu_str,
@@ -231,6 +256,7 @@ fn analyze_macho_single(bytes: &[u8], macho: &mach::MachO) -> ArchInfo {
         pagezero_present,
         pagezero_zero_sized,
         has_pie,
+        exec_imports,
     }
 }
 
@@ -347,6 +373,13 @@ fn build_flags(arch: &ArchInfo) -> Vec<String> {
     let sec = arch.dylibs.iter().any(|d| d.contains("/Security.framework"));
     if cf && sc && sec && arch.dylibs.len() < 8 {
         flags.push("Dylib triad (CoreFoundation + SystemConfiguration + Security) with minimal other imports — common C2 comms pattern".to_string());
+    }
+    if !arch.exec_imports.is_empty() {
+        let names: Vec<String> = arch.exec_imports.iter().map(|n| format!("{n}()")).collect();
+        flags.push(format!(
+            "Imports {} — can launch a shell or other programs (e.g. osascript, curl) with arguments built at runtime",
+            names.join(", ")
+        ));
     }
     if !arch.rpath_entries.is_empty() {
         flags.push(format!(

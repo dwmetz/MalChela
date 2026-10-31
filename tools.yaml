@@ -35,7 +35,7 @@ tools:
   exec_type: cargo
 
 - name: Threat Intel Query
-  description: "Multi-source threat intel lookup for hashes, URLs, and IPs (VT, MB, OTX, GreyNoise, and more)"
+  description: "Multi-source threat intel hash lookup (MB, VT, OTX, MetaDefender, HA, FileScan, Malshare)"
   command: ["tiquery"]
   input_type: hash
   category: "Threat Intel"
@@ -114,13 +114,6 @@ tools:
 - name: Strings to YARA
   description: "Converts string sets into YARA rules"
   command: ["strings_to_yara"]
-  input_type: file
-  category: "YARA Tools"
-  exec_type: cargo
-
-- name: YARA Scan
-  description: "Scans a file or folder with YARA rules (embedded YARA-X; yr scan flags)"
-  command: ["yara_scan"]
   input_type: file
   category: "YARA Tools"
   exec_type: cargo

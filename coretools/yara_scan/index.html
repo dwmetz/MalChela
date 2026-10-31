@@ -1377,29 +1377,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../analyze/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Analyze
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../mac/codesign_check/" class="md-nav__link">
         
   
@@ -1469,58 +1446,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../mstrings/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    MStrings
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../mac/plist_analyzer/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     Plist Analyzer
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../unpack/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Unpack
     
   </span>
   
@@ -1924,6 +1855,9 @@
 
 <p>YARA Scan runs YARA rules against a file or folder on MalChela's embedded YARA-X engine, the same engine the other MalChela tools use.  Nothing extra to install.  Its command line follows VirusTotal's <code>yr scan</code>: the same arguments, flag names, and output formats, so a command written for one runs on the other.</p>
 <p>YARA Scan covers the options used in day-to-day scanning.  For everything else, such as compiled rules or module data, install <code>yr</code> and use the <a href="../../tools/yara-x/">YARA-X integration</a>.</p>
+<p><img alt="YARA Scan" src="../../images/yara_scan.png" /></p>
+<p align="center"><strong> YARA Scan</p>
+
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
 <pre><code class="language-bash">./target/release/yara_scan [OPTIONS] [NAMESPACE:]RULES_PATH... TARGET_PATH

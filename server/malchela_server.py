@@ -3613,6 +3613,7 @@ def set_offline_mode():
 # Keep in sync with KEYLESS_OPT_IN in tiquery/src/main.rs.
 KEYLESS_OPT_IN = {
     "urlscan": {"name": "urlscan.io", "sends": "the full URL", "key_file": "url-api.txt"},
+    "sm": {"name": "ScanMalware", "sends": "the host name"},
 }
 _KEYLESS_FILE = API_DIR / "keyless_sources.txt"
 

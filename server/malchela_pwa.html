@@ -2220,11 +2220,12 @@ function renderInputPanel(id, tool) {
             ${tiSourceChk('vt-url', 'VirusTotal')}
             ${tiSourceChk('urlscan', 'urlscan.io', '(no key · opt-in)')}
             ${tiSourceChk('gsb', 'Google Safe Browsing')}
+            ${tiSourceChk('sm', 'ScanMalware', '(no key · opt-in)')}
           </div>
           <div class="ti-keyless-note" style="font-size:10px;color:var(--text-dim);line-height:1.6;border-left:2px solid var(--border);padding:4px 8px;margin-bottom:8px">
             <strong style="color:var(--text-primary)">Keyless sources are opt-in.</strong>
             They need no account, but they send what you look up to a third party
-            (urlscan.io receives the full URL, including any query string).
+            (urlscan.io receives the full URL, including any query string; ScanMalware receives the host name).
             Your choice is remembered; change it here or under Configuration.
           </div>
         </div>
@@ -2833,7 +2834,7 @@ async function runTool(btnEl) {
     // Collect enabled source IDs — URL/QR mode uses a separate source set
     const isUrlMode = tiMode === 'url' || tiMode === 'qr';
     const sourceDefs = isUrlMode
-      ? [['vt','vt-url'], ['urlscan','urlscan'], ['gsb','gsb']]
+      ? [['vt','vt-url'], ['urlscan','urlscan'], ['gsb','gsb'], ['sm','sm']]
       : tiMode === 'ip'
       ? [['vt','vt-ip'], ['otx','otx-ip'], ['gn','gn']]
       : ['mb','vt','otx','md','ha','tr','fs','ms','os'].map(id => [id, id]);
@@ -3486,7 +3487,7 @@ function parseTiqueryRows(lines) {
   // Fallback: regex match on known source IDs
   if (!colPositions.length) {
     for (const line of lines) {
-      const m = line.match(/^\s*(MB|VT|OTX|MD|HA|FS|MS|TR|OS|URLSCAN|GSB|GN)\s+(\S+)\s+(.*?)\s{2,}(\S.*?)\s{2,}(https?:\S+|-)\s*$/);
+      const m = line.match(/^\s*(MB|VT|OTX|MD|HA|FS|MS|TR|OS|URLSCAN|GSB|SM|GN)\s+(\S+)\s+(.*?)\s{2,}(\S.*?)\s{2,}(https?:\S+|-)\s*$/);
       if (m) rows.push({ source: m[1], status: m[2], family: m[3].trim(), detections: m[4].trim(), reference: m[5].trim() });
     }
     return rows;

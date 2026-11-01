@@ -9,8 +9,8 @@ use futures::future::join_all;
 use hash::HashType;
 use sources::{
     AlienVaultOTX, FileScan, GoogleSafeBrowsing, HybridAnalysis, MalwareBazaar, Malshare,
-    MetaDefender, ObjectiveSee, SourceResult, SourceStatus, StubSource, ThreatSource, Triage,
-    GreyNoise, UrlScan, VirusTotal,
+    MetaDefender, ObjectiveSee, ScanMalware, SourceResult, SourceStatus, StubSource, ThreatSource,
+    Triage, GreyNoise, UrlScan, VirusTotal,
 };
 use std::io::Write as _;
 use std::sync::Arc;
@@ -23,8 +23,8 @@ struct Args {
     /// Hash (MD5/SHA1/SHA256), IP address, or URL to query
     hash: Option<String>,
 
-    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms,tr,urlscan,gsb,gn
-    /// (IPs default to vt,otx,gn; URLs to vt,urlscan,gsb)
+    /// Sources to query, comma-separated: mb,vt,otx,md,os,ha,fs,ms,tr,urlscan,gsb,sm,gn
+    /// (IPs default to vt,otx,gn; URLs to vt,urlscan,gsb,sm)
     /// Default: all sources with a configured API key
     #[arg(short, long, value_delimiter = ',', value_name = "SRC")]
     sources: Option<Vec<String>>,
@@ -109,6 +109,7 @@ const URL_SOURCE_IDS: &[(&str, bool)] = &[
     ("vt",      true),
     ("urlscan", false),
     ("gsb",     true),
+    ("sm",      false),
 ];
 
 fn default_source_ids() -> Vec<String> {
@@ -195,6 +196,7 @@ fn is_non_public_ip(ip: &std::net::IpAddr) -> bool {
 /// (id, display name, what leaves the machine)
 const KEYLESS_OPT_IN: &[(&str, &str, &str)] = &[
     ("urlscan", "urlscan.io", "the full URL"),
+    ("sm",      "ScanMalware", "the host name"),
 ];
 
 /// Opted in if the user said so (saved choice or tiquery.yaml), or if they set
@@ -287,6 +289,7 @@ fn build_sources(ids: &[String], _hash_type: HashType, verbose_vt: bool) -> Vec<
             "os"  => Arc::new(ObjectiveSee::new()),
             "urlscan" => Arc::new(UrlScan::new(resolve("url"))),
             "gsb"     => Arc::new(GoogleSafeBrowsing::new(resolve("gsb"))),
+            "sm"      => Arc::new(ScanMalware::new()),
             "gn"      => Arc::new(GreyNoise::new(resolve("gn"))),
             other => Arc::new(StubSource::new(other)),
         };
@@ -903,6 +906,17 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod keyless_tests {
+    use super::{is_keyless_opt_in, URL_SOURCE_IDS};
+
+    #[test]
+    fn scanmalware_is_a_url_source_and_opt_in() {
+        assert!(URL_SOURCE_IDS.iter().any(|(id, _)| *id == "sm"));
+        assert!(is_keyless_opt_in("sm"));
+    }
 }
 
 #[cfg(test)]

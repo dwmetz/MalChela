@@ -29,12 +29,13 @@ Some MalChela tools submit data to external services as part of their function. 
 
 - **urlscan.io** — *opt-in.* Searches urlscan.io's archive for existing scans of the URL. The full URL (including any query string) is sent; nothing is submitted for a new scan. It works without a key (lookups tied to your public IP) or with an optional key from a urlscan.io account (higher rate limits; lookups also tied to that account). [Privacy Policy](https://urlscan.io/about/)
 - **Google Safe Browsing** — URLs checked against Google's Safe Browsing list. [Privacy Policy](https://policies.google.com/privacy)
+- **ScanMalware** — *opt-in.* Searches ScanMalware's archive for existing public scans of the URL. Only the URL's host name is sent; the full URL is matched locally and nothing is submitted for a new scan. [Privacy Policy](https://scanmalware.com/privacy)
 
 **Local only (no external transmission):**
 
 - **NIST NSRL** — File hashes queried against a local copy of the NSRL database. No data leaves the user's machine for this function.
 
-Users should review the privacy policies and terms of service of these third-party providers before submitting sensitive or confidential files. Keyed services are contacted only when the user has configured an API key for them. Keyless services that send the looked-up value to a third party (currently urlscan.io) are **off until the user opts in**, in the web interface (Configuration → Keyless threat-intel sources, or the source checkbox) or with `tiquery --enable-keyless <id>`. The choice is saved in `api/keyless_sources.txt` and shared by the web interface, the CLI, and the Claude plugin; configuring an optional key for such a source also counts as opting in unless the user has opted out. Objective-See needs no key and sends nothing about the sample: its public catalogue is downloaded and matched locally. [Offline Mode](docs/configuration/offline-mode.md) turns off every external lookup.
+Users should review the privacy policies and terms of service of these third-party providers before submitting sensitive or confidential files. Keyed services are contacted only when the user has configured an API key for them. Keyless services that send the looked-up value to a third party (currently urlscan.io and ScanMalware) are **off until the user opts in**, in the web interface (Configuration → Keyless threat-intel sources, or the source checkbox) or with `tiquery --enable-keyless <id>`. The choice is saved in `api/keyless_sources.txt` and shared by the web interface, the CLI, and the Claude plugin; configuring an optional key for such a source also counts as opting in unless the user has opted out. Objective-See needs no key and sends nothing about the sample: its public catalogue is downloaded and matched locally. [Offline Mode](docs/configuration/offline-mode.md) turns off every external lookup.
 
 ## Claude / MCP Integration
 

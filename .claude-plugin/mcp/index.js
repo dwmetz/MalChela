@@ -188,17 +188,18 @@ const TOOLS = [
       'FileScan, Malshare, Triage, Objective-See. IPs (IPv4/IPv6, defanged accepted): ' +
       'VirusTotal (detections, AS owner, country), OTX (pulses), and GreyNoise (known ' +
       'internet scanner vs. known benign service such as a cloud or CDN address). ' +
-      'URLs: VirusTotal, urlscan.io, Google Safe Browsing. Private and reserved IPs, and URLs ' +
+      'URLs: VirusTotal, urlscan.io, Google Safe Browsing, ScanMalware. Private and reserved IPs, and URLs ' +
       'with internal hosts, are refused. Keyed sources are queried only with an API key in ' +
-      'api/*.txt. Keyless urlscan.io is opt-in (the user enables it in MalChela; it receives ' +
-      'the full URL) — do not pass it in sources unless the user asks for it.',
+      'api/*.txt. Keyless urlscan.io and ScanMalware are opt-in (the user enables them in MalChela; ' +
+      'urlscan.io receives the full URL, ScanMalware the host name) — do not pass them in sources ' +
+      'unless the user asks for it.',
     inputSchema: {
       type: 'object',
       properties: {
         hash:    { type: 'string', description: 'MD5/SHA1/SHA256 hash, IP address, or http(s) URL to query' },
         sources: {
           type: 'string',
-          description: 'Comma-separated source IDs (hashes: mb,vt,otx,md,ha,fs,ms,tr,os; IPs: vt,otx,gn; URLs: vt,urlscan,gsb). Default: every source for the input type that has a key, plus keyless sources the user has opted in to',
+          description: 'Comma-separated source IDs (hashes: mb,vt,otx,md,ha,fs,ms,tr,os; IPs: vt,otx,gn; URLs: vt,urlscan,gsb,sm). Default: every source for the input type that has a key, plus keyless sources the user has opted in to',
         },
       },
       required: ['hash'],

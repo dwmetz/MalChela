@@ -1688,7 +1688,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.9",
- "ssdeep",
  "strip-ansi-escapes",
  "sys-info",
  "tempfile",
@@ -2673,16 +2672,6 @@ checksum = "a9fd2f41a1cba099f79a0b6b6c35656cf7c03351a7bae8ff0f28f25270f929d2"
 dependencies = [
  "arbitrary",
  "cc",
-]
-
-[[package]]
-name = "libfuzzy-sys"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4774eb3c15b9506dbf7571a4c65cee61a80561d44baef4bf1a8700496982834c"
-dependencies = [
- "cc",
- "libc",
 ]
 
 [[package]]
@@ -4736,16 +4725,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ssdeep"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc1029d357aab683016d86af6ba42fb0772ab3ac191c8f6eef5315d4e0988752"
-dependencies = [
- "libc",
- "libfuzzy-sys",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5178,6 +5157,7 @@ dependencies = [
  "serde_yaml",
  "sha2 0.10.9",
  "tokio",
+ "zip",
 ]
 
 [[package]]

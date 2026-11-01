@@ -46,6 +46,15 @@ Private, loopback, link-local, multicast, documentation, and other non-routable 
 
 All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL or an IP address, only the sources for that input type are queried. Pass `--sources` to restrict the query to specific sources.
 
+### Downloading samples
+
+`-d` / `--download` (SHA256 only) saves the sample after the lookup:
+
+1. **MalwareBazaar**, if it has the sample (needs `api/mb-api.txt`).
+2. **Triage**, if MalwareBazaar doesn't have it or the download fails (needs `api/tr-api.txt`). Triage serves the raw file, so tiquery checks its SHA256 against the hash you asked for and then wraps it in a zip with the usual password before writing anything to disk.
+
+Either way the result is `<first 16 of sha256>.zip`, password **`infected`**, in `saved_output/tiquery/downloads/` (or the case's `tiquery/downloads/` folder with `--case`). The sample is never written to disk unwrapped. Only public samples can be downloaded.
+
 ### Keyless sources are opt-in
 
 Some sources need no API key. If they ran by default, every lookup would go to a third party without anyone deciding to send it. Sources that send what you look up (currently **urlscan.io**, which receives the full URL) are therefore **off until you opt in**. Objective-See stays on: it downloads its public catalogue and matches hashes locally, so nothing about your sample leaves the machine.
@@ -104,7 +113,7 @@ tiquery <hash> -o -t
 # Save report to a case folder
 tiquery <hash> -o -t --case Case123
 
-# Download sample from MalwareBazaar (SHA256 only)
+# Download sample (SHA256 only): MalwareBazaar first, then Triage
 tiquery <hash> -d
 
 # Bulk lookup — process multiple hashes from a file

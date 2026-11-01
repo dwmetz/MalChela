@@ -31,4 +31,8 @@ chrono       = "0.4"
 base64       = "0.21"
 image        = "0.25"
 rqrr         = "0.10"
+# Password-protected (ZipCrypto, "infected") wrapper for raw samples downloaded
+# from Triage, matching MalwareBazaar's convention. Default features off: no
+# lzma/bzip2/zstd C deps (lzma-static broke GCC 13 builds before).
+zip          = { version = "=9.2.1", default-features = false, features = ["deflate"] }  # exact pin: ZipCrypto writer is in zip::unstable
 common_config = { path = "../common_config" }

@@ -37,7 +37,7 @@ struct Args {
     #[arg(long)]
     csv: bool,
 
-    /// Download sample from MalwareBazaar after lookup (SHA256 only)
+    /// Download sample after lookup (SHA256 only): MalwareBazaar, falling back to Triage
     #[arg(short = 'd', long)]
     download: bool,
 
@@ -856,42 +856,48 @@ async fn main() -> Result<()> {
         }
     }
 
-    // ── MB download (SHA256 only) ─────────────────────────────────────────────
+    // ── Sample download (SHA256 only): MalwareBazaar first, then Triage ─────────
     if args.download {
         if hash_type != HashType::Sha256 {
             eprintln!("--download requires SHA256 hash (got {})", hash_type.label());
         } else {
-            // Only proceed if MB returned a hit
-            let mb_found = results.iter().any(|(name, r)| {
-                name == "MB" && matches!(r.status, Some(SourceStatus::Found))
+            let found = |src: &str| results.iter().any(|(name, r)| {
+                name == src && matches!(r.status, Some(SourceStatus::Found))
             });
+            let (mb_found, tr_found) = (found("MB"), found("TR"));
 
-            if !mb_found {
-                eprintln!("[download] Sample not found in MalwareBazaar — skipping.");
+            let dl_dir = if let Some(ref case) = args.case {
+                std::path::Path::new("saved_output")
+                    .join("cases").join(case).join("tiquery").join("downloads")
             } else {
-                let cfg = config::TiQueryConfig::load().unwrap_or_default();
-                let mb_key = cfg.source_api_key("mb")
-                    .or_else(|| common_config::resolve_api_key("mb"));
+                common_config::get_output_dir("tiquery").join("downloads")
+            };
+            let cfg = config::TiQueryConfig::load().unwrap_or_default();
+            let key_for = |id: &str| cfg.source_api_key(id).or_else(|| common_config::resolve_api_key(id));
 
-                let dl_dir = if let Some(ref case) = args.case {
-                    std::path::Path::new("saved_output")
-                        .join("cases").join(case).join("tiquery").join("downloads")
-                } else {
-                    common_config::get_output_dir("tiquery").join("downloads")
-                };
-
-                let mb = sources::MalwareBazaar::new(mb_key);
-                match mb.download_sample(&hash, &dl_dir).await {
+            // Always report on stderr so the GUI can capture it without
+            // corrupting the JSON array on stdout.
+            let mut saved = false;
+            if mb_found {
+                match sources::MalwareBazaar::new(key_for("mb")).download_sample(&hash, &dl_dir).await {
                     Ok(path) => {
-                        // Always write to stderr so the GUI can capture it without
-                        // corrupting the JSON array on stdout.
-                        eprintln!(
-                            "[download] Sample saved: {} (extract password: infected)",
-                            path.display()
-                        );
+                        eprintln!("[download] Sample saved from MalwareBazaar: {} (extract password: infected)", path.display());
+                        saved = true;
                     }
-                    Err(e) => eprintln!("[download] Failed: {}", e),
+                    Err(e) => eprintln!("[download] MalwareBazaar failed: {}", e),
                 }
+            }
+            if !saved && tr_found {
+                match sources::Triage::new(key_for("tr")).download_sample(&hash, &dl_dir).await {
+                    Ok(path) => {
+                        eprintln!("[download] Sample saved from Triage: {} (extract password: infected)", path.display());
+                        saved = true;
+                    }
+                    Err(e) => eprintln!("[download] Triage failed: {}", e),
+                }
+            }
+            if !saved && !mb_found && !tr_found {
+                eprintln!("[download] Sample not found in MalwareBazaar or Triage — skipping.");
             }
         }
     }

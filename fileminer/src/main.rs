@@ -400,6 +400,16 @@ fn analyze_one_file(path: &Path) -> Result<ScanResult, Box<dyn std::error::Error
                 suggested_tools.push(("mStrings".into(), "mstrings".into()));
                 suggested_tools.push(("tiquery".into(), "tiquery".into()));
                 suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+            } else if file_type.contains("x-ole-storage") || file_type.contains("x-msi") {
+                // OLE Compound File Binary (CFB): MSI installers and legacy Office
+                // (.doc/.xls/.ppt). Had no branch, so Analyze ran zero tools on it —
+                // observed on an MSI dropper whose CustomAction/Property table carried
+                // the entire PowerShell loader chain. mStrings scans the stream text
+                // (script bodies, LOLBins, Base64 markers) directly.
+                suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                suggested_tools.push(("mStrings".into(), "mstrings".into()));
+                suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
             } else if file_type.contains("x-apple-property-list") || file_type.contains("application/xml") {
                 suggested_tools.push(("Plist Analyzer".into(), "plist_analyzer".into()));
             } else if file_type.starts_with("text/") {
@@ -476,7 +486,33 @@ fn analyze_one_file(path: &Path) -> Result<ScanResult, Box<dyn std::error::Error
                 }
             }
 
-
+            // Catch-all: a type infer *recognized* but no branch above handles
+            // still gets the baseline tools, so a new format degrades to
+            // "hash + static triage" instead of Analyze silently running nothing
+            // (how OLE/MSI slipped through). Deliberately skipped:
+            //   - "Unknown": the size-gated branches above already decided; small
+            //     unknown blobs are usually resource/junk data.
+            //   - containers (.zip/.dmg/.pkg and archive MIMEs): server-side
+            //     _expand_nested_containers() relies on these keeping an EMPTY
+            //     suggested_tools list to know they still need unwrapping.
+            //   - plain media/fonts: avoids a tiquery/NSRL lookup per image in
+            //     directory scans.
+            if suggested_tools.is_empty() && file_type != "Unknown" && file_size > 0 {
+                let is_container = matches!(extension.as_str(), "zip" | "dmg" | "pkg")
+                    || ["zip", "x-7z-compressed", "x-rar-compressed", "x-tar", "gzip",
+                        "x-bzip2", "x-xz", "zstd", "x-apple-diskimage", "x-xar",
+                        "vnd.rar"]
+                        .iter()
+                        .any(|m| file_type.ends_with(m));
+                let is_media = ["image/", "audio/", "video/", "font/"]
+                    .iter()
+                    .any(|m| file_type.starts_with(m));
+                if !is_container && !is_media {
+                    suggested_tools.push(("FileAnalyzer".into(), "fileanalyzer".into()));
+                    suggested_tools.push(("tiquery".into(), "tiquery".into()));
+                    suggested_tools.push(("nsrlquery".into(), "nsrlquery".into()));
+                }
+            }
 
             Ok(ScanResult {
                 filename: path

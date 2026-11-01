@@ -3571,6 +3571,64 @@ def set_offline_mode():
     return jsonify({"success": True, "enabled": enabled})
 
 
+# Keyless threat-intel sources that send the looked-up value to a third party
+# are opt-in. The choice lives in api/keyless_sources.txt as id=on/off lines
+# (same storage convention as offline_mode.txt); tiquery reads the same file via
+# common_config::keyless_choice, so CLI, PWA, and MCP honor one setting.
+# Keep in sync with KEYLESS_OPT_IN in tiquery/src/main.rs.
+KEYLESS_OPT_IN = {
+    "urlscan": {"name": "urlscan.io", "sends": "the full URL", "key_file": "url-api.txt"},
+}
+_KEYLESS_FILE = API_DIR / "keyless_sources.txt"
+
+
+def _keyless_choices() -> dict:
+    """{id: True/False} for every source with a recorded choice."""
+    out = {}
+    if _KEYLESS_FILE.exists():
+        for line in _KEYLESS_FILE.read_text().splitlines():
+            if "=" not in line:
+                continue
+            k, v = (x.strip().lower() for x in line.split("=", 1))
+            if v in ("on", "1", "true", "yes"):
+                out[k] = True
+            elif v in ("off", "0", "false", "no"):
+                out[k] = False
+    return out
+
+
+@app.route("/keyless_sources", methods=["GET"])
+def get_keyless_sources():
+    """Opt-in keyless sources and the user's recorded choice (None = not chosen yet, treated as off)."""
+    choices = _keyless_choices()
+    out = []
+    for k, v in KEYLESS_OPT_IN.items():
+        kf = v.get("key_file")
+        has_key = bool(kf and (API_DIR / kf).exists() and (API_DIR / kf).read_text().strip())
+        choice = choices.get(k)
+        # Same rule as tiquery: an explicit choice wins; otherwise a key the user
+        # configured themselves counts as opting in.
+        enabled = choice if choice is not None else has_key
+        out.append({"id": k, "name": v["name"], "sends": v["sends"],
+                    "choice": choice, "has_key": has_key, "enabled": enabled})
+    return jsonify({"success": True, "sources": out})
+
+
+@app.route("/keyless_sources", methods=["POST"])
+def set_keyless_source():
+    """Record an opt-in / opt-out for one keyless source. Takes effect immediately."""
+    data = request.json or {}
+    sid = str(data.get("id", "")).strip().lower()
+    if sid not in KEYLESS_OPT_IN:
+        return jsonify({"success": False, "error": "Unknown keyless source"}), 400
+    enabled = bool(data.get("enabled"))
+    choices = _keyless_choices()
+    choices[sid] = enabled
+    API_DIR.mkdir(parents=True, exist_ok=True)
+    _KEYLESS_FILE.write_text("".join(f"{k}={'on' if v else 'off'}\n" for k, v in choices.items()))
+    return jsonify({"success": True, "id": sid, "enabled": enabled})
+
+
 @app.route("/read_file", methods=["POST"])
 def read_file():
     """Read any file within the browser jail — used by View Reports."""

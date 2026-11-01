@@ -68,6 +68,14 @@ struct Args {
     /// QR code decode: extract URL from an image and query it
     #[arg(long, value_name = "IMAGE", conflicts_with = "hash")]
     qr: Option<String>,
+
+    /// Opt in to keyless source(s) that send lookups to a third party (saved): urlscan
+    #[arg(long, value_delimiter = ',', value_name = "SRC")]
+    enable_keyless: Vec<String>,
+
+    /// Opt out of keyless source(s) (saved; also silences the notice)
+    #[arg(long, value_delimiter = ',', value_name = "SRC")]
+    disable_keyless: Vec<String>,
 }
 
 // ── Source registry ───────────────────────────────────────────────────────────
@@ -139,6 +147,26 @@ fn parse_ip_input(s: &str) -> Option<std::net::IpAddr> {
     s.trim().replace("[.]", ".").replace("[:]", ":").parse().ok()
 }
 
+/// Why a URL's host shouldn't be sent to any external source, if it shouldn't:
+/// a non-public IP literal, a single-label name, or an internal-only suffix.
+/// Applies to every URL source (keyed or keyless), so an analyst pasting an
+/// internal URL never leaks internal names or addressing to a third party.
+fn non_public_url_host(input: &str) -> Option<String> {
+    let url = reqwest::Url::parse(input).ok()?;
+    let host = url.host_str()?.trim_start_matches('[').trim_end_matches(']').trim_end_matches('.');
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_non_public_ip(&ip).then(|| format!("{} is not a public IP address", ip));
+    }
+    const INTERNAL: &[&str] = &[
+        ".local", ".localdomain", ".lan", ".internal", ".intranet", ".corp", ".home", ".home.arpa", ".localhost",
+    ];
+    let h = host.to_ascii_lowercase();
+    if !h.contains('.') || INTERNAL.iter().any(|sfx| h.ends_with(sfx)) {
+        return Some(format!("{} is not a public host name", h));
+    }
+    None
+}
+
 /// Loopback, private, link-local, multicast, documentation, and other
 /// non-routable addresses: no reputation source has anything on them, and a
 /// lookup would spend rate-limited quota for nothing.
@@ -160,12 +188,64 @@ fn is_non_public_ip(ip: &std::net::IpAddr) -> bool {
     }
 }
 
+/// Keyless sources that send the looked-up value to a third party. They are
+/// opt-in: left out of the defaults until the user turns them on (saved in
+/// api/keyless_sources.txt, or `enabled: true` in tiquery.yaml). An explicit
+/// `--sources` still uses them for that one run.
+/// (id, display name, what leaves the machine)
+const KEYLESS_OPT_IN: &[(&str, &str, &str)] = &[
+    ("urlscan", "urlscan.io", "the full URL"),
+];
+
+/// Opted in if the user said so (saved choice or tiquery.yaml), or if they set
+/// up an optional key for the source themselves, unless they explicitly opted out.
+fn keyless_opted_in(cfg: &config::TiQueryConfig, id: &str) -> bool {
+    match common_config::keyless_choice(id) {
+        Some(choice) => choice,
+        None => {
+            cfg.sources.get(id).and_then(|s| s.enabled) == Some(true)
+                || cfg.source_api_key(id).or_else(|| common_config::resolve_api_key(api_key_name(id))).is_some()
+        }
+    }
+}
+
+/// api/<name>-api.txt for a source id (urlscan's optional key is url-api.txt).
+fn api_key_name(id: &str) -> &str {
+    if id == "urlscan" { "url" } else { id }
+}
+
+fn is_keyless_opt_in(id: &str) -> bool {
+    KEYLESS_OPT_IN.iter().any(|(k, _, _)| *k == id)
+}
+
+/// One-time notice while no choice is recorded for an opt-in keyless source.
+fn keyless_notice() {
+    let pending: Vec<_> = KEYLESS_OPT_IN
+        .iter()
+        .filter(|(id, _, _)| {
+            common_config::keyless_choice(id).is_none()
+                && common_config::resolve_api_key(api_key_name(id)).is_none()
+        })
+        .collect();
+    if pending.is_empty() {
+        return;
+    }
+    eprintln!("Note: keyless sources are off until you opt in. They need no account, but");
+    eprintln!("      they send what you look up to a third party:");
+    for (id, name, sends) in &pending {
+        eprintln!("        {:<8} {} receives {}", id, name, sends);
+    }
+    eprintln!("      Opt in:  tiquery --enable-keyless <id>   (or --disable-keyless to silence this)");
+    eprintln!("      Your choice is saved; a one-off --sources <id> works without saving.");
+}
+
 fn default_url_source_ids() -> Vec<String> {
     let cfg = config::TiQueryConfig::load().unwrap_or_default();
     URL_SOURCE_IDS
         .iter()
         .filter(|(id, needs_key)| {
             if !cfg.source_enabled(id) { return false; }
+            if is_keyless_opt_in(id) { return keyless_opted_in(&cfg, id); }
             if !needs_key { return true; }
             cfg.source_api_key(id)
                 .or_else(|| common_config::resolve_api_key(id))
@@ -575,6 +655,30 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
+    // Keyless opt-in / opt-out: save the choice, then continue only if there's
+    // something to look up.
+    if !args.enable_keyless.is_empty() || !args.disable_keyless.is_empty() {
+        for (ids, on) in [(&args.enable_keyless, true), (&args.disable_keyless, false)] {
+            for id in ids.iter().map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()) {
+                match KEYLESS_OPT_IN.iter().find(|(k, _, _)| *k == id) {
+                    Some((_, name, sends)) => match common_config::set_keyless_choice(&id, on) {
+                        Ok(()) if on => eprintln!("Opted in: {} ({} receives {}).", id, name, sends),
+                        Ok(()) => eprintln!("Opted out: {} ({}).", id, name),
+                        Err(e) => { eprintln!("Error: could not save choice for {}: {}", id, e); std::process::exit(1); }
+                    },
+                    None => {
+                        let known: Vec<_> = KEYLESS_OPT_IN.iter().map(|(k, _, _)| *k).collect();
+                        eprintln!("Error: '{}' is not an opt-in keyless source (known: {})", id, known.join(", "));
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+        if args.hash.is_none() && args.qr.is_none() && args.bulk.is_none() {
+            return Ok(());
+        }
+    }
+
     // Bulk mode: read hashes from a file and query each one
     if let Some(ref path) = args.bulk.clone() {
         return run_bulk(path, &args).await;
@@ -608,6 +712,12 @@ async fn main() -> Result<()> {
     // Detect whether the input is a URL, an IP address, or a hash
     let is_url = raw_input.starts_with("http://") || raw_input.starts_with("https://");
     let ip_input = if is_url { None } else { parse_ip_input(&raw_input) };
+    if is_url {
+        if let Some(reason) = non_public_url_host(&raw_input) {
+            eprintln!("Error: {} (private, internal, or reserved) — not sent to any external source", reason);
+            std::process::exit(1);
+        }
+    }
     if let Some(ip) = ip_input {
         if is_non_public_ip(&ip) {
             eprintln!("Error: {} is not a public IP address (private, loopback, reserved, or documentation range) — nothing to look up", ip);
@@ -633,7 +743,10 @@ async fn main() -> Result<()> {
     let source_ids: Vec<String> = args
         .sources
         .unwrap_or_else(|| {
-            if is_url { default_url_source_ids() } else if ip_input.is_some() { default_ip_source_ids() } else { default_source_ids() }
+            if is_url {
+                if !common_config::is_offline_mode() { keyless_notice(); }
+                default_url_source_ids()
+            } else if ip_input.is_some() { default_ip_source_ids() } else { default_source_ids() }
         });
 
     // If ObjectiveSee is requested and hash is SHA256, warm the cache sequentially first
@@ -808,5 +921,27 @@ mod truncate_tests {
         assert_eq!(truncate("AS3352 Telefónica", 13), "AS3352 Telef…");
         assert_eq!(truncate("Ростелеком", 4), "Рос…");
         assert_eq!(truncate("short", 22), "short");
+    }
+}
+
+#[cfg(test)]
+mod url_host_tests {
+    use super::non_public_url_host;
+
+    #[test]
+    fn internal_url_hosts_are_refused() {
+        for u in [
+            "http://10.0.0.5/x", "https://192.168.1.10:8443/", "http://[fe80::1]/", "http://intranet/",
+            "https://fs01.corp.local/share", "https://wiki.acme.internal/", "http://nas.home.arpa/",
+            "http://127.0.0.1/",
+        ] {
+            assert!(non_public_url_host(u).is_some(), "{u}");
+        }
+        for u in [
+            "https://minnarasanen.com/nfront.php", "https://www.google.com/", "http://45.76.91.240/x",
+            "https://x.pages.dev/",
+        ] {
+            assert!(non_public_url_host(u).is_none(), "{u}");
+        }
     }
 }

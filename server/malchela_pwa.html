@@ -1567,6 +1567,15 @@
             <div style="margin-top:4px">Takes effect immediately, no restart needed. Doesn't affect anything a sample itself might do if executed — this only covers MalChela's own lookups.</div>
           </div>
         </div>
+
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border)">
+          <div style="font-size:13px;color:var(--text-primary);margin-bottom:8px">Keyless threat-intel sources</div>
+          <div id="cfg-keyless-list" style="display:flex;flex-direction:column;gap:6px"></div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-dim);line-height:1.8">
+            <div>These sources need no API key, so nothing stops them from running by default. They're <strong>off until you opt in</strong>, because each one sends what you look up to a third party, along with your public IP.</div>
+            <div style="margin-top:4px">Your choice is saved and shared by the web interface, the tiquery CLI (<span style="color:var(--cyan)">--enable-keyless</span> / <span style="color:var(--cyan)">--disable-keyless</span>), and the Claude plugin. Offline mode still overrides everything.</div>
+          </div>
+        </div>
       </div>
 
       <!-- API Keys Screen -->
@@ -2211,8 +2220,14 @@ function renderInputPanel(id, tool) {
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">
             ${tiSourceChk('vt-url', 'VirusTotal')}
-            ${tiSourceChk('urlscan', 'urlscan.io', '(no key required)')}
+            ${tiSourceChk('urlscan', 'urlscan.io', '(no key · opt-in)')}
             ${tiSourceChk('gsb', 'Google Safe Browsing')}
+          </div>
+          <div class="ti-keyless-note" style="font-size:10px;color:var(--text-dim);line-height:1.6;border-left:2px solid var(--border);padding:4px 8px;margin-bottom:8px">
+            <strong style="color:var(--text-primary)">Keyless sources are opt-in.</strong>
+            They need no account, but they send what you look up to a third party
+            (urlscan.io receives the full URL, including any query string).
+            Your choice is remembered; change it here or under Configuration.
           </div>
         </div>
         <div id="ti-ip-sources-section" style="display:none">
@@ -2576,7 +2591,37 @@ function tiSourceChk(id, label, note = '', hasVtPerEngine = false) {
     </label>${peEngineChk}</span>`;
 }
 
+// Keyless opt-in sources: checkbox mirrors the saved choice (off until chosen),
+// and toggling it saves the choice server-side (api/keyless_sources.txt).
+async function loadKeylessStatus() {
+  try {
+    const data = await api('/keyless_sources');
+    if (!data?.success) return;
+    for (const src of data.sources) {
+      const chk = document.getElementById(`ti-src-${src.id}`);
+      if (!chk || chk.dataset.keylessBound) continue;
+      chk.checked = !!src.enabled;
+      chk.dataset.keylessBound = '1';
+      chk.title = `${src.name} receives ${src.sends}`;
+      chk.addEventListener('change', () => setKeylessChoice(src.id, chk.checked, chk));
+    }
+  } catch (e) { /* non-fatal: checkbox stays as rendered */ }
+}
+
+async function setKeylessChoice(id, enabled, chk) {
+  try {
+    const data = await api('/keyless_sources', { method: 'POST', body: JSON.stringify({ id, enabled }) });
+    if (!data?.success) throw new Error(data?.error || 'save failed');
+    showToast(enabled ? `${id}: opted in (choice saved)` : `${id}: opted out (choice saved)`, 'success');
+    document.querySelectorAll(`#ti-src-${id}, #cfg-keyless-${id}`).forEach(el => { if (el !== chk) el.checked = enabled; });
+  } catch (e) {
+    showToast(`Could not save ${id} choice: ${e.message}`, 'error');
+    if (chk) chk.checked = !enabled;
+  }
+}
+
 async function loadTiSourceStatus() {
+  loadKeylessStatus();
   // Gray out sources that have no API key configured
   try {
     const data = await api('/api_keys');
@@ -4872,6 +4917,17 @@ function showConfig(e) {
   document.getElementById('cfg-server-url').value = serverUrl;
   api('/offline_mode').then(data => {
     if (data?.success) document.getElementById('cfg-offline-mode').checked = !!data.enabled;
+  }).catch(() => {});
+  api('/keyless_sources').then(data => {
+    const list = document.getElementById('cfg-keyless-list');
+    if (!data?.success || !list) return;
+    list.innerHTML = data.sources.map(src => `
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-primary)">
+        <input type="checkbox" id="cfg-keyless-${escHtml(src.id)}" ${src.enabled ? 'checked' : ''}
+               onchange="setKeylessChoice('${escHtml(src.id)}', this.checked, this)">
+        ${escHtml(src.name)}
+        <span style="color:var(--text-dim);font-size:10px">receives ${escHtml(src.sends)}${src.choice === null ? (src.has_key ? ' · on because a key is configured' : ' · not chosen yet') : ''}</span>
+      </label>`).join('');
   }).catch(() => {});
 }
 

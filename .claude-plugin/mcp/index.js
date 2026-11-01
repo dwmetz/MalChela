@@ -188,15 +188,17 @@ const TOOLS = [
       'FileScan, Malshare, Triage, Objective-See. IPs (IPv4/IPv6, defanged accepted): ' +
       'VirusTotal (detections, AS owner, country), OTX (pulses), and GreyNoise (known ' +
       'internet scanner vs. known benign service such as a cloud or CDN address). ' +
-      'URLs: VirusTotal, urlscan.io, Google Safe Browsing. Private and reserved IPs are ' +
-      'refused. Only sources with an API key in api/*.txt are queried.',
+      'URLs: VirusTotal, urlscan.io, Google Safe Browsing. Private and reserved IPs, and URLs ' +
+      'with internal hosts, are refused. Keyed sources are queried only with an API key in ' +
+      'api/*.txt. Keyless urlscan.io is opt-in (the user enables it in MalChela; it receives ' +
+      'the full URL) — do not pass it in sources unless the user asks for it.',
     inputSchema: {
       type: 'object',
       properties: {
         hash:    { type: 'string', description: 'MD5/SHA1/SHA256 hash, IP address, or http(s) URL to query' },
         sources: {
           type: 'string',
-          description: 'Comma-separated source IDs (hashes: mb,vt,otx,md,ha,fs,ms,tr,os; IPs: vt,otx,gn; URLs: vt,urlscan,gsb). Default: every source for the input type that has a key',
+          description: 'Comma-separated source IDs (hashes: mb,vt,otx,md,ha,fs,ms,tr,os; IPs: vt,otx,gn; URLs: vt,urlscan,gsb). Default: every source for the input type that has a key, plus keyless sources the user has opted in to',
         },
       },
       required: ['hash'],
@@ -679,7 +681,7 @@ function buildCommand(toolName, args) {
       }
 
       if (currentCase) {
-        return { bin: binary, args: [targetPath, '--case', currentCase, '-o', '-t'] };
+        return { bin: binary, args: [targetPath, '--case', currentCase, '-o', '-m'] };  // Markdown: mitre_matrix.for_case() only parses pipe tables
       }
       const cmdArgs = [targetPath];
       if (args.output) cmdArgs.push('-o', args.output);
@@ -715,7 +717,7 @@ function buildCommand(toolName, args) {
       return { bin: binary, args: cmdArgs };
     }
     case 'hash': {
-      const caseArgs = currentCase ? ['--case', currentCase, '-o', '-t'] : [];
+      const caseArgs = currentCase ? ['--case', currentCase, '-o', '-m'] : [];
       if (toolName === 'tiquery') {
         const srcArgs = args.sources ? ['--sources', args.sources] : [];
         return { bin: binary, args: [args.hash, ...srcArgs, '--json', ...caseArgs] };

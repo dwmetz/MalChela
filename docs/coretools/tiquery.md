@@ -31,7 +31,7 @@ Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool
 | ID      | Source                  | Key Required |
 |---------|-------------------------|--------------|
 | vt      | VirusTotal (URL API)    | Yes          |
-| urlscan | urlscan.io              | Optional (raises rate limits) |
+| urlscan | urlscan.io              | Optional (raises rate limits). **Opt-in**, see below |
 | gsb     | Google Safe Browsing    | Yes          |
 
 ### Supported Sources — IP Lookups
@@ -46,6 +46,30 @@ Private, loopback, link-local, multicast, documentation, and other non-routable 
 
 All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL or an IP address, only the sources for that input type are queried. Pass `--sources` to restrict the query to specific sources.
 
+### Keyless sources are opt-in
+
+Some sources need no API key. If they ran by default, every lookup would go to a third party without anyone deciding to send it. Sources that send what you look up (currently **urlscan.io**, which receives the full URL) are therefore **off until you opt in**. Objective-See stays on: it downloads its public catalogue and matches hashes locally, so nothing about your sample leaves the machine.
+
+```bash
+tiquery --enable-keyless urlscan     # opt in (saved)
+tiquery --disable-keyless urlscan    # opt out (saved; also silences the notice)
+tiquery https://example.com --sources urlscan   # one-off use without saving a choice
+```
+
+Until a choice is recorded, URL lookups print a short notice listing each opt-in source and what it receives. The choice is saved in `api/keyless_sources.txt` (`urlscan=on` / `urlscan=off`) and shared by the CLI, the web interface (the source checkbox, or Configuration → Keyless threat-intel sources), and the Claude plugin. Configuring an optional key for the source (for urlscan, `api/url-api.txt`) also counts as opting in unless you've opted out.
+
+**urlscan.io with or without a key.** urlscan.io's search API answers both anonymous and authenticated requests, so its key is optional:
+
+| | Without a key | With a key (free account) |
+|---|---|---|
+| Rate limit | Low; busy sessions may see `rate limited` errors | Higher |
+| Results | Public scans only | Public scans, plus your own private scans |
+| Attribution | Lookups are tied to your public IP address | Lookups are also tied to your urlscan.io account |
+
+Either way, the full URL is sent and nothing is submitted for a new scan. If you're working a case where lookups shouldn't be attributable to you, leave urlscan opted out, run lookups from a dedicated analysis egress, or use Offline Mode. Offline Mode overrides everything.
+
+URLs whose host is a private, loopback, or reserved IP address, a single-label name, or an internal suffix (`.local`, `.lan`, `.internal`, `.corp`, `.home.arpa`, and so on) are refused before any source is queried.
+
 ---
 
 ### 🔧 CLI Syntax
@@ -54,7 +78,7 @@ All sources with a configured API key are queried automatically. No flag is need
 # Hash lookup — queries all hash sources with a configured API key
 tiquery <hash>
 
-# URL lookup — queries VirusTotal (URL), urlscan.io, and Google Safe Browsing
+# URL lookup — queries VirusTotal (URL) and Google Safe Browsing; urlscan.io too once opted in
 tiquery https://example.com/path
 
 # IP lookup — queries VirusTotal (IP), AlienVault OTX, and GreyNoise
@@ -180,7 +204,7 @@ The MalChela web interface's Threat Intel Query panel offers five input modes, s
 
 - **Single Hash** — paste a hash or click **Browse…** to pick a file; the web interface computes the file's SHA256 and populates the hash field automatically.
 - **Bulk Lookup** — as described above, for batches of hashes in a file.
-- **URL** — paste an `http://` or `https://` URL to query VirusTotal, urlscan.io, and Google Safe Browsing in parallel.
+- **URL** — paste an `http://` or `https://` URL to query VirusTotal, Google Safe Browsing, and (once opted in) urlscan.io in parallel. The urlscan.io checkbox reflects your saved choice, and toggling it saves the new choice.
 - **IP** — paste an IPv4 or IPv6 address (defanged is fine: `1.2.3[.]4`) to query VirusTotal, AlienVault OTX, and GreyNoise.  Because an IP being *known* to a source isn't a verdict (8.8.8.8 is in every one), each row shows what that source concluded instead of FOUND: **FLAGGED** (VirusTotal engines or a GreyNoise malicious scanner), **IN *N* PULSES** (OTX: discussed, which is context), or **CLEAN** / **KNOWN BENIGN** (no engine detections, or a GreyNoise RIOT business service such as a CDN or public DNS).
 - **QR Code** — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the web interface decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.
 

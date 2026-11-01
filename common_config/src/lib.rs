@@ -67,6 +67,50 @@ pub fn find_workspace_root() -> Option<PathBuf> {
     }
 }
 
+/// Keyless threat-intel sources that send what's being looked up to a third
+/// party are opt-in. The choice is stored in `api/keyless_sources.txt` as
+/// `id=on` / `id=off` lines, next to the API keys and `offline_mode.txt`, so
+/// the CLI, the web server, and the MCP plugin all honor one setting.
+/// `None` means no choice has been recorded yet (treated as off).
+pub fn keyless_choice(source: &str) -> Option<bool> {
+    let path = find_workspace_root()?.join("api").join("keyless_sources.txt");
+    let text = fs::read_to_string(path).ok()?;
+    text.lines().rev().find_map(|l| {
+        let (id, v) = l.trim().split_once('=')?;
+        if !id.trim().eq_ignore_ascii_case(source) {
+            return None;
+        }
+        match v.trim().to_ascii_lowercase().as_str() {
+            "on" | "1" | "true" | "yes" => Some(true),
+            "off" | "0" | "false" | "no" => Some(false),
+            _ => None,
+        }
+    })
+}
+
+/// Record the user's opt-in / opt-out for a keyless source (see `keyless_choice`).
+pub fn set_keyless_choice(source: &str, on: bool) -> std::io::Result<()> {
+    let root = find_workspace_root()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "MalChela workspace root not found"))?;
+    let dir = root.join("api");
+    fs::create_dir_all(&dir)?;
+    let path = dir.join("keyless_sources.txt");
+    let existing = fs::read_to_string(&path).unwrap_or_default();
+    let mut lines: Vec<String> = existing
+        .lines()
+        .filter(|l| {
+            l.trim()
+                .split_once('=')
+                .map(|(id, _)| !id.trim().eq_ignore_ascii_case(source))
+                .unwrap_or(!l.trim().is_empty())
+        })
+        .map(str::to_string)
+        .collect();
+    lines.push(format!("{}={}", source, if on { "on" } else { "off" }));
+    fs::write(&path, lines.join("\n") + "\n")
+}
+
+
 /// Resolve an API key for `source` (e.g. "vt", "mb", "otx").
 ///
 /// Priority:

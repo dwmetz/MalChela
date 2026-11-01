@@ -91,7 +91,7 @@ Unlike the PWA, the MCP server uses a **mandatory case model** — call `set_cas
 
 | Tool | Description |
 |---|---|
-| `tiquery` | Multi-source hash lookup across MalwareBazaar, VirusTotal, AlienVault OTX, and InQuest Labs — combined results matrix with detections, families, and source links. |
+| `tiquery` | Multi-source threat-intel lookup for hashes (MalwareBazaar, VirusTotal, AlienVault OTX, MetaDefender, Hybrid Analysis, Triage, FileScan.IO, Malshare, Objective-See), URLs (VirusTotal, Google Safe Browsing, urlscan.io once opted in), and IPs (VirusTotal, OTX, GreyNoise). Combined results matrix with detections, families, and source links. Keyed sources run only with a key in `api/`. |
 | `nsrlquery` | Checks a hash (MD5 or SHA1) against the NIST NSRL known-good database. |
 
 **Hashing Tools**

@@ -203,7 +203,7 @@ pub fn write_api_key(source: &str, key: &str) -> Result<(), Box<dyn Error>> {
 /// Call at startup to proactively migrate any legacy key files sitting at the
 /// workspace root. Silent if nothing needs moving.
 pub fn migrate_api_keys() {
-    for src in &["vt", "mb", "otx", "ha", "mp", "mw", "tr", "fs", "ms"] {
+    for src in &["vt", "mb", "otx", "md", "ha", "tr", "fs", "ms", "gn", "gsb", "url"] {
         let _ = resolve_api_key(src);
     }
 }

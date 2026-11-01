@@ -1,6 +1,6 @@
-/// Placeholder source for Tier 2 integrations not yet implemented.
-/// Returns a Skipped result with "coming soon" so the matrix still shows
-/// the row when the user explicitly requests a Tier 2 source.
+/// Fallback for a source id tiquery doesn't recognize (for example a typo in
+/// `--sources`). Returns a Skipped row so the matrix still shows what was asked
+/// for, instead of silently dropping it.
 use super::{SourceResult, ThreatSource};
 use async_trait::async_trait;
 
@@ -12,18 +12,9 @@ pub struct StubSource {
 
 impl StubSource {
     pub fn new(id: &str) -> Self {
-        let full = match id {
-            "mp" => "Malpedia",
-            "ha" => "Hybrid Analysis",
-            "mw" => "MWDB",
-            "tr" => "Triage",
-            "fs" => "FileScan.IO",
-            "ms" => "Malshare",
-            other => other,
-        };
         StubSource {
             short: id.to_uppercase(),
-            full: full.to_string(),
+            full: id.to_string(),
         }
     }
 }
@@ -34,6 +25,6 @@ impl ThreatSource for StubSource {
     fn short_name(&self) -> &str { &self.short }
 
     async fn query(&self, _hash: &str) -> SourceResult {
-        SourceResult::skipped(&self.short, "coming soon")
+        SourceResult::skipped(&self.short, "unknown source id")
     }
 }

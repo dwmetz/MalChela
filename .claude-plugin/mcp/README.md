@@ -38,13 +38,10 @@ required for their respective lookups:
 | File | Service |
 |------|---------|
 | `md-api.txt` | MetaDefender Cloud |
-| `mp-api.txt` | Malpedia |
 | `ha-api.txt` | Hybrid Analysis |
-| `mw-api.txt` | MWDB |
 | `tr-api.txt` | Triage |
 | `fs-api.txt` | FileScan.IO |
 | `ms-api.txt` | Malshare |
-| `iq-api.txt` | InQuest Labs |
 
 **URL Sources**
 
@@ -105,13 +102,10 @@ MalChela reads API keys from plain text files in the `api/` subdirectory of the 
 | File | Service |
 |---|---|
 | `md-api.txt` | [MetaDefender Cloud](https://metadefender.opswat.com) |
-| `mp-api.txt` | [Malpedia](https://malpedia.caad.fkie.fraunhofer.de) |
 | `ha-api.txt` | [Hybrid Analysis](https://hybrid-analysis.com) |
-| `mw-api.txt` | [MWDB](https://mwdb.cert.pl) |
 | `tr-api.txt` | [Triage](https://tria.ge) |
 | `fs-api.txt` | [FileScan.IO](https://www.filescan.io) |
 | `ms-api.txt` | [Malshare](https://malshare.com) |
-| `iq-api.txt` | [InQuest Labs](https://labs.inquest.net) |
 
 **URL Sources**
 
@@ -195,7 +189,7 @@ Once configured, the following MalChela tools are available to Claude — 17 map
 
 | Tool | Description |
 |---|---|
-| `tiquery` | Multi-source hash lookup across MalwareBazaar, VirusTotal, AlienVault OTX, and InQuest Labs — combined results matrix with detections, families, and source links. |
+| `tiquery` | Multi-source threat-intel lookup for hashes (MalwareBazaar, VirusTotal, AlienVault OTX, MetaDefender, Hybrid Analysis, Triage, FileScan.IO, Malshare, Objective-See), URLs (VirusTotal, Google Safe Browsing, urlscan.io once opted in), and IPs (VirusTotal, OTX, GreyNoise). Combined results matrix with detections, families, and source links. Keyed sources run only with a key in `api/`. |
 | `nsrlquery` | Checks a hash (MD5 or SHA1) against the NIST NSRL known-good database. |
 
 **Hashing Tools**

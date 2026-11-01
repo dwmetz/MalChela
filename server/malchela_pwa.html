@@ -2200,9 +2200,7 @@ function renderInputPanel(id, tool) {
             Sources — Tier 2 (Registration Required)
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">
-            ${tiSourceChk('mp',  'Malpedia')}
             ${tiSourceChk('ha',  'Hybrid Analysis')}
-            ${tiSourceChk('mw',  'MWDB')}
             ${tiSourceChk('tr',  'Triage')}
             ${tiSourceChk('fs',  'FileScan.IO')}
             ${tiSourceChk('ms',  'Malshare')}
@@ -2838,7 +2836,7 @@ async function runTool(btnEl) {
       ? [['vt','vt-url'], ['urlscan','urlscan'], ['gsb','gsb']]
       : tiMode === 'ip'
       ? [['vt','vt-ip'], ['otx','otx-ip'], ['gn','gn']]
-      : ['mb','vt','otx','md','mp','ha','mw','tr','fs','ms','os'].map(id => [id, id]);
+      : ['mb','vt','otx','md','ha','tr','fs','ms','os'].map(id => [id, id]);
     const sources = sourceDefs.filter(([, domId]) => {
       const chk = document.getElementById(`ti-src-${domId}`);
       return chk && chk.checked && !chk.disabled;

@@ -2404,7 +2404,9 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     elif _lookups_offline():
         ti = "Not queried (offline mode)"
     elif tools_run.get("tiquery"):
-        ti = "No match in the queried sources"
+        keyed_ti = _configured_hash_ti()
+        ti = ("No match in: " + ", ".join(keyed_ti)) if keyed_ti \
+            else "Not queried: no threat-intel API keys configured"
     else:
         ti = "Not queried"
     lines.append(f"| **Threat Intel Matches** | {ti} |")
@@ -2414,7 +2416,10 @@ def _build_analyze_rollup(target: str, per_file_results: list, extraction_note: 
     elif _lookups_offline():
         lines.append("| **VirusTotal** | Not queried (offline mode) |")
     elif tools_run.get("tiquery") or tools_run.get("fileanalyzer"):
-        lines.append("| **VirusTotal** | No file flagged malicious |")
+        if "VirusTotal" in _configured_hash_ti():
+            lines.append("| **VirusTotal** | No file flagged malicious |")
+        else:
+            lines.append("| **VirusTotal** | Not queried: no VirusTotal API key configured |")
     platforms = []
     for k in top_keys:
         pl = _platform_for(groups[k][0]["filetype"], fmt_by_key.get(k, ""))
@@ -3487,9 +3492,7 @@ API_KEY_DEFS = [
     {"id": "otx", "name": "AlienVault OTX",     "file": "otx-api.txt", "tier": 1},
     # Tier 2
     {"id": "md",  "name": "MetaDefender Cloud", "file": "md-api.txt",  "tier": 2},
-    {"id": "mp",  "name": "Malpedia",           "file": "mp-api.txt",  "tier": 2},
     {"id": "ha",  "name": "Hybrid Analysis",    "file": "ha-api.txt",  "tier": 2},
-    {"id": "mw",  "name": "MWDB",               "file": "mw-api.txt",  "tier": 2},
     {"id": "tr",  "name": "Triage",             "file": "tr-api.txt",  "tier": 2},
     {"id": "fs",  "name": "FileScan.IO",        "file": "fs-api.txt",  "tier": 2},
     {"id": "ms",  "name": "Malshare",           "file": "ms-api.txt",  "tier": 2},
@@ -3499,6 +3502,27 @@ API_KEY_DEFS = [
     # IP sources (VirusTotal and OTX keys above also cover IP lookups)
     {"id": "gn",  "name": "GreyNoise",          "file": "gn-api.txt",  "tier": "ip"},
 ]
+
+# Keyed hash-lookup threat-intel sources. Objective-See is keyless and only
+# knows Apple malware, so on its own it can't vouch for a Windows/Linux sample.
+_HASH_TI_KEYED = ("vt", "mb", "otx", "md", "ha", "tr", "fs", "ms")
+
+
+def _configured_hash_ti() -> list:
+    """Display names of keyed hash-TI sources that have a key file, so a summary
+    can say what was actually queried instead of implying "clean"."""
+    names = []
+    for d in API_KEY_DEFS:
+        if d["id"] not in _HASH_TI_KEYED:
+            continue
+        f = API_DIR / d["file"]
+        try:
+            if f.exists() and f.read_text(encoding="utf-8-sig", errors="replace").strip():
+                names.append(d["name"])
+        except OSError:
+            pass
+    return names
+
 API_KEY_FILES = {k["id"]: k["file"] for k in API_KEY_DEFS}
 
 

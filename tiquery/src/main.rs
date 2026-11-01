@@ -204,13 +204,13 @@ fn keyless_opted_in(cfg: &config::TiQueryConfig, id: &str) -> bool {
         Some(choice) => choice,
         None => {
             cfg.sources.get(id).and_then(|s| s.enabled) == Some(true)
-                || cfg.source_api_key(id).or_else(|| common_config::resolve_api_key(api_key_name(id))).is_some()
+                || cfg.source_api_key(id).or_else(|| common_config::resolve_api_key(source_file_stem(id))).is_some()
         }
     }
 }
 
 /// api/<name>-api.txt for a source id (urlscan's optional key is url-api.txt).
-fn api_key_name(id: &str) -> &str {
+fn source_file_stem(id: &str) -> &str {
     if id == "urlscan" { "url" } else { id }
 }
 
@@ -224,7 +224,7 @@ fn keyless_notice() {
         .iter()
         .filter(|(id, _, _)| {
             common_config::keyless_choice(id).is_none()
-                && common_config::resolve_api_key(api_key_name(id)).is_none()
+                && common_config::resolve_api_key(source_file_stem(id)).is_none()
         })
         .collect();
     if pending.is_empty() {

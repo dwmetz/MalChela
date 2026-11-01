@@ -1373,6 +1373,25 @@ function ipRepNote(rep) {
   return s + '; IP address lists and public DNS resolvers are never looked up';
 }
 
+
+// Keyed hash-lookup threat-intel sources (mirrors API_KEY_DEFS in the server).
+// Objective-See is keyless and only knows Apple malware, so it isn't counted.
+const HASH_TI_KEYED = [
+  ['VirusTotal', 'vt-api.txt'], ['MalwareBazaar', 'mb-api.txt'], ['AlienVault OTX', 'otx-api.txt'],
+  ['MetaDefender Cloud', 'md-api.txt'], ['Hybrid Analysis', 'ha-api.txt'], ['Triage', 'tr-api.txt'],
+  ['FileScan.IO', 'fs-api.txt'], ['Malshare', 'ms-api.txt'],
+];
+
+// Names of keyed hash-TI sources with a key file, so a summary says what was
+// actually queried instead of implying "clean" when nothing could run.
+function configuredHashTi() {
+  return HASH_TI_KEYED.filter(([, file]) => {
+    try {
+      return readFileSync(`${MALCHELA_DIR}/api/${file}`, 'utf8').replace(/^\uFEFF/, '').trim().length > 0;
+    } catch { return false; }
+  }).map(([name]) => name);
+}
+
 function buildAnalyzeRollup(target, perFileResults, extractionNote, ipReputation = null) {
   const groups = new Map();
   const order = [];
@@ -1482,14 +1501,20 @@ function buildAnalyzeRollup(target, perFileResults, extractionNote, ipReputation
     ti = tiRows.slice(0, 8).map(r => `${mdCell(r.fam)} — ${r.src}` + (r.det ? ` ${mdCell(r.det)}` : '')).join('; ');
     if (tiRows.length > 8) ti += `; +${tiRows.length - 8} more`;
   } else if (offline) ti = 'Not queried (offline mode)';
-  else if (toolsRun.tiquery) ti = 'No match in the queried sources';
-  else ti = 'Not queried';
+  else if (toolsRun.tiquery) {
+    const keyedTi = configuredHashTi();
+    ti = keyedTi.length ? `No match in: ${keyedTi.join(', ')}` : 'Not queried: no threat-intel API keys configured';
+  } else ti = 'Not queried';
   lines.push(`| **Threat Intel Matches** | ${ti} |`);
   if (flagged.length) {
     lines.push(`| **VirusTotal** | ⚠ ${flagged.length} of ${order.length} file(s) flagged malicious: ` +
       flagged.map(f => link(f.filename, f.anchor)).join(', ') + ' |');
   } else if (offline) lines.push('| **VirusTotal** | Not queried (offline mode) |');
-  else if (toolsRun.tiquery || toolsRun.fileanalyzer) lines.push('| **VirusTotal** | No file flagged malicious |');
+  else if (toolsRun.tiquery || toolsRun.fileanalyzer) {
+    lines.push(configuredHashTi().includes('VirusTotal')
+      ? '| **VirusTotal** | No file flagged malicious |'
+      : '| **VirusTotal** | Not queried: no VirusTotal API key configured |');
+  }
   const platforms = [];
   for (const k of topKeys) {
     const pl = platformFor(groups.get(k)[0].filetype, fmtByKey.get(k));

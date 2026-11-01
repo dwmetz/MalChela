@@ -6,7 +6,7 @@ members = [ "about", "combine_yara", "extract_samples", "fileanalyzer", "hashit"
 # inherits it (version.workspace = true); the web server, PWA, and MCP plugin
 # read it from here at runtime. Bump this one line for a release.
 [workspace.package]
-version = "4.4.0"
+version = "4.4.1"
 
 [patch.crates-io]
 serde_yml = { path = "vendor/serde_yml" }

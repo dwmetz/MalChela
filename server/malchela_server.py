@@ -469,7 +469,30 @@ def _case_dir(case_name: str) -> Optional[Path]:
     return Path(candidate)
 
 
+def _url_case_dir(case_name: str) -> Optional[Path]:
+    """Case directory for a case name taken from a URL or request, or None if
+    the name isn't already a clean case name (no silent rewriting: a name
+    that sanitizing would change is rejected, not redirected)."""
+    if not case_name or _sanitize_case_name(case_name) != case_name:
+        return None
+    return _case_dir(case_name)
+
+
+def _child_dir(parent: Path, name: str) -> Optional[Path]:
+    """parent/name for a single path component taken from a request (a tool
+    name, say), or None if it isn't a clean name or would leave parent."""
+    if not name or _sanitize_case_name(name) != name:
+        return None
+    root      = os.path.abspath(parent)
+    candidate = os.path.abspath(os.path.join(root, name))
+    if not candidate.startswith(root + os.sep):
+        return None
+    return Path(candidate)
+
+
 _CASE_NAME_RE = re.compile(r'[^\w\-.]')
+# Protocols TShark accepts for --export-objects.
+_TSHARK_EXPORT_PROTOCOLS = {"dicom", "ftp-data", "http", "imf", "smb", "tftp"}
 _SAFE_ARG_RE  = re.compile(r'^[^\|&;`$<>!]+$')
 
 def _sanitize_case_name(name: str) -> Optional[str]:
@@ -2572,7 +2595,7 @@ def hashit():
     """Generate MD5, SHA1, SHA256 hashes for a single file."""
     data        = request.json or {}
     path        = safe_path(data.get("path", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -2594,7 +2617,7 @@ def hashcheck():
     data        = request.json or {}
     hash_value  = data.get("hash", "").strip()
     hashset     = safe_path(data.get("hashset", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -2626,7 +2649,7 @@ def mstrings():
     """Extract strings, map to MITRE ATT&CK, identify IOCs."""
     data        = request.json or {}
     path        = safe_path(data.get("path", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -2647,7 +2670,7 @@ def plist_analyzer():
     """Parse macOS .plist files and .app bundle Info.plist for malware indicators."""
     data        = request.json or {}
     path        = safe_path(data.get("path", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -2668,7 +2691,7 @@ def macho_info():
     """Parse Mach-O binary: architecture, linked libraries, sections with entropy, stripped symbols."""
     data        = request.json or {}
     path        = safe_path(data.get("path", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -2689,7 +2712,7 @@ def codesign_check():
     """Inspect macOS code signing: signature type, team ID, entitlements, ad-hoc/unsigned detection."""
     data        = request.json or {}
     path        = safe_path(data.get("path", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -2784,7 +2807,7 @@ def mzcount():
     """Recursively count files by format in a directory."""
     data        = request.json or {}
     path        = safe_path(data.get("path", ""))
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     # mzcount supports txt (-t) and md (-m) only; map json to md
     if save_format not in ("txt", "md"):
@@ -2824,7 +2847,7 @@ def nsrlquery():
     """Query an MD5 hash against the NSRL database."""
     data        = request.json or {}
     hash_value  = data.get("hash", "").strip()
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     save_format = data.get("save_format", "md").lower()
     if save_format not in _FMT_FLAG:
         save_format = "md"
@@ -3154,9 +3177,10 @@ def tshark():
     include_headers= data.get("include_headers", False)
     export_objects = data.get("export_objects", False)
     export_protocol= data.get("export_protocol", "http").strip()
+    if export_objects and export_protocol not in _TSHARK_EXPORT_PROTOCOLS:
+        return jsonify({"success": False, "error": "Unsupported export protocol"}), 400
     extra_args     = data.get("extra_args", "").strip()
-    case_name      = data.get("case_name", "").strip()
-
+    case_name      = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     if not pcap_path:
         return jsonify({"success": False, "error": "PCAP path required"}), 400
     if not pcap_path.exists():
@@ -3171,7 +3195,7 @@ def tshark():
     if export_objects:
         # Route to case folder if case is active, else saved_output/tshark
         if case_name:
-            export_dir = CASES_DIR / case_name / "tshark" / "exports" / export_protocol
+            export_dir = _case_dir(case_name) / "tshark" / "exports" / export_protocol
         else:
             export_dir = OUTPUT_DIR / "tshark" / "exports" / export_protocol
         export_dir.mkdir(parents=True, exist_ok=True)
@@ -3236,7 +3260,7 @@ def run_vol3():
     plugin      = data.get("plugin", "").strip()
     plugin_args = data.get("plugin_args", {})
     dump_dir    = data.get("dump_dir", "").strip()
-    case_name   = data.get("case_name", "").strip()
+    case_name   = _sanitize_case_name(data.get("case_name", "").strip()) or ""
     extra_args  = data.get("extra_args", "").strip()
 
     if not image_path:
@@ -3262,7 +3286,7 @@ def run_vol3():
                 d.mkdir(parents=True, exist_ok=True)
                 resolved_dump_dir = str(d)
         elif case_name:
-            d = CASES_DIR / case_name / "vol3" / plugin
+            d = _case_dir(case_name) / "vol3" / plugin
             d.mkdir(parents=True, exist_ok=True)
             resolved_dump_dir = str(d)
         else:
@@ -3356,7 +3380,7 @@ def yara_scan():
         try:
             parsed = _shlex.split(extra_args)
         except ValueError as e:
-            return jsonify({"success": False, "error": f"Arguments: {e}"}), 400
+            return jsonify({"success": False, "error": "Arguments: unbalanced quotes or escape"}), 400
         # --case/--save come from the case selector. Refuse them here rather
         # than drop the flag and leave its value behind as a stray path.
         if any(a.startswith(("--case", "--save")) for a in parsed):
@@ -3602,7 +3626,9 @@ def create_case():
     if not name:
         return jsonify({"success": False, "error": "Case name is required"}), 400
 
-    case_dir = CASES_DIR / name
+    case_dir = _case_dir(name)
+    if case_dir is None:
+        return jsonify({"success": False, "error": "Invalid case name"}), 400
     if case_dir.exists():
         return jsonify({"success": False, "error": "Case already exists"}), 409
 
@@ -3625,10 +3651,8 @@ def create_case():
 @app.route("/cases/<case_name>", methods=["GET"])
 def get_case(case_name):
     """Get case details including saved outputs."""
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
@@ -3655,12 +3679,8 @@ def get_case(case_name):
 
 
 def _case_dir_checked(case_name: str):
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
-        return None
-    return case_dir if case_dir.is_dir() else None
+    case_dir = _url_case_dir(case_name)
+    return case_dir if case_dir is not None and case_dir.is_dir() else None
 
 
 @app.route("/cases/<case_name>/mitre", methods=["GET"])
@@ -3733,10 +3753,8 @@ def mitre_layer_from_matrix():
 @app.route("/cases/<case_name>", methods=["PATCH"])
 def update_case(case_name):
     """Update case metadata (description, tags, status)."""
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
@@ -3762,10 +3780,8 @@ def update_case(case_name):
 @app.route("/cases/<case_name>/delete", methods=["POST"])
 def delete_case(case_name):
     """Permanently delete a case directory."""
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
@@ -3779,10 +3795,8 @@ def delete_case(case_name):
 @app.route("/cases/<case_name>/archive", methods=["POST"])
 def archive_case(case_name):
     """Zip a case to saved_output/case_archives/ and return path info for optional download."""
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
@@ -3841,7 +3855,9 @@ def import_case():
             if len(top_dirs) != 1:
                 return jsonify({"success": False, "error": "Zip must contain exactly one top-level case folder"}), 400
             case_name = top_dirs.pop()
-            dest = CASES_DIR / case_name
+            dest = _url_case_dir(case_name)
+            if dest is None:
+                return jsonify({"success": False, "error": "Zip's top-level folder is not a valid case name"}), 400
             if dest.exists():
                 if not overwrite:
                     return jsonify({"success": False, "error": f"Case '{case_name}' already exists", "conflict": True, "case_name": case_name}), 409
@@ -3873,10 +3889,8 @@ def save_to_case(case_name):
     Supports format: txt (default), json, md
     Structure: cases/<case_name>/<tool>/report_<timestamp>.<ext>
     """
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
@@ -3890,7 +3904,9 @@ def save_to_case(case_name):
         fmt = "txt"
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    tool_dir  = case_dir / tool
+    tool_dir  = _child_dir(case_dir, str(tool))
+    if tool_dir is None:
+        return jsonify({"success": False, "error": "Invalid tool name"}), 400
     tool_dir.mkdir(parents=True, exist_ok=True)
     filename  = f"report_{timestamp}.{fmt}"
     filepath  = tool_dir / filename
@@ -4005,10 +4021,8 @@ def search_cases():
     return jsonify({"success": True, "results": results, "query": query})
 def get_case_notes(case_name):
     """Get case notes file list for Notebook save-to-case browser."""
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
@@ -4022,10 +4036,8 @@ def append_case_notes(case_name):
     Append notebook content to a case notes file.
     Creates notes.md if no filename specified.
     """
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     if not case_dir.exists():
         return jsonify({"success": False, "error": "Case not found"}), 404
@@ -4071,22 +4083,19 @@ def get_case_output(case_name):
     Read a saved output file from a case.
     Accepts path as query param to support subdirectory paths e.g. tiquery/report_xyz.txt
     """
-    case_dir = CASES_DIR / case_name
-    try:
-        case_dir.resolve().relative_to(CASES_DIR.resolve())
-    except ValueError:
+    case_dir = _url_case_dir(case_name)
+    if case_dir is None:
         return jsonify({"success": False, "error": "Invalid case name"}), 400
     filename = request.args.get("path", "")
     if not filename:
         return jsonify({"success": False, "error": "Missing path parameter"}), 400
 
-    filepath = (case_dir / filename).resolve()
-
     # Jail check — ensure path stays within the case directory
-    try:
-        filepath.relative_to(case_dir.resolve())
-    except ValueError:
+    case_root = os.path.realpath(case_dir)
+    resolved  = os.path.realpath(os.path.join(case_root, filename))
+    if not resolved.startswith(case_root + os.sep):
         return jsonify({"success": False, "error": "Invalid path"}), 403
+    filepath = Path(resolved)
 
     if not filepath.exists():
         return jsonify({"success": False, "error": "File not found"}), 404

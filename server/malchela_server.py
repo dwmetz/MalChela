@@ -139,6 +139,17 @@ def _read_malchela_version() -> str:
 
 MALCHELA_VERSION = _read_malchela_version()
 BINARY_DIR      = MALCHELA_ROOT / "target" / "release"
+
+# Cargo names binaries tool.exe on Windows. Every MalChela binary lookup goes
+# through tool_bin() so the same tool names work on macOS, Linux, and Windows.
+_EXE_SUFFIX = ".exe" if os.name == "nt" else ""
+
+
+def tool_bin(name: str) -> Path:
+    """Path of a cargo-built MalChela tool in target/release (adds .exe on Windows)."""
+    if _EXE_SUFFIX and not name.lower().endswith(_EXE_SUFFIX):
+        return BINARY_DIR / (name + _EXE_SUFFIX)
+    return BINARY_DIR / name
 API_DIR         = MALCHELA_ROOT / "api"
 YARA_DIR        = MALCHELA_ROOT / "yara_rules"
 OUTPUT_DIR      = MALCHELA_ROOT / "saved_output"
@@ -162,7 +173,7 @@ def find_tool(binary: str) -> Optional[str]:
     3. Absolute path (if binary is a full path)
     """
     # MalChela cargo binary
-    cargo_path = BINARY_DIR / binary
+    cargo_path = tool_bin(binary)
     if cargo_path.exists():
         return str(cargo_path)
     # PATH search
@@ -213,7 +224,7 @@ def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
     Run a MalChela binary from the project root.
     All binaries must be invoked from MALCHELA_ROOT per project requirements.
     """
-    binary_path = BINARY_DIR / binary
+    binary_path = tool_bin(binary)
     if not binary_path.exists():
         return {"success": False, "error": f"Binary not found: {binary}"}
 
@@ -226,7 +237,7 @@ def run_binary(binary: str, args: List[str], timeout: int = 120) -> dict:
             cmd,  # shell=False (list form) — not vulnerable to shell injection
             cwd=str(MALCHELA_ROOT),  # Required — resolves API keys, YARA rules, Sigma rules
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             timeout=timeout,
             env=env,
         )
@@ -533,7 +544,7 @@ def health():
         "nsrlquery", "combine_yara", "strings_to_yara", "extract_samples",
         "tiquery", "about", "MITRE_lookup",
     ]
-    available = {b: (BINARY_DIR / b).exists() for b in binaries}
+    available = {b: (tool_bin(b)).exists() for b in binaries}
     return jsonify({
         "status": "ok",
         "version": MALCHELA_VERSION,
@@ -583,7 +594,7 @@ def get_tools_yaml():
 
             available = False
             if exec_type == "cargo":
-                available = (BINARY_DIR / binary).exists()
+                available = (tool_bin(binary)).exists()
             else:
                 available = find_tool(binary) is not None
 
@@ -794,7 +805,7 @@ def run_generic_tool():
 
 def _run_interactive(binary: str, stdin_input: str = "\n", timeout: int = 15) -> dict:
     """Run an interactive binary, send stdin to satisfy prompts, return output."""
-    binary_path = BINARY_DIR / binary
+    binary_path = tool_bin(binary)
     if not binary_path.exists():
         return {"success": False, "error": f"Binary not found: {binary}"}
     try:
@@ -803,7 +814,7 @@ def _run_interactive(binary: str, stdin_input: str = "\n", timeout: int = 15) ->
             cwd=str(MALCHELA_ROOT),
             input=stdin_input,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             timeout=timeout
         )
         output = result.stdout + (f"\n{result.stderr}" if result.stderr.strip() else "")
@@ -892,7 +903,7 @@ def update_check():
         remote_update = subprocess.run(
             ["git", "remote", "update"],
             cwd=str(MALCHELA_ROOT),
-            capture_output=True, text=True, timeout=8,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=8,
         )
         if remote_update.returncode != 0:
             return jsonify({"success": True, "status": "unknown"})
@@ -900,7 +911,7 @@ def update_check():
         status = subprocess.run(
             ["git", "status", "-uno"],
             cwd=str(MALCHELA_ROOT),
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
         )
         if "branch is behind" in status.stdout:
             return jsonify({"success": True, "status": "behind"})
@@ -967,7 +978,7 @@ def home_stats():
                 exec_type = tool.get("exec_type", "cargo")
                 if exec_type == "cargo":
                     malchela_total += 1
-                    if (BINARY_DIR / binary).exists():
+                    if (tool_bin(binary)).exists():
                         malchela_available += 1
                 else:
                     integrations_total += 1
@@ -977,7 +988,7 @@ def home_stats():
             pass
     for _name, binary in BUILTIN_TOOLS:
         malchela_total += 1
-        if (BINARY_DIR / binary).exists():
+        if (tool_bin(binary)).exists():
             malchela_available += 1
 
     return jsonify({
@@ -996,7 +1007,7 @@ def about_screen():
     Run the standalone 'about' binary, but replace its art output with the
     canonical art string (same as home) to ensure consistent rendering.
     """
-    binary_path = BINARY_DIR / "about"
+    binary_path = tool_bin("about")
     if not binary_path.exists():
         return jsonify({"success": False, "error": "about binary not found"})
 
@@ -1023,7 +1034,7 @@ def about_screen():
             cwd=str(MALCHELA_ROOT),
             input="\n",
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             timeout=15
         )
         raw = result.stdout + (f"\n{result.stderr}" if result.stderr.strip() else "")
@@ -3067,7 +3078,7 @@ def tiquery():
         result_holder = {}
 
         def run_and_track():
-            binary_path = BINARY_DIR / "tiquery"
+            binary_path = tool_bin("tiquery")
             if not binary_path.exists():
                 result_holder['result'] = {"success": False, "error": "tiquery binary not found"}
                 return
@@ -3222,7 +3233,7 @@ def tshark():
         result = subprocess.run(
             [tshark_bin] + args,
             cwd=str(MALCHELA_ROOT),
-            capture_output=True, text=True, timeout=300
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300
         )
         stdout = result.stdout.strip()
         stderr = result.stderr.strip()
@@ -3324,7 +3335,7 @@ def run_vol3():
         result = subprocess.run(
             [vol3] + args,
             cwd=str(MALCHELA_ROOT),
-            capture_output=True, text=True, timeout=600
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600
         )
         stdout = result.stdout.strip()
         stderr = result.stderr.strip()
@@ -3434,7 +3445,7 @@ def yarax():
         result = subprocess.run(
             [yr] + args,
             cwd=str(MALCHELA_ROOT),
-            capture_output=True, text=True, timeout=300
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300
         )
         stdout = _strip_cli_noise(result.stdout.strip())
         stderr = result.stderr.strip()

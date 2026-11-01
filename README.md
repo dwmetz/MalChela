@@ -108,6 +108,8 @@ chmod +x release.sh
 ./release.sh  # Builds all programs in release mode (recommended)
 ```
 
+On Windows (native, PowerShell or cmd), use `release.ps1` or `release.cmd` instead. See [Windows](docs/install.md#windows-native).
+
 If you cloned MalChela before 17-Apr-2026, you may see a diverging branches error when pulling. Run `git fetch origin && git reset --hard origin/main` to resync. This was a one-time history rewrite to remove a large file.
 
 <h3>Run:</h3>
@@ -118,14 +120,16 @@ On first run, execute the setup script after building the binaries:
 
 ```
 cd server
-./setup-server.sh
+./setup_server.sh
 ```
 
 Then start the server:
 
 ```
-./start-server.sh
+./start_server.sh
 ```
+
+On Windows, run `server\start_server.cmd` (or `.\server\start_server.ps1` in PowerShell). Setup is optional: the server finds the MalChela folder on its own.
 
 The PWA will be accessible from any browser on the local network.
 

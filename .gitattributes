@@ -1,0 +1,5 @@
+# Keep script line endings correct regardless of core.autocrlf on the clone.
+*.sh  text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf

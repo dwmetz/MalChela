@@ -15,7 +15,8 @@ plugins:
   - search
   - with-pdf:
       output_path: "pdf/user-guide.pdf"
-      cover_subtitle: "4.4.1"
+      # Set by build_pdf.sh from [workspace.package] version in Cargo.toml.
+      cover_subtitle: !ENV [MALCHELA_VERSION, "dev"]
       cover_logo: "images/malchela_steampunk.png"
       exclude_pages:
         - "^$"

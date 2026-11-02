@@ -50,6 +50,8 @@ required for their respective lookups:
 | `url-api.txt` | urlscan.io |
 | `gsb-api.txt` | Google Safe Browsing |
 
+ScanMalware (URL lookups) needs no key and is opt-in, like urlscan.io.
+
 MalChela will prompt you on first run if a required key is missing.
 
 ### 4. Install the plugin
@@ -113,6 +115,8 @@ MalChela reads API keys from plain text files in the `api/` subdirectory of the 
 |---|---|
 | `url-api.txt` | [urlscan.io](https://urlscan.io) |
 | `gsb-api.txt` | [Google Safe Browsing](https://safebrowsing.google.com) |
+
+ScanMalware (URL lookups) needs no key and is opt-in, like urlscan.io.
 
 The easiest way to configure keys is via MalChela's built-in config tool:
 

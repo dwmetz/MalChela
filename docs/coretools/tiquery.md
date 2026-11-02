@@ -33,6 +33,9 @@ Threat Intel Query (`tiquery`) is a multi-source threat intelligence lookup tool
 | vt      | VirusTotal (URL API)    | Yes          |
 | urlscan | urlscan.io              | Optional (raises rate limits). **Opt-in**, see below |
 | gsb     | Google Safe Browsing    | Yes          |
+| sm      | ScanMalware             | No. **Opt-in**, see below |
+
+ScanMalware reports the verdict from the newest completed scan of that exact URL in its public scan archive (trailing slash and `#fragment` ignored), with the scanner's risk factors as tags. Only the host name is sent; the URL itself is matched locally, and a new scan is never submitted. A scan of another page that merely redirected to this URL is never used, and a URL not among the newest 100 completed scans of its domain shows as NOT FOUND. `--json` output also carries the scan ID, the page's final URL after redirects, the risk level, the scanner's confidence and the scan time.
 
 ### Supported Sources — IP Lookups
 
@@ -57,10 +60,11 @@ Either way the result is `<first 16 of sha256>.zip`, password **`infected`**, in
 
 ### Keyless sources are opt-in
 
-Some sources need no API key. If they ran by default, every lookup would go to a third party without anyone deciding to send it. Sources that send what you look up (currently **urlscan.io**, which receives the full URL) are therefore **off until you opt in**. Objective-See stays on: it downloads its public catalogue and matches hashes locally, so nothing about your sample leaves the machine.
+Some sources need no API key. If they ran by default, every lookup would go to a third party without anyone deciding to send it. Sources that send what you look up (currently **urlscan.io**, which receives the full URL, and **ScanMalware**, which receives the host name) are therefore **off until you opt in**. Objective-See stays on: it downloads its public catalogue and matches hashes locally, so nothing about your sample leaves the machine.
 
 ```bash
 tiquery --enable-keyless urlscan     # opt in (saved)
+tiquery --enable-keyless sm          # the same for ScanMalware
 tiquery --disable-keyless urlscan    # opt out (saved; also silences the notice)
 tiquery https://example.com --sources urlscan   # one-off use without saving a choice
 ```
@@ -77,6 +81,8 @@ Until a choice is recorded, URL lookups print a short notice listing each opt-in
 
 Either way, the full URL is sent and nothing is submitted for a new scan. If you're working a case where lookups shouldn't be attributable to you, leave urlscan opted out, run lookups from a dedicated analysis egress, or use Offline Mode. Offline Mode overrides everything.
 
+**What happens to a ScanMalware lookup.** tiquery makes two read-only calls (`/api/v1/domains/{host}/scans`, then `/api/v1/scan/{id}/summary`) and never submits a scan. ScanMalware's operator states that these lookups do not queue a scan or crawl of the host, and that the host name does not appear in its public statistics or in any public or shared list. The request, which shows the host name, is logged: web server logs (with your IP address and user agent) are kept for 14 days, application logs for 30 days, and records of failed requests (with IP address and user agent) for 7 days, per its [privacy policy](https://scanmalware.com/privacy). Requests pass through Cloudflare. If a case forbids sharing indicators with third parties, leave `sm` opted out or use Offline Mode.
+
 URLs whose host is a private, loopback, or reserved IP address, a single-label name, or an internal suffix (`.local`, `.lan`, `.internal`, `.corp`, `.home.arpa`, and so on) are refused before any source is queried.
 
 ---
@@ -87,7 +93,7 @@ URLs whose host is a private, loopback, or reserved IP address, a single-label n
 # Hash lookup — queries all hash sources with a configured API key
 tiquery <hash>
 
-# URL lookup — queries VirusTotal (URL) and Google Safe Browsing; urlscan.io too once opted in
+# URL lookup — queries VirusTotal (URL) and Google Safe Browsing; urlscan.io and ScanMalware too once opted in
 tiquery https://example.com/path
 
 # IP lookup — queries VirusTotal (IP), AlienVault OTX, and GreyNoise
@@ -213,7 +219,7 @@ The MalChela web interface's Threat Intel Query panel offers five input modes, s
 
 - **Single Hash** — paste a hash or click **Browse…** to pick a file; the web interface computes the file's SHA256 and populates the hash field automatically.
 - **Bulk Lookup** — as described above, for batches of hashes in a file.
-- **URL** — paste an `http://` or `https://` URL to query VirusTotal, Google Safe Browsing, and (once opted in) urlscan.io in parallel. The urlscan.io checkbox reflects your saved choice, and toggling it saves the new choice.
+- **URL** — paste an `http://` or `https://` URL to query VirusTotal, Google Safe Browsing, and (once opted in) urlscan.io and ScanMalware in parallel. The urlscan.io and ScanMalware checkboxes reflect your saved choices, and toggling one saves the new choice.
 - **IP** — paste an IPv4 or IPv6 address (defanged is fine: `1.2.3[.]4`) to query VirusTotal, AlienVault OTX, and GreyNoise.  Because an IP being *known* to a source isn't a verdict (8.8.8.8 is in every one), each row shows what that source concluded instead of FOUND: **FLAGGED** (VirusTotal engines or a GreyNoise malicious scanner), **IN *N* PULSES** (OTX: discussed, which is context), or **CLEAN** / **KNOWN BENIGN** (no engine detections, or a GreyNoise RIOT business service such as a CDN or public DNS).
 - **QR Code** — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the web interface decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.
 

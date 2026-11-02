@@ -608,9 +608,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#windows-notes" class="md-nav__link">
+  <a href="#windows-native" class="md-nav__link">
     <span class="md-ellipsis">
-      Windows Notes
+      Windows (native)
     </span>
   </a>
   
@@ -1810,9 +1810,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#windows-notes" class="md-nav__link">
+  <a href="#windows-native" class="md-nav__link">
     <span class="md-ellipsis">
-      Windows Notes
+      Windows (native)
     </span>
   </a>
   
@@ -1892,10 +1892,10 @@ cd MalChela
 <p><strong>PWA (recommended)</strong></p>
 <p>On first run, execute the setup script after building the binaries:</p>
 <pre><code class="language-bash">cd server
-./setup-server.sh
+./setup_server.sh
 </code></pre>
 <p>Then start the server:</p>
-<pre><code class="language-bash">./start-server.sh
+<pre><code class="language-bash">./start_server.sh
 </code></pre>
 <p>The PWA will be accessible from any browser on the local network.</p>
 <p><strong>CLI</strong></p>
@@ -1905,11 +1905,21 @@ cd MalChela
 <blockquote>
 <p>⚠️ <strong>Important:</strong> MalChela binaries must be invoked from the project root directory. Always use <code>cd /path/to/MalChela &amp;&amp; ./target/release/&lt;binary&gt;</code> rather than calling the binary directly from another path. This is required for correct resolution of API key files, YARA rules, and Sigma rules — all of which are resolved relative to the project root. API keys are read exclusively from files under <code>api/</code>; environment variables are not supported.</p>
 </blockquote>
-<h3 id="windows-notes">Windows Notes</h3>
+<h3 id="windows-native">Windows (native)</h3>
+<p>As of v4.5, MalChela builds and runs natively on Windows, with no WSL required. You need Rust with the MSVC toolchain (from <a href="https://rustup.rs">rustup.rs</a>, plus the Visual Studio C++ build tools it prompts for), Git, and Python 3 (from <a href="https://www.python.org">python.org</a> with "Add python.exe to PATH" ticked, or <code>winget install Python.Python.3.12</code>).</p>
+<p>Build, from the MalChela folder in PowerShell or cmd:</p>
+<pre><code class="language-powershell">.\release.ps1            # or: release.cmd   (add -Unattended to skip the prompt)
+</code></pre>
+<p>or build the whole workspace in one go with <code>cargo build --release --workspace</code>. Binaries land in <code>target\release\</code> as <code>.exe</code> files.</p>
+<p>Start the PWA server:</p>
+<pre><code class="language-powershell">server\start_server.cmd  # or, in PowerShell: .\server\start_server.ps1
+</code></pre>
+<p>The first run creates <code>server\venv</code> and installs Flask, flask-cors, and PyYAML. No <code>server_config.yaml</code> is needed: the server finds the MalChela folder relative to itself and uses your user folder as the file-browser root. To change the port or browser root, create <code>server\server_config.yaml</code> (see the setup steps above for the fields) or set <code>MALCHELA_PORT</code> / <code>MALCHELA_BROWSER_ROOT</code>.</p>
 <ul>
-<li>Best experience via WSL2.</li>
-<li>As of October 2025, both the MalChela CLI and PWA operate on Windows under WSL2.</li>
-<li>The web interface is accessible via any browser on Windows (WSL2 recommended for running the server).</li>
+<li>The <code>.cmd</code> wrappers run the PowerShell scripts with <code>-ExecutionPolicy Bypass</code>, so they work even where <code>.ps1</code> scripts are blocked by policy.</li>
+<li>External tools (capa, YARA, tshark, and so on) are found through your <code>PATH</code>.</li>
+<li>macOS-specific tools (Code Sign Check, Mach-O Info) build on Windows but are of limited use there.</li>
+<li>WSL2 still works if you prefer a Linux environment.</li>
 </ul>
 <h3 id="whats-next">What's Next</h3>
 <ul>

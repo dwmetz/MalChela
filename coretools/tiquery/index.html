@@ -1048,6 +1048,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#downloading-samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Downloading samples
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keyless-sources-are-opt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      Keyless sources are opt-in
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
     <span class="md-ellipsis">
       🔧 CLI Syntax
@@ -1815,6 +1833,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#downloading-samples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Downloading samples
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keyless-sources-are-opt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      Keyless sources are opt-in
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cli-syntax" class="md-nav__link">
     <span class="md-ellipsis">
       🔧 CLI Syntax
@@ -1983,15 +2019,21 @@
 <tr>
 <td>urlscan</td>
 <td>urlscan.io</td>
-<td>Optional (raises rate limits)</td>
+<td>Optional (raises rate limits). <strong>Opt-in</strong>, see below</td>
 </tr>
 <tr>
 <td>gsb</td>
 <td>Google Safe Browsing</td>
 <td>Yes</td>
 </tr>
+<tr>
+<td>sm</td>
+<td>ScanMalware</td>
+<td>No. <strong>Opt-in</strong>, see below</td>
+</tr>
 </tbody>
 </table>
+<p>ScanMalware reports the verdict from the newest completed scan of that exact URL in its public scan archive (trailing slash and <code>#fragment</code> ignored), with the scanner's risk factors as tags. Only the host name is sent; the URL itself is matched locally, and a new scan is never submitted. A scan of another page that merely redirected to this URL is never used, and a URL not among the newest 100 completed scans of its domain shows as NOT FOUND. <code>--json</code> output also carries the scan ID, the page's final URL after redirects, the risk level, the scanner's confidence and the scan time.</p>
 <h3 id="supported-sources-ip-lookups">Supported Sources — IP Lookups</h3>
 <table>
 <thead>
@@ -2025,12 +2067,57 @@
 </table>
 <p>Private, loopback, link-local, multicast, documentation, and other non-routable addresses are refused before any source is queried, so they never spend rate-limited quota.  A free VirusTotal key allows 4 lookups a minute and 500 a day.</p>
 <p>All sources with a configured API key are queried automatically. No flag is needed to enable Tier 2 sources — if the key file exists, the source is included. When the input is a URL or an IP address, only the sources for that input type are queried. Pass <code>--sources</code> to restrict the query to specific sources.</p>
+<h3 id="downloading-samples">Downloading samples</h3>
+<p><code>-d</code> / <code>--download</code> (SHA256 only) saves the sample after the lookup:</p>
+<ol>
+<li><strong>MalwareBazaar</strong>, if it has the sample (needs <code>api/mb-api.txt</code>).</li>
+<li><strong>Triage</strong>, if MalwareBazaar doesn't have it or the download fails (needs <code>api/tr-api.txt</code>). Triage serves the raw file, so tiquery checks its SHA256 against the hash you asked for and then wraps it in a zip with the usual password before writing anything to disk.</li>
+</ol>
+<p>Either way the result is <code>&lt;first 16 of sha256&gt;.zip</code>, password <strong><code>infected</code></strong>, in <code>saved_output/tiquery/downloads/</code> (or the case's <code>tiquery/downloads/</code> folder with <code>--case</code>). The sample is never written to disk unwrapped. Only public samples can be downloaded.</p>
+<h3 id="keyless-sources-are-opt-in">Keyless sources are opt-in</h3>
+<p>Some sources need no API key. If they ran by default, every lookup would go to a third party without anyone deciding to send it. Sources that send what you look up (currently <strong>urlscan.io</strong>, which receives the full URL, and <strong>ScanMalware</strong>, which receives the host name) are therefore <strong>off until you opt in</strong>. Objective-See stays on: it downloads its public catalogue and matches hashes locally, so nothing about your sample leaves the machine.</p>
+<pre><code class="language-bash">tiquery --enable-keyless urlscan     # opt in (saved)
+tiquery --enable-keyless sm          # the same for ScanMalware
+tiquery --disable-keyless urlscan    # opt out (saved; also silences the notice)
+tiquery https://example.com --sources urlscan   # one-off use without saving a choice
+</code></pre>
+<p>Until a choice is recorded, URL lookups print a short notice listing each opt-in source and what it receives. The choice is saved in <code>api/keyless_sources.txt</code> (<code>urlscan=on</code> / <code>urlscan=off</code>) and shared by the CLI, the web interface (the source checkbox, or Configuration → Keyless threat-intel sources), and the Claude plugin. Configuring an optional key for the source (for urlscan, <code>api/url-api.txt</code>) also counts as opting in unless you've opted out.</p>
+<p><strong>urlscan.io with or without a key.</strong> urlscan.io's search API answers both anonymous and authenticated requests, so its key is optional:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Without a key</th>
+<th>With a key (free account)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rate limit</td>
+<td>Low; busy sessions may see <code>rate limited</code> errors</td>
+<td>Higher</td>
+</tr>
+<tr>
+<td>Results</td>
+<td>Public scans only</td>
+<td>Public scans, plus your own private scans</td>
+</tr>
+<tr>
+<td>Attribution</td>
+<td>Lookups are tied to your public IP address</td>
+<td>Lookups are also tied to your urlscan.io account</td>
+</tr>
+</tbody>
+</table>
+<p>Either way, the full URL is sent and nothing is submitted for a new scan. If you're working a case where lookups shouldn't be attributable to you, leave urlscan opted out, run lookups from a dedicated analysis egress, or use Offline Mode. Offline Mode overrides everything.</p>
+<p><strong>What happens to a ScanMalware lookup.</strong> tiquery makes two read-only calls (<code>/api/v1/domains/{host}/scans</code>, then <code>/api/v1/scan/{id}/summary</code>) and never submits a scan. ScanMalware's operator states that these lookups do not queue a scan or crawl of the host, and that the host name does not appear in its public statistics or in any public or shared list. The request, which shows the host name, is logged: web server logs (with your IP address and user agent) are kept for 14 days, application logs for 30 days, and records of failed requests (with IP address and user agent) for 7 days, per its <a href="https://scanmalware.com/privacy">privacy policy</a>. Requests pass through Cloudflare. If a case forbids sharing indicators with third parties, leave <code>sm</code> opted out or use Offline Mode.</p>
+<p>URLs whose host is a private, loopback, or reserved IP address, a single-label name, or an internal suffix (<code>.local</code>, <code>.lan</code>, <code>.internal</code>, <code>.corp</code>, <code>.home.arpa</code>, and so on) are refused before any source is queried.</p>
 <hr />
 <h3 id="cli-syntax">🔧 CLI Syntax</h3>
 <pre><code class="language-bash"># Hash lookup — queries all hash sources with a configured API key
 tiquery &lt;hash&gt;
 
-# URL lookup — queries VirusTotal (URL), urlscan.io, and Google Safe Browsing
+# URL lookup — queries VirusTotal (URL) and Google Safe Browsing; urlscan.io and ScanMalware too once opted in
 tiquery https://example.com/path
 
 # IP lookup — queries VirusTotal (IP), AlienVault OTX, and GreyNoise
@@ -2056,7 +2143,7 @@ tiquery &lt;hash&gt; -o -t
 # Save report to a case folder
 tiquery &lt;hash&gt; -o -t --case Case123
 
-# Download sample from MalwareBazaar (SHA256 only)
+# Download sample (SHA256 only): MalwareBazaar first, then Triage
 tiquery &lt;hash&gt; -d
 
 # Bulk lookup — process multiple hashes from a file
@@ -2124,7 +2211,7 @@ api/gn-api.txt        # GreyNoise (IP lookups; a free Community key works)
 <ul>
 <li><strong>Single Hash</strong> — paste a hash or click <strong>Browse…</strong> to pick a file; the web interface computes the file's SHA256 and populates the hash field automatically.</li>
 <li><strong>Bulk Lookup</strong> — as described above, for batches of hashes in a file.</li>
-<li><strong>URL</strong> — paste an <code>http://</code> or <code>https://</code> URL to query VirusTotal, urlscan.io, and Google Safe Browsing in parallel.</li>
+<li><strong>URL</strong> — paste an <code>http://</code> or <code>https://</code> URL to query VirusTotal, Google Safe Browsing, and (once opted in) urlscan.io and ScanMalware in parallel. The urlscan.io and ScanMalware checkboxes reflect your saved choices, and toggling one saves the new choice.</li>
 <li><strong>IP</strong> — paste an IPv4 or IPv6 address (defanged is fine: <code>1.2.3[.]4</code>) to query VirusTotal, AlienVault OTX, and GreyNoise.  Because an IP being <em>known</em> to a source isn't a verdict (8.8.8.8 is in every one), each row shows what that source concluded instead of FOUND: <strong>FLAGGED</strong> (VirusTotal engines or a GreyNoise malicious scanner), <strong>IN <em>N</em> PULSES</strong> (OTX: discussed, which is context), or <strong>CLEAN</strong> / <strong>KNOWN BENIGN</strong> (no engine detections, or a GreyNoise RIOT business service such as a CDN or public DNS).</li>
 <li><strong>QR Code</strong> — pick a QR code image (PNG/JPG/GIF/BMP/WebP); the web interface decodes the embedded URL and populates the URL field for review, then runs the standard URL lookup pipeline. Useful for triaging "quishing" (QR phishing) samples from emails and screenshots.</li>
 </ul>

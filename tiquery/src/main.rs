@@ -69,7 +69,7 @@ struct Args {
     #[arg(long, value_name = "IMAGE", conflicts_with = "hash")]
     qr: Option<String>,
 
-    /// Opt in to keyless source(s) that send lookups to a third party (saved): urlscan
+    /// Opt in to keyless source(s) that send lookups to a third party (saved): urlscan, sm
     #[arg(long, value_delimiter = ',', value_name = "SRC")]
     enable_keyless: Vec<String>,
 

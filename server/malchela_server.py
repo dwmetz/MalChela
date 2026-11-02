@@ -3497,7 +3497,8 @@ API_KEY_DEFS = [
     {"id": "fs",  "name": "FileScan.IO",        "file": "fs-api.txt",  "tier": 2},
     {"id": "ms",  "name": "Malshare",           "file": "ms-api.txt",  "tier": 2},
     # URL sources
-    {"id": "url", "name": "urlscan.io",         "file": "url-api.txt", "tier": "url"},
+    {"id": "url", "name": "urlscan.io",         "file": "url-api.txt", "tier": "url",
+     "note": "Optional: raises rate limits. Saving a key turns urlscan.io lookups on (the full URL is sent, tied to your account) unless you've opted out under Configuration → Keyless threat-intel sources."},
     {"id": "gsb", "name": "Google Safe Browsing", "file": "gsb-api.txt", "tier": "url"},
     # IP sources (VirusTotal and OTX keys above also cover IP lookups)
     {"id": "gn",  "name": "GreyNoise",          "file": "gn-api.txt",  "tier": "ip"},

@@ -818,6 +818,12 @@
   .apikey-name { font-size: 13px; font-weight: 600; color: var(--text-bright); }
   .apikey-configured   { color: var(--green); font-size: 12px; }
   .apikey-unconfigured { color: var(--text-dim); font-size: 12px; }
+  .apikey-note {
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 2px 0 6px;
+  }
   .apikey-filename {
     font-size: 10px;
     color: var(--text-dim);
@@ -2586,7 +2592,7 @@ function tiSourceChk(id, label, note = '', hasVtPerEngine = false) {
       <input type="checkbox" id="ti-src-${id}" checked>
       <strong>${escHtml(label)}</strong>
       <span style="color:var(--text-dim);font-size:10px">${escHtml(shortId)}</span>
-      ${note ? `<span style="color:var(--text-dim);font-size:10px">${escHtml(note)}</span>` : ''}
+      ${note ? `<span id="ti-src-note-${id}" style="color:var(--text-dim);font-size:10px">${escHtml(note)}</span>` : ''}
     </label>${peEngineChk}</span>`;
 }
 
@@ -2602,6 +2608,8 @@ async function loadKeylessStatus() {
       chk.checked = !!src.enabled;
       chk.dataset.keylessBound = '1';
       chk.title = `${src.name} receives ${src.sends}`;
+      const note = document.getElementById(`ti-src-note-${src.id}`);
+      if (note) note.textContent = src.has_key ? '(key configured)' : '(no key · opt-in)';
       chk.addEventListener('change', () => setKeylessChoice(src.id, chk.checked, chk));
     }
   } catch (e) { /* non-fatal: checkbox stays as rendered */ }
@@ -5127,6 +5135,7 @@ function renderApiKeys(keys) {
             <span class="${iconClass}">${icon}</span>
           </div>
           <div class="apikey-filename">file: api/${escHtml(key.file)}</div>
+          ${key.note ? `<div class="apikey-note">${escHtml(key.note)}</div>` : ''}
           <div class="apikey-input-row">
             <input class="apikey-field" id="apikey-field-${key.id}"
               type="password"

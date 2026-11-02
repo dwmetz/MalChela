@@ -2,7 +2,7 @@
  <img style="padding:0;vertical-align:bottom;" height="400" width="400" src="images/malchela_steampunk.png"/>
  <p>
  <h1>
-  MalChela v4.4.1
+  MalChela v4.5.0
  </h1>
   <h4>
       A YARA &amp; Malware Analysis Toolkit written in Rust.
@@ -45,7 +45,7 @@
 | File Miner          | Scans a folder for file type mismatches and metadata |
 | Hash It             | Generates MD5, SHA1, and SHA256 hashes for a single file |
 | Hash Check          | Checks if a given hash exists in a provided hash set file |
-| Threat Intel Query  | Multi-source hash **and URL** lookup. Hash sources: VirusTotal, MalwareBazaar, OTX, Hybrid Analysis, FileScan.IO, Malshare, MetaDefender, ObjectiveSee. URL sources: VirusTotal, urlscan.io, Google Safe Browsing, ScanMalware. GUI adds file-to-hash and QR code decode → URL lookup. |
+| Threat Intel Query  | Multi-source hash, URL, and IP lookup. Hash sources: VirusTotal, MalwareBazaar, OTX, MetaDefender, Hybrid Analysis, Triage, FileScan.IO, Malshare, ObjectiveSee. URL sources: VirusTotal, Google Safe Browsing, plus urlscan.io and ScanMalware (opt-in). IP sources: VirusTotal, OTX, GreyNoise. Downloads samples from MalwareBazaar or Triage. GUI adds file-to-hash and QR code decode → URL lookup. |
 | mStrings            | Extracts strings from a file — including Mach-O binaries and `.app` bundles — applies regex and Sigma rules, maps to MITRE ATT&CK, identifies filesystem/network IOCs, and includes built-in MITRE Technique lookup |
 | mzhash              | Recursively hashes files with MZ headers using MD5 — ideal for gold build or known-bad corpus generation |
 | mzcount             | Recursively counts files by format (MZ, ZIP, PDF, etc.) using header/YARA detection |
@@ -67,13 +67,13 @@
 
 Code Sign Check, Mach-O Info, mStrings, and Plist Analyzer auto-resolve a `.app` bundle's main executable (via `CFBundleExecutable`, falling back to the sole binary in `Contents/MacOS/`) — point them at the bundle directly. Run those four together against a bundle or binary with `./mac_stack.sh`. More Mac-specific detections are planned for upcoming releases.
 
-*Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically.*
+*Threat Intel Query supports optional API keys for VirusTotal, MalwareBazaar, OTX, and additional sources. Sources without configured keys are skipped automatically. Keyless sources that send lookups to a third party (urlscan.io, ScanMalware) stay off until you opt in. See [Keyless sources](docs/coretools/tiquery.md#keyless-sources-are-opt-in).*
 
 ---
 
 <h3>Dependencies:</h3>
 
-MalChela's YARA engine is [YARA-X](https://virustotal.github.io/yara-x/), compiled in as a Rust crate, so there is no system YARA library to install or point the build at.  The build only needs a C compiler and `make`, for the few bundled C libraries (ssdeep, bzip2, LZFSE, and xz).
+MalChela's YARA engine is [YARA-X](https://virustotal.github.io/yara-x/), compiled in as a Rust crate, so there is no system YARA library to install or point the build at.  Compression and other format support is pure Rust as well; the build only needs a C compiler for the TLS library.
 
 Linux
 ```
@@ -84,6 +84,10 @@ Mac
 ```
 xcode-select --install
 ```
+
+Windows
+
+The Visual Studio C++ build tools (rustup offers to install them) and [Python 3](https://www.python.org) for the web interface.  See [Windows (native)](docs/install.md#windows-native).
 
 Third-party integrations (TShark, Volatility 3, the YARA-X CLI, and others in `tools.yaml`) are optional and installed separately.
 
@@ -244,9 +248,9 @@ These enhancements make working with memory images, PCAPs, and YARA rules more s
 
 #### Platform Support:
 
-Successfully tested on macOS (Apple Silicon), Ubuntu, and Raspberry Pi.  
+Successfully tested on macOS (Apple Silicon), Ubuntu, Raspberry Pi, and Windows 11.  
 
 No system YARA install is required: as of v4.4, every tool uses the embedded YARA-X engine.
 
-**Windows:** As of October 2025, both MalChela CLI and GUI operate on Windows under WSL2. MalChelaGUI improvements for WSL included in v3.1.1.
+**Windows:** As of v4.5, MalChela builds and runs natively on Windows, CLI and web interface, with no WSL required.  See [Windows (native)](docs/install.md#windows-native).  WSL2 still works if you prefer a Linux environment.
 

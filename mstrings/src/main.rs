@@ -196,12 +196,15 @@ fn extract_urls(s: &str) -> Vec<String> {
 }
 
 fn is_boring_ip(ip: &str) -> bool {
-    if ip == "127.0.0.1" || ip == "255.255.255.255" || ip == "239.255.255.250" {
+    if ip == "127.0.0.1" || ip == "239.255.255.250" {
         return true;
     }
     let octets: Vec<&str> = ip.split('.').collect();
     if octets.len() != 4 {
         return false;
+    }
+    if octets[0] == "255" {
+        return true; // 255.x.x.x — broadcast or a subnet mask (240.0.0.0/4 is reserved, never a host)
     }
     if octets[1] == "0" && octets[2] == "0" && octets[3] == "0" {
         return true; // X.0.0.0 — network/supernet address
@@ -458,7 +461,13 @@ impl Mstrings {
 
     pub fn apply_yara_detections(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let yaml_content = std::fs::read_to_string("detections.yaml")?;
-        let raw_rules: HashMap<String, Detection> = serde_yaml::from_str(&yaml_content)?;
+        self.apply_detections_from_yaml(&yaml_content)
+    }
+
+    // Split out from apply_yara_detections so tests can feed the real
+    // detections.yaml by path instead of relying on the working directory.
+    fn apply_detections_from_yaml(&mut self, yaml_content: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let raw_rules: HashMap<String, Detection> = serde_yaml::from_str(yaml_content)?;
 
         let mut compiled_rules = Vec::new();
         for (_key, det) in &raw_rules {
@@ -492,7 +501,14 @@ impl Mstrings {
             // Deduping on rule_name alone silently dropped every pattern after
             // the first one that matched in that blob, even though each was a
             // genuine independent hit at a different offset within it.
-            let mut seen_rules: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+            //
+            // The technique ID is part of the key too: compiled_rules holds one
+            // entry per (pattern, technique), so a rule mapped to several
+            // techniques must produce one Match per technique. Keying on
+            // (rule, text) alone kept only the first technique and silently
+            // dropped the rest (WMISystemDiscovery reported T1047 but never
+            // T1082). The report groups these back into one row per rule.
+            let mut seen_rules: std::collections::HashSet<(String, String, String)> = std::collections::HashSet::new();
             for (regex, rule_name, tactic, technique, technique_id) in &compiled_rules {
                 if let Ok(Some(found)) = regex.find(&m.matched_str) {
                     if rule_name == "Hardcoded Bitcoin address (P2PKH/P2SH)"
@@ -500,7 +516,7 @@ impl Mstrings {
                     {
                         continue; // shape matched but checksum didn't — not a real address
                     }
-                    if seen_rules.insert((rule_name.clone(), found.as_str().to_string())) {
+                    if seen_rules.insert((rule_name.clone(), found.as_str().to_string(), technique_id.clone())) {
                         new_matches.push(Match {
                             offset: m.offset,
                             encoding: m.encoding.clone(),
@@ -569,6 +585,46 @@ struct DisplayMatch {
     technique: String,
     #[tabled(rename = "ID")]
     technique_id: String,
+}
+
+/// One technique a match was attributed to: (tactics, technique name, ID).
+/// `tactics` is already comma-joined, as it comes from detections.yaml.
+type MitreCell = (String, String, String);
+
+/// Record a match's technique on a report row, once, keeping first-seen
+/// (detections.yaml) order. IOC-only matches carry no technique and add nothing.
+fn push_mitre(cells: &mut Vec<MitreCell>, m: &Match) {
+    let id = m.technique_id.clone().unwrap_or_default();
+    if id.is_empty() || cells.iter().any(|c| c.2 == id) {
+        return;
+    }
+    cells.push((
+        m.tactic.clone().unwrap_or_default(),
+        m.technique.clone().unwrap_or_default(),
+        id,
+    ));
+}
+
+/// Flatten a row's techniques into its Tactic / Technique / ID cells.
+/// Tactics are de-duplicated and comma-joined (the PWA matrix parser splits
+/// the Tactic cell on ","); technique names are joined with "; " because the
+/// names themselves can contain commas; IDs are comma-joined (the matrix
+/// parser pulls every T-number out of the ID cell). A single-technique rule
+/// renders exactly as before.
+fn join_mitre(cells: &[MitreCell]) -> (String, String, String) {
+    let mut tactics: Vec<&str> = Vec::new();
+    for (t, _, _) in cells {
+        for part in t.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+            if !tactics.contains(&part) {
+                tactics.push(part);
+            }
+        }
+    }
+    (
+        tactics.join(", "),
+        cells.iter().map(|c| c.1.as_str()).collect::<Vec<_>>().join("; "),
+        cells.iter().map(|c| c.2.as_str()).collect::<Vec<_>>().join(", "),
+    )
 }
 
 fn tactic_priority(tactic: &str) -> u8 {
@@ -643,7 +699,23 @@ struct FileScanResult {
     /// Runs of IPs stored together (see `split_ip_lists`), kept out of net_iocs.
     ip_lists: Vec<IpList>,
     matches: Vec<Match>,
+    /// Every extracted string, before mStrings' noise filter, for the full
+    /// strings dump saved alongside the report.
+    raw_strings: Vec<RawString>,
 }
+
+/// One extracted string as it came off the file, unfiltered.
+#[derive(Debug, Clone)]
+struct RawString {
+    offset: usize,
+    encoding: &'static str,
+    text: String,
+}
+
+/// Per-file cap on the full strings dump. Go and Electron binaries can yield
+/// tens of MB of strings; a folder-wide Analyze run would otherwise fill the
+/// case. The dump says plainly when and where it was cut.
+const STRINGS_DUMP_CAP: usize = 10 * 1024 * 1024;
 
 /// Ten or more IP addresses stored within a few hundred bytes of each other:
 /// an embedded list, most often an anti-analysis blocklist of sandbox and
@@ -709,6 +781,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
 
     let file = File::open(path)?;
     let mut mstrings = Mstrings::new();
+    let mut raw_strings: Vec<RawString> = Vec::new();
     let mut buffer = Vec::new();
     BufReader::new(file).read_to_end(&mut buffer)?;
 
@@ -728,6 +801,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         } else if current.len() >= 4 {
             if let Ok(s) = String::from_utf8(current.clone()) {
                 mstrings.process_line(&s, string_start);
+                raw_strings.push(RawString { offset: string_start, encoding: "ascii", text: s });
             }
             current.clear();
         } else {
@@ -738,6 +812,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
     if current.len() >= 4 {
         if let Ok(s) = String::from_utf8(current.clone()) {
             mstrings.process_line(&s, string_start);
+            raw_strings.push(RawString { offset: string_start, encoding: "ascii", text: s });
         }
     }
 
@@ -771,6 +846,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
             if current16.len() >= 4 {
                 if let Ok(s) = String::from_utf8(current16.clone()) {
                     mstrings.process_line_utf16(&s, string_start16);
+                    raw_strings.push(RawString { offset: string_start16, encoding: "utf16le", text: s });
                 }
             }
             current16.clear();
@@ -780,38 +856,50 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
     if current16.len() >= 4 {
         if let Ok(s) = String::from_utf8(current16.clone()) {
             mstrings.process_line_utf16(&s, string_start16);
+            raw_strings.push(RawString { offset: string_start16, encoding: "utf16le", text: s });
         }
     }
+    // Interleave the two passes by file offset so the dump reads top to bottom.
+    raw_strings.sort_by_key(|r| r.offset);
 
     mstrings.decode_base64_blobs();
     mstrings.apply_yara_detections()?;
 
-    // Group matched strings by rule name; track tactic/technique for sort.
-    // Use BTreeSet per group to deduplicate strings that appear at multiple offsets.
-    let raw_match_count = mstrings.matches.iter().filter(|m| m.rule_name.is_some()).count();
+    // A rule mapped to several techniques yields one Match per technique for
+    // the same string (see apply_detections_from_yaml), so count distinct
+    // (offset, rule, string) hits rather than Match entries, or a
+    // two-technique rule would double the reported match count.
+    let raw_match_count = mstrings.matches.iter()
+        .filter(|m| m.rule_name.is_some())
+        .map(|m| (m.offset, m.rule_name.as_deref().unwrap_or(""), m.display_str.as_str()))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
 
+    // Group matched strings by rule name, collecting every technique the rule
+    // maps to (in detections.yaml order). Use BTreeSet per group to
+    // deduplicate strings that appear at multiple offsets.
     let mut rule_groups: std::collections::HashMap<
         String,
-        (String, String, String, std::collections::BTreeSet<String>, u8),
+        (Vec<MitreCell>, std::collections::BTreeSet<String>, u8),
     > = std::collections::HashMap::new();
 
     for m in mstrings.matches.iter().filter(|m| m.rule_name.is_some()) {
         let rule = m.rule_name.as_ref().unwrap().clone();
         let entry = rule_groups.entry(rule).or_insert_with(|| (
-            m.tactic.clone().unwrap_or_default(),
-            m.technique.clone().unwrap_or_default(),
-            m.technique_id.clone().unwrap_or_default(),
+            Vec::new(),
             std::collections::BTreeSet::new(),
             0u8,
         ));
-        entry.3.insert(m.display_str.clone());
-        entry.4 = entry.4.max(m.decode_layers);
+        push_mitre(&mut entry.0, m);
+        entry.1.insert(m.display_str.clone());
+        entry.2 = entry.2.max(m.decode_layers);
     }
 
     // Sort groups: primary = tactic priority, secondary = rule name
     let mut sorted_groups: Vec<(String, String, String, String, Vec<String>, u8)> = rule_groups
         .into_iter()
-        .map(|(rule, (tactic, technique, id, strings, max_layers))| {
+        .map(|(rule, (mitre, strings, max_layers))| {
+            let (tactic, technique, id) = join_mitre(&mitre);
             (rule, tactic, technique, id, strings.into_iter().collect(), max_layers)
         })
         .collect();
@@ -1063,21 +1151,35 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         }
     }
 
-    // Detail section: flat per-string table for drill-down (parsed by PWA toggle)
-    let flat_matches: Vec<FlatMatch> = mstrings.matches.iter()
-        .filter(|m| m.rule_name.is_some())
-        .map(|m| FlatMatch {
-            offset:       format!("0x{:08X}", m.offset),
-            encoding:     if m.decode_layers > 1 {
-                format!("Base64\u{d7}{}", m.decode_layers)
-            } else {
-                format!("{:?}", m.encoding)
-            },
-            matched_str:  truncate_string(&m.display_str, 60),
-            rule_name:    m.rule_name.clone().unwrap_or_default(),
-            tactic:       m.tactic.clone().unwrap_or_default(),
-            technique:    m.technique.clone().unwrap_or_default(),
-            technique_id: m.technique_id.clone().unwrap_or_default(),
+    // Detail section: flat per-string table for drill-down (parsed by PWA toggle).
+    // One row per (offset, rule, string): the per-technique Match copies of a
+    // multi-technique rule are folded back together, in first-seen order.
+    let mut flat_index: HashMap<(usize, &str, &str), usize> = HashMap::new();
+    let mut flat_rows: Vec<(&Match, Vec<MitreCell>)> = Vec::new();
+    for m in mstrings.matches.iter().filter(|m| m.rule_name.is_some()) {
+        let key = (m.offset, m.rule_name.as_deref().unwrap_or(""), m.display_str.as_str());
+        let i = *flat_index.entry(key).or_insert_with(|| {
+            flat_rows.push((m, Vec::new()));
+            flat_rows.len() - 1
+        });
+        push_mitre(&mut flat_rows[i].1, m);
+    }
+    let flat_matches: Vec<FlatMatch> = flat_rows.iter()
+        .map(|(m, mitre)| {
+            let (tactic, technique, technique_id) = join_mitre(mitre);
+            FlatMatch {
+                offset:       format!("0x{:08X}", m.offset),
+                encoding:     if m.decode_layers > 1 {
+                    format!("Base64\u{d7}{}", m.decode_layers)
+                } else {
+                    format!("{:?}", m.encoding)
+                },
+                matched_str:  truncate_string(&m.display_str, 60),
+                rule_name:    m.rule_name.clone().unwrap_or_default(),
+                tactic,
+                technique,
+                technique_id,
+            }
         })
         .collect();
 
@@ -1091,6 +1193,7 @@ fn scan_file(path: &Path) -> Result<FileScanResult, Box<dyn std::error::Error>> 
         fs_iocs,
         net_iocs,
         matches: mstrings.matches,
+        raw_strings,
     })
 }
 
@@ -1248,6 +1351,128 @@ fn write_report(
     }
 
     Ok(())
+}
+
+// ── Full strings dump ─────────────────────────────────────────────────────────
+// Saved next to every report mStrings writes (-o, PWA, Analyze), so the case
+// holds what the rules ran against and not just what they matched. Offsets
+// are mStrings' own, so a detail-table hit (lsass.exe @ 0x000000F0) can be
+// found in context by offset. Goes in its own full_strings/ folder, never in
+// mstrings/: the server's Analyze path renames and registers "the newest file
+// in <case>/mstrings/" as the report, so a dump there could be mistaken for it.
+
+/// Render the dump body, stopping at `cap` bytes. Returns (text, truncated).
+fn format_strings_dump(
+    file_path: &str,
+    sha256: &str,
+    raw: &[RawString],
+    matches: &[Match],
+    cap: usize,
+) -> (String, bool) {
+    // Base64 blobs mStrings decoded: derived text, listed after the raw
+    // extraction and labeled, de-duplicated across per-technique Match copies.
+    let mut seen = std::collections::HashSet::new();
+    let decoded: Vec<&Match> = matches.iter()
+        .filter(|m| matches!(m.encoding, Encoding::Base64))
+        .filter(|m| seen.insert((m.offset, m.matched_str.as_str())))
+        .collect();
+    let ascii = raw.iter().filter(|r| r.encoding == "ascii").count();
+    let utf16 = raw.len() - ascii;
+
+    let mut out = String::new();
+    out.push_str("# mStrings full strings dump\n");
+    out.push_str(&format!("# File:    {}\n", file_path));
+    out.push_str(&format!("# SHA256:  {}\n", sha256));
+    out.push_str("# Extraction: printable runs of 4+ characters, ASCII/UTF-8 and UTF-16LE,\n");
+    out.push_str("#   unfiltered (mStrings' ObjC/Swift noise filter is not applied here).\n");
+    out.push_str("#   Offsets are file offsets and match the mStrings detail table.\n");
+    out.push_str(&format!("# Strings: {} ({} ascii, {} utf16le), {} decoded\n", raw.len(), ascii, utf16, decoded.len()));
+    out.push_str("# Columns: offset, encoding, string (tab-separated)\n\n");
+
+    let rows = raw.iter().map(|r| (r.offset, r.encoding, r.text.as_str(), false))
+        .chain(decoded.iter().map(|m| (m.offset, "base64", m.matched_str.as_str(), true)));
+    let total = raw.len() + decoded.len();
+    let mut written = 0usize;
+    let mut in_decoded = false;
+    for (offset, enc, text, is_decoded) in rows {
+        if is_decoded && !in_decoded {
+            out.push_str("\n# --- decoded (derived): base64 blobs mStrings decoded; offset is the blob's ---\n");
+            in_decoded = true;
+        }
+        // Tabs and newlines inside a string would break the one-line-per-string format.
+        let clean = text.replace(['\t', '\r', '\n'], " ");
+        let line = format!("0x{:08X}\t{}\t{}\n", offset, enc, clean);
+        if out.len() + line.len() > cap {
+            out.push_str(&format!(
+                "\n# TRUNCATED at {} MB: {} of {} strings written. Run mstrings on the file directly for the rest.\n",
+                cap / (1024 * 1024), written, total
+            ));
+            return (out, true);
+        }
+        out.push_str(&line);
+        written += 1;
+    }
+    (out, false)
+}
+
+/// Filename stem for a dump, built the same way the server names Analyze's
+/// case reports (_rename_case_report in malchela_server.py): the file stem
+/// without its extension, each run of characters outside [\w.-] collapsed to
+/// one "_", underscores trimmed from both ends, at most 80 characters, and
+/// "file" if nothing is left. So 90(2)'s dump, 90_2_strings_<ts>.txt, sorts
+/// right next to its report, 90_2_<ts>.md.
+fn dump_stem(name_hint: &str) -> String {
+    let base = Path::new(name_hint)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| name_hint.to_string());
+    let mut out = String::new();
+    let mut in_run = false;
+    for c in base.chars() {
+        if c.is_alphanumeric() || c == '_' || c == '.' || c == '-' {
+            out.push(c);
+            in_run = false;
+        } else if !in_run {
+            out.push('_');
+            in_run = true;
+        }
+    }
+    let trimmed: String = out.trim_matches('_').chars().take(80).collect();
+    if trimmed.is_empty() { "file".to_string() } else { trimmed }
+}
+
+fn strings_dump_dir(matches: &ArgMatches) -> std::path::PathBuf {
+    match matches.get_one::<String>("case") {
+        Some(case_name) => get_output_dir("cases").join(case_name).join("full_strings"),
+        None => get_output_dir("full_strings"),
+    }
+}
+
+/// Write one file's dump and register it with the case. Best-effort: a dump
+/// that fails to write warns but never fails the scan or blocks the report.
+fn write_strings_dump(result: &FileScanResult, name_hint: &str, matches: &ArgMatches, target: &str) {
+    if matches.get_flag("no-strings-dump") {
+        return;
+    }
+    let dir = strings_dump_dir(matches);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("{}", format!("Could not create {}: {}", dir.display(), e).yellow());
+        return;
+    }
+    let stem = dump_stem(name_hint);
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let path = dir.join(format!("{}_strings_{}.txt", stem, timestamp));
+    let (body, truncated) = format_strings_dump(&result.file_path, &result.sha256, &result.raw_strings, &result.matches, STRINGS_DUMP_CAP);
+    match File::create(&path).and_then(|mut f| f.write_all(body.as_bytes())) {
+        Ok(()) => {
+            let note = if truncated { " (truncated at cap)" } else { "" };
+            println!("{}", format!("Full strings saved to: {}{}", path.display(), note).green());
+            if let Some(case_name) = matches.get_one::<String>("case") {
+                common_config::register_case_output("full_strings", case_name, target, &path);
+            }
+        }
+        Err(e) => eprintln!("{}", format!("Could not save full strings: {}", e).yellow()),
+    }
 }
 
 // Build the txt/md report body for one scanned file (single-file layout).
@@ -1436,6 +1661,9 @@ fn run_single(
             report_buffer
         };
 
+        // Dump first, report second: the report stays the newest file mStrings
+        // writes, in case anything downstream still looks for "the latest".
+        write_strings_dump(&result, file_path_copy, matches, file_path_copy);
         write_report(&output_dir, format, custom_name, &contents, matches, file_path_copy)?;
     } else {
         if !is_gui_mode() {
@@ -1598,6 +1826,10 @@ fn run_bundle(
             report_buffer
         };
 
+        // One dump per embedded binary, named after its path inside the bundle.
+        for (rel_path, result, _) in &scanned {
+            write_strings_dump(result, &rel_path.replace('/', "_"), matches, file_path_copy);
+        }
         write_report(&output_dir, format, custom_name, &contents, matches, file_path_copy)?;
     } else {
         if !is_gui_mode() {
@@ -1669,6 +1901,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .num_args(1)
                 .help("Custom output file name (used with --output)"),
         )
+        .arg(
+            Arg::new("no-strings-dump")
+                .long("no-strings-dump")
+                .num_args(0)
+                .help("Don't save the full strings dump alongside a saved report"),
+        )
         .get_matches();
 
     let file_path = match matches.get_one::<String>("file").map(String::as_str) {
@@ -1736,6 +1974,78 @@ mod encoded_table_tests {
 }
 
 #[cfg(test)]
+mod strings_dump_tests {
+    use super::*;
+
+    fn raw(offset: usize, enc: &'static str, text: &str) -> RawString {
+        RawString { offset, encoding: enc, text: text.to_string() }
+    }
+
+    fn decoded(offset: usize, text: &str) -> Match {
+        Match {
+            offset, encoding: Encoding::Base64, matched_str: text.to_string(),
+            display_str: text.to_string(), decode_layers: 1, rule_name: None,
+            tactic: None, technique: None, technique_id: None,
+        }
+    }
+
+    #[test]
+    fn dump_lists_every_string_with_offset_and_encoding() {
+        let r = vec![raw(0xF0, "ascii", "lsass.exe"), raw(0x200, "utf16le", "mshta.exe")];
+        let (out, truncated) = format_strings_dump("/x/90", "abc", &r, &[], STRINGS_DUMP_CAP);
+        assert!(!truncated);
+        assert!(out.contains("# SHA256:  abc"));
+        assert!(out.contains("# Strings: 2 (1 ascii, 1 utf16le), 0 decoded"));
+        assert!(out.contains("0x000000F0\tascii\tlsass.exe\n"));
+        assert!(out.contains("0x00000200\tutf16le\tmshta.exe\n"));
+        assert!(!out.contains("decoded (derived)"));
+    }
+
+    #[test]
+    fn decoded_strings_are_labeled_and_deduplicated() {
+        // Two Match copies of one decoded blob, as a two-technique rule makes.
+        let m = vec![decoded(0x40, "powershell -nop"), decoded(0x40, "powershell -nop")];
+        let (out, _) = format_strings_dump("f", "h", &[], &m, STRINGS_DUMP_CAP);
+        assert!(out.contains("0 utf16le), 1 decoded"));
+        assert!(out.contains("# --- decoded (derived)"));
+        assert_eq!(out.matches("powershell -nop").count(), 1);
+    }
+
+    // Expected values are what the server's _rename_case_report produces for
+    // the same names (checked against its Python regex), so each dump pairs
+    // with its Analyze report by name.
+    #[test]
+    fn dump_stem_matches_server_report_naming() {
+        assert_eq!(dump_stem("/x/90(2)"), "90_2");
+        assert_eq!(dump_stem("%2f"), "2f");
+        assert_eq!(dump_stem("%2f(1)"), "2f_1");
+        assert_eq!(dump_stem("imgpaper.png"), "imgpaper");
+        assert_eq!(dump_stem("90"), "90");
+        assert_eq!(dump_stem("Contents_MacOS_Evil App"), "Contents_MacOS_Evil_App");
+        assert_eq!(dump_stem("((()))"), "file");
+    }
+
+    #[test]
+    fn embedded_tabs_and_newlines_stay_on_one_line() {
+        let (out, _) = format_strings_dump("f", "h", &[raw(1, "ascii", "a\tb\nc")], &[], STRINGS_DUMP_CAP);
+        assert!(out.contains("0x00000001\tascii\ta b c\n"));
+    }
+
+    #[test]
+    fn dump_stops_at_cap_and_says_so() {
+        let r: Vec<RawString> = (0..1000).map(|i| raw(i * 16, "ascii", "AAAAAAAAAAAAAAAAAAAA")).collect();
+        let cap = 4096;
+        let (out, truncated) = format_strings_dump("f", "h", &r, &[], cap);
+        assert!(truncated);
+        assert!(out.contains("# TRUNCATED at"));
+        assert!(out.contains("of 1000 strings written"));
+        // The cap bounds the strings; only the one-line truncation note may exceed it.
+        let body_end = out.find("\n# TRUNCATED").unwrap();
+        assert!(body_end <= cap, "body {} > cap {}", body_end, cap);
+    }
+}
+
+#[cfg(test)]
 mod detection_file_tests {
     use super::*;
 
@@ -1760,6 +2070,51 @@ mod detection_file_tests {
             }
         }
         assert!(bad.is_empty(), "{}", bad.join("\n"));
+    }
+
+    fn techniques_for(line: &str, rule_title: &str) -> Vec<String> {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../detections.yaml");
+        let mut ms = Mstrings::new();
+        ms.process_line(line, 0);
+        ms.apply_detections_from_yaml(&std::fs::read_to_string(path).unwrap()).unwrap();
+        ms.matches.iter()
+            .filter(|m| m.rule_name.as_deref() == Some(rule_title))
+            .filter_map(|m| m.technique_id.clone())
+            .collect()
+    }
+
+    // A rule with several mitre entries used to report only the first one:
+    // the dedupe key was (rule, matched text), so the second technique's
+    // Match was discarded as a duplicate.
+    #[test]
+    fn multi_technique_rule_reports_every_technique() {
+        let mut ids = techniques_for("SELECT * FROM Win32_OperatingSystem", "WMI System Discovery Query");
+        ids.sort();
+        assert_eq!(ids, vec!["T1047", "T1082"]);
+        let mut ids = techniques_for("LoadLibraryA", "Dynamic API Resolution via LoadLibrary and GetProcAddress");
+        ids.sort();
+        assert_eq!(ids, vec!["T1106", "T1129"]);
+    }
+
+    #[test]
+    fn single_technique_rule_reports_once() {
+        assert_eq!(techniques_for("nltest /domain_trusts", "Domain Trust Discovery"), vec!["T1482"]);
+    }
+
+    #[test]
+    fn join_mitre_merges_cells() {
+        let cells = vec![
+            ("Execution, Discovery".to_string(), "Windows Management Instrumentation".to_string(), "T1047".to_string()),
+            ("Discovery".to_string(), "System Information Discovery".to_string(), "T1082".to_string()),
+        ];
+        assert_eq!(join_mitre(&cells), (
+            "Execution, Discovery".to_string(),
+            "Windows Management Instrumentation; System Information Discovery".to_string(),
+            "T1047, T1082".to_string(),
+        ));
+        let one = vec![("Discovery".to_string(), "Domain Trust Discovery".to_string(), "T1482".to_string())];
+        assert_eq!(join_mitre(&one), ("Discovery".to_string(), "Domain Trust Discovery".to_string(), "T1482".to_string()));
+        assert_eq!(join_mitre(&[]), (String::new(), String::new(), String::new()));
     }
 
     fn hits(key: &str, s: &str) -> bool {

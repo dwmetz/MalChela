@@ -3549,8 +3549,16 @@ function parseVtPerEngineRows(lines) {
 // A technique ID opens the built-in MITRE Lookup. The href stays the ATT&CK
 // page, so Cmd/Ctrl-click or middle-click still opens it in a new tab, and ↗
 // goes there directly. (Saved reports keep plain attack.mitre.org links.)
+// A rule mapped to several techniques gets a comma-joined ID cell
+// ("T1129, T1106"); render one link per ID rather than one broken link.
 function buildIdHtml(id) {
   if (!id) return '';
+  const ids = String(id).match(/T\d{4}(?:\.\d{3})?/g);
+  if (!ids) return escHtml(id);
+  return ids.map(buildOneIdHtml).join('<br>');
+}
+
+function buildOneIdHtml(id) {
   const safe = escHtml(id);
   const url = 'https://attack.mitre.org/techniques/' + id.replace('.', '/') + '/';
   return `<span style="white-space:nowrap"><a class="ms-technique-id" href="${url}" target="_blank" rel="noopener"
@@ -4795,7 +4803,13 @@ async function viewCaseFile(caseName, filename, e) {
       document.getElementById('tool-input').innerHTML = '';
       lastOutput = data.content;
       const ext = filename.split('.').pop().toLowerCase();
-      if (ext === 'md') {
+      if (/^full_strings[\\/]/.test(filename)) {  // either separator: native Windows paths use a backslash
+        // mStrings' full strings dump: show it as plain text. The colorizer
+        // would paint any sample string containing FOUND, MATCH, or a
+        // T-number as if it were a finding, and skipping the per-line spans
+        // keeps a dump near the 10 MB cap responsive.
+        setOutput(`<span class="out-default">${escHtml(data.content)}</span>`);
+      } else if (ext === 'md') {
         renderMarkdownOutput(data.content);
       } else if (ext === 'json') {
         renderJsonOutput(data.content);

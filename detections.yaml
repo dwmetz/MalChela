@@ -26,7 +26,7 @@ HardcodedIPAddress:
   title: "Hardcoded IP address"
   id: "b2e9a3d7-cf18-4b6f-987b-4d90d7a94b88"
   status: "experimental"
-  description: "Detection of hardcoded IP address. Excludes X.509 attribute and extension OIDs (2.5.4.x, 2.5.29.x, e.g. 2.5.29.37 extKeyUsage), X.0.0.0- and X.X.0.0-shaped matches (network/supernet addresses, not usable host targets), 127.0.0.1 (loopback), the RFC 5737 documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) and 192.0.0.0/24 (IETF protocol assignments) — all guaranteed by RFC to never be real routable hosts — plus 255.255.255.255 (broadcast) and 239.255.255.250 (SSDP multicast, the one specific address every UPnP/SSDP implementation hardcodes). Boundary requires the match not be immediately preceded or followed by another digit, dot, OR letter/underscore — \\b alone (or a digit/dot-only boundary check) lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer identifier: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth) matched as \"1.3.6.1\", and — the case that motivated tightening the boundary further — a Go compiler closure symbol like crypto/tls.(*clientHelloMsg).marshal.func1.4.10.1 matched \"4.10.1\"-style tails as if they were IPs, since the character right before the digits was a letter ('c' in 'func'), which the original digit/dot-only lookbehind never checked. RFC 1918 private and 169.254/16 link-local addresses are excluded here and reported by HardcodedPrivateIPAddress instead (an IOC-only rule): a private IP is worth listing (lab infrastructure, an internal target) but is not evidence of C2 — e.g. OSX.Yort embeds a table of 10.3.18x.x addresses and OSX.CreativeUpdate references 192.168.0.1. Observed on IPStorm (TAOMM Ch1): 29 raw matches, nearly all either Go symbol-table tail-numbers or one of these now-excluded reserved ranges (themselves libp2p's own bogon/CIDR-filter constants, not C2 infrastructure)."
+  description: "Detection of hardcoded IP address. Excludes X.509 attribute and extension OIDs (2.5.4.x, 2.5.29.x, e.g. 2.5.29.37 extKeyUsage), X.0.0.0- and X.X.0.0-shaped matches (network/supernet addresses, not usable host targets), 127.0.0.1 (loopback), the RFC 5737 documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) and 192.0.0.0/24 (IETF protocol assignments) — all guaranteed by RFC to never be real routable hosts — plus any 255.x.x.x address (broadcast and subnet masks such as 255.255.255.0 — 240.0.0.0/4 is reserved and never a routable host; observed on Trickbot, where an exfiltrated ipconfig /all listed its own subnet mask as a C2 IP) and 239.255.255.250 (SSDP multicast, the one specific address every UPnP/SSDP implementation hardcodes). Boundary requires the match not be immediately preceded or followed by another digit, dot, OR letter/underscore — \\b alone (or a digit/dot-only boundary check) lets the pattern match a 4-octet-shaped WINDOW embedded inside a longer identifier: an X.509 OID like 1.3.6.1.5.5.7.3.1 (id-kp-serverAuth) matched as \"1.3.6.1\", and — the case that motivated tightening the boundary further — a Go compiler closure symbol like crypto/tls.(*clientHelloMsg).marshal.func1.4.10.1 matched \"4.10.1\"-style tails as if they were IPs, since the character right before the digits was a letter ('c' in 'func'), which the original digit/dot-only lookbehind never checked. RFC 1918 private and 169.254/16 link-local addresses are excluded here and reported by HardcodedPrivateIPAddress instead (an IOC-only rule): a private IP is worth listing (lab infrastructure, an internal target) but is not evidence of C2 — e.g. OSX.Yort embeds a table of 10.3.18x.x addresses and OSX.CreativeUpdate references 192.168.0.1. Observed on IPStorm (TAOMM Ch1): 29 raw matches, nearly all either Go symbol-table tail-numbers or one of these now-excluded reserved ranges (themselves libp2p's own bogon/CIDR-filter constants, not C2 infrastructure)."
   references:
     - "https://oidref.com/1.3.6.1.5.5.7.3.1"
   logsource:
@@ -34,7 +34,7 @@ HardcodedIPAddress:
     product: "windows"
   detection:
     strings:
-      - "(?<![\\w.])(?!127\\.0\\.0\\.1\\b)(?!2\\.5\\.(?:4|29)\\.)(?!\\d{1,3}\\.0\\.0\\.0\\b)(?!\\d{1,3}\\.\\d{1,3}\\.0\\.0\\b)(?!192\\.0\\.0\\.)(?!192\\.0\\.2\\.)(?!198\\.51\\.100\\.)(?!203\\.0\\.113\\.)(?!10\\.)(?!192\\.168\\.)(?!172\\.(?:1[6-9]|2\\d|3[01])\\.)(?!169\\.254\\.)(?!255\\.255\\.255\\.255\\b)(?!239\\.255\\.255\\.250\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\w.])(?![^\\s]*version=)"
+      - "(?<![\\w.])(?!127\\.0\\.0\\.1\\b)(?!2\\.5\\.(?:4|29)\\.)(?!\\d{1,3}\\.0\\.0\\.0\\b)(?!\\d{1,3}\\.\\d{1,3}\\.0\\.0\\b)(?!192\\.0\\.0\\.)(?!192\\.0\\.2\\.)(?!198\\.51\\.100\\.)(?!203\\.0\\.113\\.)(?!10\\.)(?!192\\.168\\.)(?!172\\.(?:1[6-9]|2\\d|3[01])\\.)(?!169\\.254\\.)(?!255\\.)(?!239\\.255\\.255\\.250\\b)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![\\w.])(?![^\\s]*version=)"
   falsepositives:
     - "A real hardcoded IP that genuinely ends in .0.0.0 or .0.0 (rare — that's a network/supernet address, not a usable host target)"
   tags:
@@ -268,22 +268,36 @@ DotNetLOLBinExecution:
   title: "Signed .NET Proxy Execution (Regasm / Regsvcs / Odbcconf)"
   id: "lolbin-dotnet-exec-001"
   status: "experimental"
-  description: "Detects regasm.exe, regsvcs.exe, and odbcconf.exe — signed Microsoft binaries that can execute arbitrary .NET assemblies or DLLs to bypass application whitelisting. Regasm/Regsvcs run code via COM registration callbacks; odbcconf loads DLLs via response files."
+  description: "Detects regasm.exe, regsvcs.exe, and odbcconf.exe — signed Microsoft binaries that can execute arbitrary .NET assemblies or DLLs to bypass application whitelisting. Regasm/Regsvcs run code via COM registration callbacks; odbcconf loads DLLs via response files. Audit 2026-11: odbcconf moved to OdbcconfLOLBinExecution (T1218.008)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
       - "(regasm\\.exe|regsvcs\\.exe)(?:[^a-zA-Z0-9_\\-]|$)"
-      - "odbcconf\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
   tags:
     - attack.T1218.009
-    - attack.T1218.008
   level: high
   mitre:
     - technique_id: "T1218.009"
       technique_name: "System Binary Proxy Execution: Regsvcs/Regasm"
       tactics: ["Stealth"]
+
+OdbcconfLOLBinExecution:
+  title: "Signed Proxy Execution (Odbcconf)"
+  id: "lolbin-dotnet-exec-002"
+  status: "experimental"
+  description: "Detects odbcconf.exe, a signed Microsoft binary that loads DLLs via response files to bypass application allow-listing. Split from DotNetLOLBinExecution (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "odbcconf\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+  tags:
+    - attack.T1218.008
+  level: high
+  mitre:
     - technique_id: "T1218.008"
       technique_name: "System Binary Proxy Execution: Odbcconf"
       tactics: ["Stealth"]
@@ -336,24 +350,38 @@ CertutilDownloadDecode:
   title: "Certutil Used for Download or Decode"
   id: "lolbin-certutil-download-001"
   status: "experimental"
-  description: "Detects certutil.exe with flags specific to payload download and base64 decoding. -urlcache -split -f downloads a URL to disk; -decode decodes a base64-encoded payload. Both are heavily abused by malware droppers. certutil.exe by name is already in LOLBinsDefenseEvasion; this rule targets the specific abuse flags."
+  description: "Detects certutil.exe with flags specific to payload download and base64 decoding. -urlcache -split -f downloads a URL to disk; -decode decodes a base64-encoded payload. Both are heavily abused by malware droppers. certutil.exe by name is already in LOLBinsDefenseEvasion; this rule targets the specific abuse flags. Audit 2026-11: -decode moved to CertutilDecode (T1140); this rule now covers download only."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
       - "certutil.*-urlcache"
-      - "certutil.*-decode"
       - "certutil.*-split"
       - "certutil.*http[s]?://"
   tags:
     - attack.T1105
-    - attack.T1140
   level: high
   mitre:
     - technique_id: "T1105"
       technique_name: "Ingress Tool Transfer"
       tactics: ["Command and Control"]
+
+CertutilDecode:
+  title: "Certutil Used to Decode a Payload"
+  id: "lolbin-certutil-download-002"
+  status: "experimental"
+  description: "Detects certutil -decode, used by droppers to turn a base64-encoded payload back into a binary. Split from CertutilDownloadDecode (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "certutil.*-decode"
+  tags:
+    - attack.T1140
+  level: high
+  mitre:
     - technique_id: "T1140"
       technique_name: "Deobfuscate/Decode Files or Information"
       tactics: ["Stealth"]
@@ -428,7 +456,7 @@ SystemReconLOLBins:
   title: "System Reconnaissance via Built-in Commands"
   id: "lolbin-recon-001"
   status: "experimental"
-  description: "Detects reconnaissance commands commonly hardcoded in malware droppers and RATs. whoami reveals current user/privilege context; systeminfo fingerprints OS build and patch level; nltest enumerates domain controllers and trusts; ipconfig /all reveals network configuration."
+  description: "Detects reconnaissance commands commonly hardcoded in malware droppers and RATs. whoami reveals current user/privilege context; systeminfo fingerprints OS build and patch level; nltest enumerates domain controllers and trusts; ipconfig /all reveals network configuration. Audit 2026-11: split by technique. systeminfo moved to SystemInfoLOLBin (T1082); nltest DC discovery moved to DomainControllerDiscovery (T1018); nltest /domain_trusts is in DomainTrustDiscovery (T1482)."
   logsource:
     category: "file_event"
     product: "windows"
@@ -436,21 +464,76 @@ SystemReconLOLBins:
     strings:
       - "whoami\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
       - "whoami\\s+/(?:all|priv|groups)"
-      - "systeminfo\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
-      - "nltest\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
-      - "nltest\\s+/(?:dclist|domain_trusts|dsgetdc)"
   tags:
     - attack.T1033
-    - attack.T1082
-    - attack.T1482
   level: medium
   mitre:
     - technique_id: "T1033"
       technique_name: "System Owner/User Discovery"
       tactics: ["Discovery"]
+
+SystemInfoLOLBin:
+  title: "System Information Discovery via systeminfo"
+  id: "lolbin-recon-002"
+  status: "experimental"
+  description: "Detects systeminfo.exe, used to fingerprint OS build, patch level, and domain membership. Split from SystemReconLOLBins (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "systeminfo\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+  tags:
+    - attack.T1082
+  level: medium
+  mitre:
     - technique_id: "T1082"
       technique_name: "System Information Discovery"
       tactics: ["Discovery"]
+
+
+DomainControllerDiscovery:
+  title: "Domain Controller Discovery via nltest"
+  id: "lolbin-recon-003"
+  status: "experimental"
+  description: "Detects nltest.exe and its domain-controller enumeration flags (/dclist, /dsgetdc), used to locate DCs before lateral movement. Mapped to T1018 Remote System Discovery (was reported as T1033 under SystemReconLOLBins). Split out in Audit 2026-11."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "nltest\\.exe(?:[^a-zA-Z0-9_\\-]|$)"
+      - "nltest\\s+/(?:dclist|dsgetdc)"
+  tags:
+    - attack.T1018
+  level: medium
+  mitre:
+    - technique_id: "T1018"
+      technique_name: "Remote System Discovery"
+      tactics: ["Discovery"]
+
+
+DomainTrustDiscovery:
+  title: "Domain Trust Discovery"
+  id: "discovery-domaintrust-001"
+  status: "experimental"
+  description: "Detects enumeration of Active Directory domain and forest trusts — nltest /domain_trusts (and /all_trusts), nltest /trusted_domains, and dsquery or AdFind queries for trustedDomain objects. Trickbot, Emotet follow-on loaders, and pre-ransomware operators run these to map the environment before lateral movement. Observed on Trickbot: the bot's /90 C2 POST carried the output of nltest /domain_trusts and nltest /domain_trusts /all_trusts from both the workstation and the domain controller."
+  references:
+    - "https://attack.mitre.org/techniques/T1482/"
+  author: Doug Metz
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "nltest(?:\\.exe)?\\s+/(?:domain_trusts|trusted_domains)"
+      - "(?i)objectClass=trustedDomain"
+  falsepositives:
+    - "Admin or inventory scripts that audit domain trusts"
+  tags:
+    - attack.T1482
+  level: medium
+  mitre:
     - technique_id: "T1482"
       technique_name: "Domain Trust Discovery"
       tactics: ["Discovery"]
@@ -661,7 +744,7 @@ AntiDebuggingNtQuerySystemInformation:
   title: "Anti-debugging NtQuerySystemInformation with Debug-Related Classes"
   id: "o8b8d3b6-8e3e-4b0b-b87f-d929a0b17be0"
   status: "experimental"
-  description: "Detects class constants passed to NtQuerySystemInformation for anti-debugging. Note: NtQuerySystemInformation itself is typically dynamically resolved via GetProcAddress and will not appear as a string in the IAT — matching on the class name constants alone is sufficient signal."
+  description: "Detects class constants passed to NtQuerySystemInformation for anti-debugging. Note: NtQuerySystemInformation itself is typically dynamically resolved via GetProcAddress and will not appear as a string in the IAT — matching on the class name constants alone is sufficient signal. Audit 2026-11: mapped to T1622 Debugger Evasion (was T1082 and T1497.003 Time Based Checks, which is the wrong technique). SystemProcessInformation moved to NtQueryProcessDiscovery (T1057)."
   logsource:
     category: "file_event"
     product: "windows"
@@ -669,19 +752,34 @@ AntiDebuggingNtQuerySystemInformation:
     strings:
       - "NtQuerySystemInformation"
       - "SystemKernelDebuggerInformation"
-      - "SystemProcessInformation"
       - "SystemDebugObjectInformation"
   tags:
-    - attack.T1082
-    - attack.T1497.003
+    - attack.T1622
   level: high
   mitre:
-    - technique_id: "T1082"
-      technique_name: "System Information Discovery"
+    - technique_id: "T1622"
+      technique_name: "Debugger Evasion"
+      tactics: ["Stealth", "Discovery"]
+
+NtQueryProcessDiscovery:
+  title: "Process Discovery via NtQuerySystemInformation"
+  id: "o8b8d3b6-8e3e-4b0b-b87f-d929a0b17be0-002"
+  status: "experimental"
+  description: "Detects the SystemProcessInformation class constant, passed to NtQuerySystemInformation to walk the process list without the Toolhelp APIs. Split from AntiDebuggingNtQuerySystemInformation (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "SystemProcessInformation"
+  tags:
+    - attack.T1057
+  level: medium
+  mitre:
+    - technique_id: "T1057"
+      technique_name: "Process Discovery"
       tactics: ["Discovery"]
-    - technique_id: "T1497.003"
-      technique_name: "Virtualization/Sandbox Evasion: Time Based Checks"
-      tactics: ["Stealth"]
+
 
 CmdCExecution:
   title: "cmd /c (command execution)"
@@ -877,7 +975,7 @@ SuspiciousURLDetection:
   title: "Refined Suspicious URL Detection (No Lookaround)"
   id: "b1c2d3e4-5f6g-7h8i-9j0k-1l2m3n4o5p6q"
   status: "experimental"
-  description: "Detects suspicious URLs, refined to reduce false positives, focusing on malicious TLDs, scripts, and obfuscation. (Microsoft domain filtering in code)"
+  description: "Detects suspicious URLs, refined to reduce false positives, focusing on malicious TLDs, scripts, and obfuscation. (Microsoft domain filtering in code) Audit 2026-11: removed T1566.002; a URL embedded in a sample is C2 or a download, not a spearphishing link."
   logsource:
     category: "network_connection"
     product: "any"
@@ -895,10 +993,6 @@ SuspiciousURLDetection:
     - technique_id: "T1071.001"
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
-    - technique_id: "T1566.002"
-      technique_name: "Phishing: Spearphishing Link"
-      tactics: ["Initial Access"]
-      
 SuspiciousScriptReferences:
   title: "Suspicious Script File Extension Reference"
   id: "bb2c8d6a-3a8e-4957-9a3c-b9a6b5f3065f"
@@ -1026,7 +1120,7 @@ SuspiciousURLGeneric:
   title: "Suspicious URL Detection"
   id: "87654321-b98e-3d21-654a-266424710000"
   status: "experimental"
-  description: "Detects suspicious URLs in two focused forms: raw IP-address URLs (almost never legitimate in malware strings) and URLs with query string parameters (typical of dynamic C2 beaconing). Intentionally excludes bare domain/path URLs to avoid XML namespace false positives (e.g. schemas.microsoft.com). NOTE: Go binaries embed many internal runtime strings containing colons and slashes that can resemble URL fragments - the IP-form pattern is the more reliable signal of the two."
+  description: "Detects suspicious URLs in two focused forms: raw IP-address URLs (almost never legitimate in malware strings) and URLs with query string parameters (typical of dynamic C2 beaconing). Intentionally excludes bare domain/path URLs to avoid XML namespace false positives (e.g. schemas.microsoft.com). NOTE: Go binaries embed many internal runtime strings containing colons and slashes that can resemble URL fragments - the IP-form pattern is the more reliable signal of the two. Audit 2026-11: removed T1566.002; a URL embedded in a sample is C2 or a download, not a spearphishing link."
   logsource:
     category: "process_command_line"
     product: "any"
@@ -1036,16 +1130,11 @@ SuspiciousURLGeneric:
       - "(?:https?|ftp|ftps)://[a-zA-Z0-9\\.\\-_]+(?:/[a-zA-Z0-9\\.\\-_/]*)?\\?[a-zA-Z0-9\\.\\-_=&%]+"
   tags:
     - attack.T1071.001
-    - attack.T1566.002
   level: medium
   mitre:
     - technique_id: "T1071.001"
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
-    - technique_id: "T1566.002"
-      technique_name: "Phishing: Spearphishing Link"
-      tactics: ["Initial Access"]
-      
 UnusualDllFilenamePattern:
   title: "Randomized-looking DLL filename"
   id: "dll-filename-anomaly-001"
@@ -1069,7 +1158,7 @@ ProcessEnumerationAndHooking:
   title: "Process Enumeration and API Hooking Indicators"
   id: "a9c8b7d6-e5f4-4321-bacd-fedcba987654"
   status: "experimental"
-  description: "Detects process enumeration and hook installation APIs. CreateToolhelp32Snapshot/EnumProcesses are used to walk running processes before injection or termination. SetWindowsHookEx installs keyboard/mouse hooks. ZwQueryInformationProcess is used for anti-debug and process inspection. Consolidates overlapping coverage from retired SuspiciousDllApiHooks, SuspiciousWindowsAPIDiscovery, and SuspiciousDllExports rules."
+  description: "Detects process enumeration and hook installation APIs. CreateToolhelp32Snapshot/EnumProcesses are used to walk running processes before injection or termination. SetWindowsHookEx installs keyboard/mouse hooks. ZwQueryInformationProcess is used for anti-debug and process inspection. Consolidates overlapping coverage from retired SuspiciousDllApiHooks, SuspiciousWindowsAPIDiscovery, and SuspiciousDllExports rules. Audit 2026-11: now Process Discovery only. SetWindowsHookEx removed (duplicate of SetWindowsHookExKeylogger); DllMain removed (exported by every DLL); T1055 and T1056.001 removed (no pattern here shows injection or keylogging on its own)."
   logsource:
     category: "file_event"
     product: "windows"
@@ -1077,20 +1166,10 @@ ProcessEnumerationAndHooking:
     strings:
       - "(CreateToolhelp32Snapshot|EnumProcesses)"
       - "(Module32First|Module32Next|Process32First|Process32Next|Thread32First|Thread32Next)"
-      - "(?<![a-zA-Z])SetWindowsHookEx"
-      - "DllMain"
   tags:
-    - attack.T1055
-    - attack.T1056.001
     - attack.T1057
   level: high
   mitre:
-    - technique_id: "T1055"
-      technique_name: "Process Injection"
-      tactics: ["Stealth", "Privilege Escalation"]
-    - technique_id: "T1056.001"
-      technique_name: "Input Capture: Keylogging"
-      tactics: ["Credential Access"]
     - technique_id: "T1057"
       technique_name: "Process Discovery"
       tactics: ["Discovery"]
@@ -1443,27 +1522,17 @@ PowerShellMemoryExecution:
   title: "In-Memory Payload Execution (PowerShell / .NET)"
   id: "ps-memory-bypass"
   status: "experimental"
-  description: "Detects base64 decoding and in-memory assembly loading used by both PowerShell scripts and compiled .NET binaries. FromBase64String is a .NET method equally present in C# droppers and PS scripts; System.Reflection.Assembly::Load is the canonical .NET in-memory load primitive."
+  description: "Detects base64 decoding and in-memory assembly loading used by both PowerShell scripts and compiled .NET binaries. FromBase64String is a .NET method equally present in C# droppers and PS scripts; System.Reflection.Assembly::Load is the canonical .NET in-memory load primitive. Audit 2026-11: now reflective loading only. Invoke-Expression removed (already covered by PowerShellInvokeExpression, T1059.001); FromBase64String removed (already covered by StringEncodingObfuscation, T1027)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "FromBase64String"
-      - "Invoke-Expression"
       - "System.Reflection.Assembly::Load"
   tags:
-    - attack.T1059.001
-    - attack.T1027
     - attack.T1620
   level: high
   mitre:
-    - technique_id: "T1059.001"
-      technique_name: "Command and Scripting Interpreter: PowerShell"
-      tactics: ["Execution"]
-    - technique_id: "T1027"
-      technique_name: "Obfuscated Files or Information"
-      tactics: ["Stealth"]
     - technique_id: "T1620"
       technique_name: "Reflective Code Loading"
       tactics: ["Stealth"]
@@ -1674,26 +1743,19 @@ FileSystemManipulationAPI:
   title: "File System Manipulation via Windows API"
   id: "fs-api-manipulation-001"
   status: "experimental"
-  description: "Detects Windows file system API imports for creation, deletion, move, and hard link operations. Present as IAT imports in binaries performing file manipulation (ransomware staging, cleanup, etc.)."
+  description: "Detects Windows file system API imports for creation, deletion, move, and hard link operations. Present as IAT imports in binaries performing file manipulation (ransomware staging, cleanup, etc.). Audit 2026-11: removed T1565.001 and the CreateFile/CreateDirectory/MoveFile/CreateHardLink patterns, which appear in nearly every PE and produced false Impact findings; now file deletion only."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "(CreateFileW|CreateFileA)"
       - "(DeleteFileW|DeleteFileA)"
-      - "(MoveFileW|MoveFileExW|MoveFileExA)"
-      - "(RemoveDirectoryW|CreateDirectoryW)"
-      - "CreateHardLinkW"
+      - "(RemoveDirectoryW)"
       - "SHFileOperationW"
   tags:
-    - attack.T1565.001
     - attack.T1070.004
   level: medium
   mitre:
-    - technique_id: "T1565.001"
-      technique_name: "Data Manipulation: Stored Data Manipulation"
-      tactics: ["Impact"]
     - technique_id: "T1070.004"
       technique_name: "Indicator Removal: File Deletion"
       tactics: ["Stealth"]
@@ -1724,26 +1786,59 @@ FileAttributeManipulationAPI:
   title: "File Attribute and Permission Manipulation via Windows API"
   id: "fs-attr-manipulation-001"
   status: "experimental"
-  description: "Detects API imports for modifying file attributes, timestamps, and permissions — commonly used to hide files or cover tracks."
+  description: "Detects API imports for modifying file attributes, timestamps, and permissions — commonly used to hide files or cover tracks. Audit 2026-11: split by technique. SetFileSecurityW moved to FilePermissionModificationAPI (T1222.001); SetFileTime moved to TimestompAPI (T1070.006)."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
       - "SetFileAttributesW"
-      - "SetFileSecurityW"
-      - "SetFileTime"
   tags:
     - attack.T1564.001
-    - attack.T1222.001
   level: medium
   mitre:
     - technique_id: "T1564.001"
       technique_name: "Hide Artifacts: Hidden Files and Directories"
       tactics: ["Stealth"]
+
+FilePermissionModificationAPI:
+  title: "File Permission Modification via Windows API"
+  id: "fs-attr-manipulation-002"
+  status: "experimental"
+  description: "Detects SetFileSecurityW, used to change a file's DACL (for example, to lock defenders out of a dropped file). Split from FileAttributeManipulationAPI (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "SetFileSecurityW"
+  tags:
+    - attack.T1222.001
+  level: medium
+  mitre:
     - technique_id: "T1222.001"
       technique_name: "File and Directory Permissions Modification: Windows Permissions"
       tactics: ["Defense Impairment"]
+
+
+TimestompAPI:
+  title: "Timestomping via SetFileTime"
+  id: "fs-attr-manipulation-003"
+  status: "experimental"
+  description: "Detects SetFileTime, used to overwrite a file's MACB timestamps so a dropped file blends in with system files. Previously mapped only to T1564.001/T1222.001 under FileAttributeManipulationAPI; split out and mapped to T1070.006 in Audit 2026-11."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "SetFileTime"
+  tags:
+    - attack.T1070.006
+  level: medium
+  mitre:
+    - technique_id: "T1070.006"
+      technique_name: "Indicator Removal: Timestomp"
+      tactics: ["Stealth"]
 
 
 RegistryModificationAPI:
@@ -1792,22 +1887,17 @@ ProcessThreadManipulationAPI:
   title: "Process and Thread Manipulation via Windows API"
   id: "proc-thread-api-001"
   status: "experimental"
-  description: "Detects CreateThread and TerminateProcess API imports. Combined presence indicates capability to spawn and kill processes/threads — common in loaders and ransomware."
+  description: "Detects CreateThread and TerminateProcess API imports. Combined presence indicates capability to spawn and kill processes/threads — common in loaders and ransomware. Audit 2026-11: removed CreateThread and T1055 (a local thread is not injection; CreateRemoteThread is covered by ProcessInjectionVirtualAllocEx); level lowered to low, since TerminateProcess is a near-universal import."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
-      - "CreateThread"
       - "TerminateProcess"
   tags:
-    - attack.T1055
-    - attack.t1685
-  level: high
+    - attack.T1685
+  level: low
   mitre:
-    - technique_id: "T1055"
-      technique_name: "Process Injection"
-      tactics: ["Stealth", "Privilege Escalation"]
     - technique_id: "T1685"
       technique_name: "Disable or Modify Tools"
       tactics: ["Defense Impairment"]
@@ -1839,14 +1929,13 @@ WMISystemDiscovery:
   title: "WMI System Discovery Query"
   id: "wmi-sysquery-001"
   status: "experimental"
-  description: "Detects literal WMI query strings and CoSetProxyBlanket — a COM call required for remote WMI authentication. Win32_OperatingSystem queries are common for fingerprinting the victim system."
+  description: "Detects literal WMI query strings and CoSetProxyBlanket — a COM call required for remote WMI authentication. Win32_OperatingSystem queries are common for fingerprinting the victim system. Audit 2026-11: CoSetProxyBlanket moved to WMIRemoteAuthentication (T1047 only), since it shows WMI use but not system discovery."
   logsource:
     category: "file_event"
     product: "windows"
   detection:
     strings:
       - "SELECT \\* FROM Win32_"
-      - "CoSetProxyBlanket"
   tags:
     - attack.T1047
     - attack.T1082
@@ -1859,12 +1948,31 @@ WMISystemDiscovery:
       technique_name: "System Information Discovery"
       tactics: ["Discovery"]
 
+WMIRemoteAuthentication:
+  title: "WMI Remote Authentication (CoSetProxyBlanket)"
+  id: "wmi-sysquery-002"
+  status: "experimental"
+  description: "Detects CoSetProxyBlanket, the COM call required to authenticate WMI connections. Shows WMI use, not what is queried. Split from WMISystemDiscovery (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "windows"
+  detection:
+    strings:
+      - "CoSetProxyBlanket"
+  tags:
+    - attack.T1047
+  level: medium
+  mitre:
+    - technique_id: "T1047"
+      technique_name: "Windows Management Instrumentation"
+      tactics: ["Execution", "Discovery"]
+
 
 DPAPIMemoryEncryption:
   title: "DPAPI Memory Encryption (CryptProtectMemory)"
   id: "dpapi-memory-crypt-001"
   status: "experimental"
-  description: "Detects CryptProtectMemory and CryptUnprotectMemory — Windows DPAPI functions for encrypting data in memory. Used to protect credentials, keys, or payloads from memory inspection."
+  description: "Detects CryptProtectMemory and CryptUnprotectMemory — Windows DPAPI functions for encrypting data in memory. Used to protect credentials, keys, or payloads from memory inspection. Audit 2026-11: removed T1486; protecting secrets in memory is not encryption for impact."
   logsource:
     category: "file_event"
     product: "windows"
@@ -1873,15 +1981,11 @@ DPAPIMemoryEncryption:
       - "(CryptProtectMemory|CryptUnprotectMemory)"
   tags:
     - attack.T1027
-    - attack.T1486
   level: high
   mitre:
     - technique_id: "T1027"
       technique_name: "Obfuscated Files or Information"
       tactics: ["Stealth"]
-    - technique_id: "T1486"
-      technique_name: "Data Encrypted for Impact"
-      tactics: ["Impact"]
 
 
 FileMappingInjection:
@@ -2510,29 +2614,67 @@ MacSensitiveFileAccess:
   title: "macOS Sensitive File and Directory Access"
   id: "mac-sensitive-paths-001"
   status: "experimental"
-  description: "Detects hardcoded paths to macOS credential stores, browser data, and user-specific sensitive directories. Common targets for data theft malware."
+  description: "Detects hardcoded paths to macOS credential stores, browser data, and user-specific sensitive directories. Common targets for data theft malware. Audit 2026-11: split by technique. Browser profile paths moved to MacBrowserCredentialAccess (T1555.003, T1539); /etc/passwd moved to MacLocalAccountDiscovery (T1087.001)."
   logsource:
     category: "file_event"
     product: "macos"
   detection:
     strings:
       - "Library/Keychains/"
+      - "Login\\.keychain"
+  tags:
+    - attack.T1555.001
+  level: high
+  mitre:
+    - technique_id: "T1555.001"
+      technique_name: "Credentials from Password Stores: Keychain"
+      tactics: ["Credential Access"]
+
+MacBrowserCredentialAccess:
+  title: "macOS Browser Credential and Cookie Access"
+  id: "mac-sensitive-paths-002"
+  status: "experimental"
+  description: "Detects hardcoded paths to Safari, Chrome, and Firefox profile data on macOS, where saved passwords and session cookies live. Both techniques apply to every pattern: each profile holds credentials and cookies. Split from MacSensitiveFileAccess (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "macos"
+  detection:
+    strings:
       - "Library/Safari/Cookies"
       - "Library/Application Support/Google/Chrome"
       - "Library/Application Support/Firefox"
-      - "/etc/passwd"
-      - "Login\\.keychain"
   tags:
-    - attack.T1555
+    - attack.T1555.003
     - attack.T1539
   level: high
   mitre:
-    - technique_id: "T1555"
-      technique_name: "Credentials from Password Stores"
+    - technique_id: "T1555.003"
+      technique_name: "Credentials from Password Stores: Credentials from Web Browsers"
       tactics: ["Credential Access"]
     - technique_id: "T1539"
       technique_name: "Steal Web Session Cookie"
       tactics: ["Credential Access"]
+
+
+MacLocalAccountDiscovery:
+  title: "Local Account Discovery (/etc/passwd)"
+  id: "mac-sensitive-paths-003"
+  status: "experimental"
+  description: "Detects a hardcoded /etc/passwd path, read to enumerate local accounts. Split from MacSensitiveFileAccess (Audit 2026-11)."
+  logsource:
+    category: "file_event"
+    product: "any"
+  detection:
+    strings:
+      - "/etc/passwd"
+  tags:
+    - attack.T1087.001
+  level: medium
+  mitre:
+    - technique_id: "T1087.001"
+      technique_name: "Account Discovery: Local Account"
+      tactics: ["Discovery"]
+
 
 MacInMemoryMachOLoading:
   title: "macOS In-Memory Mach-O Loading (dyld NSCreateObjectFileImage)"
@@ -2934,7 +3076,7 @@ CnCResolutionSymbol:
   title: "C2 Address Resolution Function Symbol"
   id: "cnc-resolve-symbol-001"
   status: "experimental"
-  description: "Detects resolve_cnc_addr and similar function names in the symbol table indicating explicit C2 address resolution logic. Mirai and derivatives export this symbol when compiled without stripping."
+  description: "Detects resolve_cnc_addr and similar function names in the symbol table indicating explicit C2 address resolution logic. Mirai and derivatives export this symbol when compiled without stripping. Audit 2026-11: removed T1008 (a symbol name does not show fallback channels); T1071.001 broadened to T1071, since Mirai-family C2 is not HTTP."
   logsource:
     category: "file_event"
     product: "linux"
@@ -2944,15 +3086,11 @@ CnCResolutionSymbol:
       - "cnc_addr"
       - "resolve_cnc"
   tags:
-    - attack.T1071.001
-    - attack.T1008
+    - attack.T1071
   level: high
   mitre:
-    - technique_id: "T1071.001"
-      technique_name: "Application Layer Protocol: Web Protocols"
-      tactics: ["Command and Control"]
-    - technique_id: "T1008"
-      technique_name: "Fallback Channels"
+    - technique_id: "T1071"
+      technique_name: "Application Layer Protocol"
       tactics: ["Command and Control"]
 
 
@@ -2980,7 +3118,7 @@ Socks5Tunneling:
   title: "SOCKS5 Proxy / Tunneling"
   id: "socks5-tunnel-001"
   status: "experimental"
-  description: "Detects hardcoded socks5 protocol strings. SOCKS5 is used by RATs and C2 frameworks to tunnel traffic through victim hosts, proxying attacker connections through compromised infrastructure."
+  description: "Detects hardcoded socks5 protocol strings. SOCKS5 is used by RATs and C2 frameworks to tunnel traffic through victim hosts, proxying attacker connections through compromised infrastructure. Audit 2026-11: removed T1572; SOCKS5 is proxying, not protocol tunneling."
   logsource:
     category: "file_event"
     product: "any"
@@ -2989,14 +3127,10 @@ Socks5Tunneling:
       - "\\bsocks5\\b"
   tags:
     - attack.T1090
-    - attack.T1572
   level: high
   mitre:
     - technique_id: "T1090"
       technique_name: "Proxy"
-      tactics: ["Command and Control"]
-    - technique_id: "T1572"
-      technique_name: "Protocol Tunneling"
       tactics: ["Command and Control"]
 
 
@@ -3069,7 +3203,7 @@ WinInetHTTPDownload:
   title: "WinINet HTTP Download APIs"
   id: "wininet-http-download-001"
   status: "experimental"
-  description: "Detects WinINet API imports used to make HTTP requests and read responses. The combination of InternetOpenW + InternetOpenUrlW + InternetReadFile is the canonical Windows HTTP download chain, commonly used by droppers and coinminer stubs to fetch second-stage payloads."
+  description: "Detects WinINet API imports used to make HTTP requests and read responses. The combination of InternetOpenW + InternetOpenUrlW + InternetReadFile is the canonical Windows HTTP download chain, commonly used by droppers and coinminer stubs to fetch second-stage payloads. Audit 2026-11: removed T1105; each import alone shows HTTP use, and a download needs the whole chain together."
   logsource:
     category: "file_event"
     product: "windows"
@@ -3080,13 +3214,9 @@ WinInetHTTPDownload:
       - "(InternetReadFile|InternetReadFileEx)"
       - "InternetCloseHandle"
   tags:
-    - attack.T1105
     - attack.T1071.001
   level: high
   mitre:
-    - technique_id: "T1105"
-      technique_name: "Ingress Tool Transfer"
-      tactics: ["Command and Control"]
     - technique_id: "T1071.001"
       technique_name: "Application Layer Protocol: Web Protocols"
       tactics: ["Command and Control"]
@@ -3116,7 +3246,7 @@ ShellExecuteExecution:
   title: "ShellExecute Used for Payload Execution"
   id: "shellexecute-exec-001"
   status: "experimental"
-  description: "Detects ShellExecuteW/A and ShellExecuteExW/A imports. These APIs launch files, URLs, and executables and are commonly used in droppers to execute a downloaded second-stage payload without spawning a visible process via CreateProcess."
+  description: "Detects ShellExecuteW/A and ShellExecuteExW/A imports. These APIs launch files, URLs, and executables and are commonly used in droppers to execute a downloaded second-stage payload without spawning a visible process via CreateProcess. Audit 2026-11: removed T1204.002; ShellExecute is the program launching something, not the user."
   logsource:
     category: "file_event"
     product: "windows"
@@ -3126,14 +3256,10 @@ ShellExecuteExecution:
       - "(ShellExecuteExW|ShellExecuteExA)"
   tags:
     - attack.T1106
-    - attack.T1204.002
   level: high
   mitre:
     - technique_id: "T1106"
       technique_name: "Native API"
-      tactics: ["Execution"]
-    - technique_id: "T1204.002"
-      technique_name: "User Execution: Malicious File"
       tactics: ["Execution"]
 
 
